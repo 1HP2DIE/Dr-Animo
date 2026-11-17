@@ -137,9 +137,10 @@ class MegaplayStreamResolver(
 
         return PlayableStream(
             masterUrl = masterUrl,
-            // RESOLVER_SPEC §1 hard rule 4: the allowlist is host-agnostic, so the referer that just
-            // worked for the page is reused for playlist + segments instead of a fixed megaplay host.
-            referer = referer,
+            // Device-verified 2026-11-17: the CDN host (fetch.*) accepts ONLY the megaplay referer —
+            // anikototv.bz / anikoto.cz return 403 there (they only pass the *embed page* allowlist).
+            // So the page referer is used for hops 1-2 and this fixed one for playback.
+            referer = CDN_REFERER,
             userAgent = userAgent,
             audio = audio,
             thumbnails = JsonLite.stringField(sources.body, "image"),
@@ -182,6 +183,8 @@ class MegaplayStreamResolver(
     private data class Resp(val code: Int, val body: String)
 
     companion object {
+        /** The only referer the stream CDN accepts (verified on device and via curl). */
+        const val CDN_REFERER = "https://megaplay.buzz/"
         private const val MARKER_404 = "Error Code: 404"
         private const val MARKER_410 = "Error Code: 410"
         private const val MARKER_MOVED = "doesn't exist or has been moved"
