@@ -41,18 +41,10 @@
         </activity>
 
         <!--
-          Player activity (owned by Agent C — ui/player). Declared here because this manifest is
-          owned by Agent A. Same configChanges set as MainActivity so rotation never recreates a
-          live surface. Exported=false: only reachable from inside the app.
+          Player is a Compose route inside AnimoNavHost (ui/player/PlayerScreen), not a separate
+          activity — the screen is immersive and locks orientation itself. The former
+          ui.player.PlayerActivity entry was removed: no such class exists.
         -->
-        <activity
-            android:name="com.animo.app.ui.player.PlayerActivity"
-            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode|density"
-            android:exported="false"
-            android:launchMode="singleTop"
-            android:screenOrientation="fullSensor"
-            android:theme="@style/Theme.Animo.Player"
-            android:windowSoftInputMode="adjustResize" />
 
         <!--
           Media3 media session service (owned by Agent C — player/PlaybackService).
