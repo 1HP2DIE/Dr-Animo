@@ -38,6 +38,14 @@ class SettingsPreferences(private val context: Context) {
         .map { prefs -> prefs[LastSyncEpochKey] }
         .distinctUntilChanged()
 
+    /**
+     * The app version whose release notes the user has already opened. `null` on a first install,
+     * which is deliberately treated as "unseen" — those notes really are new to them.
+     */
+    val changelogSeenVersion: Flow<String?> = store.data
+        .map { prefs -> prefs[ChangelogSeenKey] }
+        .distinctUntilChanged()
+
     suspend fun setAutoplayNext(enabled: Boolean) {
         store.edit { prefs -> prefs[AutoplayNextKey] = enabled }
     }
@@ -48,6 +56,10 @@ class SettingsPreferences(private val context: Context) {
 
     suspend fun recordSync(epochMs: Long) {
         store.edit { prefs -> prefs[LastSyncEpochKey] = epochMs }
+    }
+
+    suspend fun markChangelogSeen(version: String) {
+        store.edit { prefs -> prefs[ChangelogSeenKey] = version }
     }
 
     /**
@@ -64,5 +76,6 @@ class SettingsPreferences(private val context: Context) {
         val AutoplayNextKey = booleanPreferencesKey("ui_autoplay_next")
         val DefaultAudioKey = stringPreferencesKey("ui_default_audio")
         val LastSyncEpochKey = longPreferencesKey("ui_last_sync_epoch")
+        val ChangelogSeenKey = stringPreferencesKey("ui_changelog_seen_version")
     }
 }

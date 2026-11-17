@@ -13,6 +13,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.animo.app.domain.model.AudioTrack
 import com.animo.app.ui.browse.BrowseScreen
+import com.animo.app.ui.changelog.ChangelogScreen
 import com.animo.app.ui.detail.DetailScreen
 import com.animo.app.ui.home.HomeScreen
 import com.animo.app.ui.library.LibraryScreen
@@ -43,6 +44,7 @@ object Routes {
 
     const val LIBRARY = "library"
     const val SETTINGS = "settings"
+    const val CHANGELOG = "changelog"
     const val DETAIL = "detail/{$ARG_ANIME_ID}"
     const val PLAYER = "player/{$ARG_ANIME_ID}/{$ARG_EPISODE_ID}/{$ARG_AUDIO}"
 
@@ -130,6 +132,14 @@ fun AnimoNavHost(
                     composable(Routes.SETTINGS) {
                         SettingsScreen(
                             onOpenDrawer = openDrawer,
+                            onOpenChangelog = { navController.navigate(Routes.CHANGELOG) },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+
+                    composable(Routes.CHANGELOG) {
+                        ChangelogScreen(
+                            onBack = { navController.popBackStack() },
                             modifier = Modifier.fillMaxSize(),
                         )
                     }

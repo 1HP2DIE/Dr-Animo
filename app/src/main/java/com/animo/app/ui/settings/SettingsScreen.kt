@@ -3,6 +3,7 @@ package com.animo.app.ui.settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -15,10 +16,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
@@ -44,6 +49,7 @@ import com.animo.app.BuildConfig
 import com.animo.app.R
 import com.animo.app.domain.model.AudioTrack
 import com.animo.app.domain.model.SyncState
+import com.animo.app.ui.changelog.Changelog
 import com.animo.app.ui.LocalAppContainer
 import com.animo.app.ui.common.BrandMark
 import com.animo.app.ui.shell.AnimoTopBar
@@ -58,6 +64,7 @@ import java.util.Locale
 @Composable
 fun SettingsScreen(
     onOpenDrawer: () -> Unit,
+    onOpenChangelog: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val container = LocalAppContainer.current
@@ -77,6 +84,10 @@ fun SettingsScreen(
         onDefaultAudioChange = viewModel::setDefaultAudio,
         onSyncNow = viewModel::syncNow,
         onOpenDrawer = onOpenDrawer,
+        onOpenChangelog = {
+            viewModel.markChangelogSeen()
+            onOpenChangelog()
+        },
         modifier = modifier,
     )
 }
@@ -91,6 +102,7 @@ private fun SettingsScreenContent(
     onDefaultAudioChange: (AudioTrack) -> Unit,
     onSyncNow: () -> Unit,
     onOpenDrawer: () -> Unit,
+    onOpenChangelog: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -125,7 +137,10 @@ private fun SettingsScreenContent(
                 )
             }
             item(key = "about") {
-                AboutSection()
+                AboutSection(
+                    changelogUnseen = Changelog.isUnseen(state.changelogSeenVersion),
+                    onOpenChangelog = onOpenChangelog,
+                )
             }
         }
     }
@@ -329,7 +344,10 @@ private fun PlaybackSection(
 }
 
 @Composable
-private fun AboutSection() {
+private fun AboutSection(
+    changelogUnseen: Boolean,
+    onOpenChangelog: () -> Unit,
+) {
     SettingsSection(title = stringResource(R.string.ui_settings_about)) {
         Column(
             modifier = Modifier
@@ -350,7 +368,14 @@ private fun AboutSection() {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
+        SettingsActionRow(
+            label = stringResource(R.string.ui_settings_whats_new),
+            value = stringResource(R.string.ui_settings_version_value, BuildConfig.VERSION_NAME),
+            badge = if (changelogUnseen) stringResource(R.string.ui_settings_badge_new) else null,
+            onClick = onOpenChangelog,
+        )
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         SettingsValueRow(
             label = stringResource(R.string.ui_settings_data_source),
             value = stringResource(R.string.ui_settings_data_source_value),
@@ -363,6 +388,61 @@ private fun AboutSection() {
             textAlign = TextAlign.Start,
         )
         Spacer(Modifier.height(8.dp))
+    }
+}
+
+/**
+ * A tappable settings row. [badge] renders a small accent pill before the chevron — used for "New"
+ * on the release-notes row, so the changelog shows up on its own instead of needing a launch dialog.
+ */
+@Composable
+private fun SettingsActionRow(
+    label: String,
+    value: String,
+    onClick: () -> Unit,
+    badge: String? = null,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.small)
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        if (badge != null) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+            ) {
+                Text(
+                    text = badge,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.width(4.dp))
+        Icon(
+            imageVector = Icons.Rounded.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp),
+        )
     }
 }
 

@@ -10,6 +10,7 @@ import com.animo.app.domain.model.AudioTrack
 import com.animo.app.domain.model.SyncProgress
 import com.animo.app.domain.model.SyncState
 import com.animo.app.domain.repo.AnimeRepository
+import com.animo.app.ui.changelog.Changelog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -26,6 +27,8 @@ data class SettingsUiState(
     val sync: SyncProgress = SyncProgress(done = 0, total = 0, state = SyncState.IDLE),
     val isSyncing: Boolean = false,
     val syncMessage: String? = null,
+    /** Highest app version whose release notes were opened; `null` = never opened. */
+    val changelogSeenVersion: String? = null,
 ) {
     val progressFraction: Float
         get() = if (sync.total > 0) {
@@ -55,11 +58,19 @@ class SettingsViewModel(
     private val isSyncing = MutableStateFlow(false)
     private val syncMessage = MutableStateFlow<String?>(null)
 
+    private data class Prefs(
+        val autoplayNext: Boolean,
+        val defaultAudio: AudioTrack,
+        val lastSyncEpoch: Long?,
+        val changelogSeen: String?,
+    )
+
     private val playback = combine(
         preferences.autoplayNext,
         preferences.defaultAudio,
         preferences.lastSyncEpoch,
-    ) { autoplay, audio, lastSync -> Triple(autoplay, audio, lastSync) }
+        preferences.changelogSeenVersion,
+    ) { autoplay, audio, lastSync, seen -> Prefs(autoplay, audio, lastSync, seen) }
 
     private val catalogue = combine(catalogueSize, catalogueBytes) { size, bytes -> size to bytes }
 
@@ -73,9 +84,10 @@ class SettingsViewModel(
         SettingsUiState(
             catalogueSize = catalogueStats.first,
             catalogueBytes = catalogueStats.second,
-            lastSyncEpoch = playbackPrefs.third,
-            autoplayNext = playbackPrefs.first,
-            defaultAudio = playbackPrefs.second,
+            lastSyncEpoch = playbackPrefs.lastSyncEpoch,
+            autoplayNext = playbackPrefs.autoplayNext,
+            defaultAudio = playbackPrefs.defaultAudio,
+            changelogSeenVersion = playbackPrefs.changelogSeen,
             sync = sync,
             isSyncing = syncing,
             syncMessage = message,
@@ -121,6 +133,12 @@ class SettingsViewModel(
 
     fun setDefaultAudio(audio: AudioTrack) {
         viewModelScope.launch { preferences.setDefaultAudio(audio) }
+    }
+
+    /** Clears the "New" tag on the About row once the release notes have actually been opened. */
+    fun markChangelogSeen() {
+        val marker = Changelog.seenMarker
+        viewModelScope.launch { preferences.markChangelogSeen(marker) }
     }
 
     private suspend fun refreshCatalogueStats() {

@@ -119,4 +119,16 @@
     <string name="ui_settings_data_source_value">anikoto · megaplay</string>
     <string name="ui_settings_disclaimer">Streams are resolved from third-party providers (anikoto, megaplay). Animo hosts no video content.</string>
 
+    <!-- Changelog / what's new -->
+    <string name="ui_changelog_title">What\'s new</string>
+    <string name="ui_changelog_back">Back</string>
+    <string name="ui_changelog_subtitle">Version %1$s · everything that changed</string>
+    <string name="ui_changelog_latest">Latest</string>
+    <string name="ui_changelog_kind_new">New</string>
+    <string name="ui_changelog_kind_improved">Improved</string>
+    <string name="ui_changelog_kind_fixed">Fixed</string>
+    <string name="ui_changelog_footer">That\'s everything from this update.</string>
+    <string name="ui_settings_whats_new">What\'s new</string>
+    <string name="ui_settings_badge_new">New</string>
+
 </resources>
