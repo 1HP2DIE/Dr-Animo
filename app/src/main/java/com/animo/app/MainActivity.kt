@@ -4,8 +4,13 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.CompositionLocalProvider
 import com.animo.app.di.ServiceLocator
+import com.animo.app.domain.repo.AnimeRepository
+import com.animo.app.domain.repo.StreamRepository
 import com.animo.app.ui.AnimoNavHost
+import com.animo.app.ui.AppContainer
+import com.animo.app.ui.LocalAppContainer
 import com.animo.app.ui.theme.AnimoTheme
 
 /**
@@ -19,6 +24,15 @@ import com.animo.app.ui.theme.AnimoTheme
  */
 class MainActivity : ComponentActivity() {
 
+    /**
+     * Bridges the service graph into Compose without making `di` depend on `ui` (or vice versa):
+     * the container is resolved lazily so the first frame never blocks on the database.
+     */
+    private val container: AppContainer = object : AppContainer {
+        override val animeRepository: AnimeRepository get() = ServiceLocator.animeRepository
+        override val streamRepository: StreamRepository get() = ServiceLocator.streamRepository
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -27,7 +41,9 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             AnimoTheme {
-                AnimoNavHost()
+                CompositionLocalProvider(LocalAppContainer provides container) {
+                    AnimoNavHost()
+                }
             }
         }
     }
