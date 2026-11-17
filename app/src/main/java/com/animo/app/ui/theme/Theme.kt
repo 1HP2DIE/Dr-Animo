@@ -1,5 +1,6 @@
 package com.animo.app.ui.theme
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
@@ -35,9 +36,17 @@ object AnimoPalette {
     val danger: Color get() = DangerRed
     val videoBlack: Color get() = VideoBlack
 
+    /**
+     * Copy that sits on the mascot artwork (home hero). The banner is always dark, so this pair
+     * must not follow the theme — that is what makes light mode legible there.
+     */
+    val onHero: Color get() = TextPrimary
+    val onHeroSecondary: Color get() = TextSecondary
+
     val posterPlaceholder: Brush get() = PosterPlaceholderBrush
     val posterScrim: Brush get() = PosterTitleScrim
     val backdropScrim: Brush get() = BackdropScrim
+    val heroScrim: Brush get() = HeroScrim
     val playerTopScrim: Brush get() = PlayerTopScrim
     val playerBottomScrim: Brush get() = PlayerBottomScrim
 }
@@ -63,6 +72,13 @@ private val AnimoDarkScheme = darkColorScheme(
     surfaceVariant = CharcoalSurfaceHigh,
     onSurfaceVariant = TextSecondary,
     surfaceTint = TealAccent,
+    surfaceBright = CharcoalSurfaceHighest,
+    surfaceDim = CharcoalBackground,
+    surfaceContainerLowest = CharcoalBackground,
+    surfaceContainerLow = CharcoalSurfaceLow,
+    surfaceContainer = CharcoalSurface,
+    surfaceContainerHigh = CharcoalSurfaceHigh,
+    surfaceContainerHighest = CharcoalSurfaceHighest,
     inverseSurface = TextPrimary,
     inverseOnSurface = CharcoalBackground,
     error = DangerRed,
@@ -91,8 +107,20 @@ private val AnimoLightScheme = lightColorScheme(
     onSurface = LightTextPrimary,
     surfaceVariant = LightSurfaceHigh,
     onSurfaceVariant = LightTextSecondary,
+    surfaceTint = LightAccent,
+    surfaceBright = Color(0xFFFBFCFB),
+    surfaceDim = LightSurfaceHighest,
+    surfaceContainerLowest = Color(0xFFFBFCFB),
+    surfaceContainerLow = LightSurfaceLow,
+    surfaceContainer = LightSurfaceContainer,
+    surfaceContainerHigh = LightSurfaceHigh,
+    surfaceContainerHighest = LightSurfaceHighest,
+    inverseSurface = LightTextPrimary,
+    inverseOnSurface = LightSurface,
     error = Color(0xFFB3261E),
     onError = Color(0xFFFFFFFF),
+    errorContainer = Color(0xFFF7DAD7),
+    onErrorContainer = Color(0xFF410E0B),
     outline = LightOutline,
     outlineVariant = Color(0xFFDCE4E3),
     scrim = Color(0xFF000000),
@@ -109,4 +137,23 @@ fun AnimoTheme(
         shapes = AnimoShapes,
         content = content,
     )
+}
+
+/**
+ * Theme wrapper that follows the persisted [ThemePreference] (Dark / Light / System).
+ *
+ * `MainActivity` still installs the base [AnimoTheme]; this second layer is what makes the user's
+ * choice win without the activity having to observe DataStore.
+ */
+@Composable
+fun AnimoAppTheme(
+    preference: ThemePreference = rememberThemePreference(),
+    content: @Composable () -> Unit,
+) {
+    val dark = when (preference.mode) {
+        ThemeMode.DARK -> true
+        ThemeMode.LIGHT -> false
+        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+    }
+    AnimoTheme(darkTheme = dark, content = content)
 }

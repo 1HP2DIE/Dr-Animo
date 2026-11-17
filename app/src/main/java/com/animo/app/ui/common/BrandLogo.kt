@@ -27,7 +27,7 @@ import com.animo.app.R
  *  - `drawable/logo_dr_animo_ring.png` — 512 px circular avatar with a teal ring (drawer header)
  *  - `drawable/logo_dr_animo.png`      — 512 px circular avatar, no ring
  *  - `drawable/hero_dr_animo.jpg`      — 1600x900 dark-edged banner (home hero)
- *  - `mipmap-*/ic_launcher*`           — adaptive + legacy launcher icons
+ *  - `mipmap-…/ic_launcher…`           — adaptive + legacy launcher icons
  */
 @Composable
 fun BrandAvatar(

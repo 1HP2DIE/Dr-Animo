@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.Color
 
 // Dark-first palette. Deep charcoal, one teal accent, no pure black / pure white on surfaces.
 internal val CharcoalBackground = Color(0xFF0D1113)
+internal val CharcoalSurfaceLow = Color(0xFF101618)
 internal val CharcoalSurface = Color(0xFF141A1D)
 internal val CharcoalSurfaceHigh = Color(0xFF1B2327)
 internal val CharcoalSurfaceHighest = Color(0xFF232D31)
@@ -65,10 +66,24 @@ internal val PlayerBottomScrim: Brush
         1f to Color(0xE6000000),
     )
 
+/**
+ * Hero banner scrim. The Dr. Animo banner is artwork, not a theme surface, so its overlay stays
+ * dark in both themes — the copy on top is always light (see [AnimoPalette.onHero]).
+ */
+internal val HeroScrim: Brush
+    get() = Brush.verticalGradient(
+        0f to Color(0x1A0D1113),
+        0.42f to Color(0x660D1113),
+        1f to Color(0xF00D1113),
+    )
+
 // Light scheme fallbacks (the app is dark-first; these only matter when a user forces light).
 internal val LightBackground = Color(0xFFF4F6F5)
-internal val LightSurface = Color(0xFFFFFFFF)
+internal val LightSurface = Color(0xFFFBFCFB)
+internal val LightSurfaceLow = Color(0xFFF7F9F8)
+internal val LightSurfaceContainer = Color(0xFFEDF2F0)
 internal val LightSurfaceHigh = Color(0xFFE8EDEC)
+internal val LightSurfaceHighest = Color(0xFFDDE4E3)
 internal val LightTextPrimary = Color(0xFF11191A)
 internal val LightTextSecondary = Color(0xFF4C5A59)
 internal val LightOutline = Color(0xFFC3CECC)
