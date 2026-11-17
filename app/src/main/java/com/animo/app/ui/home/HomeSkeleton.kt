@@ -9,13 +9,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -24,9 +27,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 
 /**
- * First-paint skeleton with the same geometry as [HomeScreen]: hero banner, one section label and
- * 2:3 poster tiles on the same 16 dp gutters. Nothing is tappable, so the shimmer is the only
- * motion on screen.
+ * First-paint skeleton with the same geometry as [HomeScreen]: flush hero, three shelf headers and
+ * a poster rail under each. Nothing is tappable, so the shimmer is the only motion on screen.
  */
 @Composable
 fun HomeSkeleton(modifier: Modifier = Modifier) {
@@ -40,39 +42,46 @@ fun HomeSkeleton(modifier: Modifier = Modifier) {
     val tileColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = alpha)
 
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 112.dp),
+        columns = GridCells.Fixed(1),
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 28.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
         userScrollEnabled = false,
     ) {
-        item(span = { GridItemSpan(maxLineSpan) }) {
+        item {
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .height(172.dp)
-                    .clip(MaterialTheme.shapes.extraLarge)
+                    .height(208.dp)
+                    .clip(RoundedCornerShape(22.dp))
                     .background(tileColor),
             )
         }
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            Box(
-                Modifier
-                    .fillMaxWidth(0.34f)
-                    .height(16.dp)
-                    .clip(MaterialTheme.shapes.extraSmall)
-                    .background(tileColor),
-            )
-        }
-        items(count = 9) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(2f / 3f)
-                    .clip(MaterialTheme.shapes.medium)
-                    .background(tileColor),
-            )
+        items(count = 3) {
+            androidx.compose.foundation.layout.Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(
+                        Modifier
+                            .width(150.dp)
+                            .height(16.dp)
+                            .clip(MaterialTheme.shapes.extraSmall)
+                            .background(tileColor),
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    repeat(3) {
+                        Box(
+                            Modifier
+                                .width(116.dp)
+                                .aspectRatio(2f / 3f)
+                                .clip(MaterialTheme.shapes.medium)
+                                .background(tileColor),
+                        )
+                    }
+                }
+            }
         }
     }
 }

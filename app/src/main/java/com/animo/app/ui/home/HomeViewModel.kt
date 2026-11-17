@@ -21,8 +21,15 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+/**
+ * Home is a set of independent shelves, not one list. The split matters: Hindi rows are stamped
+ * with their sync clock, which is always newer than any original `updatedAt`, so a single
+ * "recent" stream degenerated into 60 Pokémon seasons and hid the whole English catalogue.
+ */
 data class HomeUiModel(
     val recent: List<Anime> = emptyList(),
+    val hindi: List<Anime> = emptyList(),
+    val topRated: List<Anime> = emptyList(),
     val continueWatching: List<Anime> = emptyList(),
     val sync: SyncProgress = SyncProgress(done = 0, total = 0, state = SyncState.IDLE),
     val isRefreshing: Boolean = false,
@@ -32,12 +39,20 @@ data class HomeUiModel(
         get() = sync.state == SyncState.RUNNING || sync.state == SyncState.THROTTLED
 
     val isEmpty: Boolean
-        get() = recent.isEmpty() && continueWatching.isEmpty()
+        get() = recent.isEmpty() && hindi.isEmpty() && topRated.isEmpty() && continueWatching.isEmpty()
 }
 
 fun homeViewModelFactory(repository: AnimeRepository): ViewModelProvider.Factory = viewModelFactory {
     initializer { HomeViewModel(repository) }
 }
+
+/** Intermediate holder: `combine` takes at most five flows, so the four lists fold first. */
+private data class Shelves(
+    val recent: List<Anime>,
+    val hindi: List<Anime>,
+    val topRated: List<Anime>,
+    val continueWatching: List<Anime>,
+)
 
 class HomeViewModel(private val repository: AnimeRepository) : ViewModel() {
 
@@ -47,15 +62,25 @@ class HomeViewModel(private val repository: AnimeRepository) : ViewModel() {
     private val _syncFailures = MutableSharedFlow<String>(extraBufferCapacity = 2)
     val syncFailures: SharedFlow<String> = _syncFailures.asSharedFlow()
 
+    private val shelves: Flow<Shelves> = combine(
+        repository.observeRecentOriginal(24),
+        repository.observeRecentHindi(20),
+        repository.observeTopRated(20),
+        repository.observeContinueWatching(20),
+    ) { recent, hindi, topRated, continueWatching ->
+        Shelves(recent, hindi, topRated, continueWatching)
+    }
+
     private val stream: Flow<UiState<HomeUiModel>> = combine(
-        repository.observeRecent(),
-        repository.observeContinueWatching(),
+        shelves,
         repository.sync,
         refreshing,
-    ) { recent, continueWatching, sync, isRefreshing ->
+    ) { current, sync, isRefreshing ->
         val model = HomeUiModel(
-            recent = recent,
-            continueWatching = continueWatching,
+            recent = current.recent,
+            hindi = current.hindi,
+            topRated = current.topRated,
+            continueWatching = current.continueWatching,
             sync = sync,
             isRefreshing = isRefreshing,
         )

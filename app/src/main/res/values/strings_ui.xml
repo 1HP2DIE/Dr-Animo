@@ -97,6 +97,15 @@
     <!-- Home hero -->
     <string name="ui_home_hero_subtitle">%1$s titles · Hindi + Original</string>
     <string name="ui_home_see_all">See all</string>
+    <string name="ui_home_hindi">New Hindi dubs</string>
+    <string name="ui_home_hindi_subtitle">Synced from the Hindi catalogue</string>
+    <string name="ui_home_top_rated">Top rated</string>
+    <string name="ui_home_top_rated_subtitle">Highest scores across the catalogue</string>
+    <string name="ui_home_hero_eyebrow">HINDI + ORIGINAL</string>
+    <string name="ui_home_hero_counts">%1$s series · %2$s Hindi</string>
+    <string name="ui_home_browse_all">Browse</string>
+    <string name="ui_home_browse_all_count">Browse all %1$s</string>
+    <string name="ui_home_badge_hindi">HINDI</string>
 
     <!-- Settings -->
     <string name="ui_settings_title">Settings</string>

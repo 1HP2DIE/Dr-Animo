@@ -5,6 +5,17 @@ import kotlinx.coroutines.flow.Flow
 
 interface AnimeRepository {
     fun observeRecent(limit: Int = 60): Flow<List<Anime>>
+
+    /**
+     * Home shelves. Split by id sign so one provider's sync clock cannot bury the other:
+     * Hindi rows are stamped with the sync time, which is always newer than an original's
+     * `updatedAt`, so a single "recent" stream returned Hindi-only content.
+     */
+    fun observeRecentOriginal(limit: Int = 24): Flow<List<Anime>>
+    fun observeRecentHindi(limit: Int = 20): Flow<List<Anime>>
+    fun observeTopRated(limit: Int = 20): Flow<List<Anime>>
+    suspend fun counts(): CatalogueCounts
+
     fun search(query: String, filters: Filters = Filters(), limit: Int = 60, offset: Int = 0): Flow<List<Anime>>
     /** Facet values for the filter sheet — derived from the local catalogue, never the network. */
     fun observeFacets(): Flow<FilterFacets>

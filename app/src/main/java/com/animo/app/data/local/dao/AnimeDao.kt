@@ -29,6 +29,25 @@ interface AnimeDao {
     @Query("SELECT * FROM anime ORDER BY updatedAtEpoch DESC, id DESC LIMIT :limit")
     fun observeRecent(limit: Int): Flow<List<AnimeEntity>>
 
+    @Query("SELECT * FROM anime WHERE id > 0 ORDER BY updatedAtEpoch DESC, id DESC LIMIT :limit")
+    fun observeRecentOriginal(limit: Int): Flow<List<AnimeEntity>>
+
+    @Query("SELECT * FROM anime WHERE id < 0 ORDER BY updatedAtEpoch DESC, id DESC LIMIT :limit")
+    fun observeRecentHindi(limit: Int): Flow<List<AnimeEntity>>
+
+    /** Highest rated originals; Hindi rows carry anitoko-incompatible scores, so they stay out. */
+    @Query(
+        "SELECT * FROM anime WHERE id > 0 AND score IS NOT NULL " +
+            "ORDER BY score DESC, updatedAtEpoch DESC, id DESC LIMIT :limit",
+    )
+    fun observeTopRated(limit: Int): Flow<List<AnimeEntity>>
+
+    @Query("SELECT COUNT(*) FROM anime WHERE id > 0")
+    suspend fun countOriginal(): Int
+
+    @Query("SELECT COUNT(*) FROM anime WHERE id < 0")
+    suspend fun countHindi(): Int
+
     @Query("SELECT * FROM anime WHERE id = :id")
     fun observeById(id: Int): Flow<AnimeEntity?>
 

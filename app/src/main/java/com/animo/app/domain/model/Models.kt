@@ -50,6 +50,14 @@ data class Anime(
     val isHindi: Boolean get() = id < 0
 }
 
+/** Split of the local catalogue, used by the home hero and the drawer stats. */
+data class CatalogueCounts(
+    val original: Int = 0,
+    val hindi: Int = 0,
+) {
+    val total: Int get() = original + hindi
+}
+
 data class Episode(
     val id: Long,
     val animeId: Int,

@@ -101,6 +101,8 @@ fun AnimoNavHost(
                             onOpenSearch = { navController.openTopLevel(Routes.BROWSE_BASE) },
                             onOpenDrawer = openDrawer,
                             onOpenLibrary = { navController.openTopLevel(Routes.LIBRARY) },
+                            onOpenBrowse = { navController.openTopLevel(Routes.BROWSE_BASE) },
+                            onOpenHindi = { navController.openTopLevel(Routes.browse(hindi = true)) },
                         )
                     }
 

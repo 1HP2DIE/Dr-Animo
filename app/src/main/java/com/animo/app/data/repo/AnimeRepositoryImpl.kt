@@ -15,6 +15,7 @@ import com.animo.app.data.local.toDomain
 import com.animo.app.data.sync.CatalogSyncer
 import com.animo.app.data.sync.EpisodeBackfill
 import com.animo.app.domain.model.Anime
+import com.animo.app.domain.model.CatalogueCounts
 import com.animo.app.domain.model.Episode
 import com.animo.app.domain.model.FilterFacets
 import com.animo.app.domain.model.Filters
@@ -23,6 +24,7 @@ import com.animo.app.domain.model.SyncState
 import com.animo.app.domain.repo.AnimeRepository
 import com.animo.app.domain.repo.HindiCatalog
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -59,6 +61,22 @@ class AnimeRepositoryImpl(
 
     override fun observeRecent(limit: Int): Flow<List<Anime>> =
         animeDao.observeRecent(limit).map { rows -> rows.map { it.toDomain() } }
+
+    override fun observeRecentOriginal(limit: Int): Flow<List<Anime>> =
+        animeDao.observeRecentOriginal(limit).map { rows -> rows.map { it.toDomain() } }
+
+    override fun observeRecentHindi(limit: Int): Flow<List<Anime>> =
+        animeDao.observeRecentHindi(limit).map { rows -> rows.map { it.toDomain() } }
+
+    override fun observeTopRated(limit: Int): Flow<List<Anime>> =
+        animeDao.observeTopRated(limit).map { rows -> rows.map { it.toDomain() } }
+
+    override suspend fun counts(): CatalogueCounts = withContext(Dispatchers.IO) {
+        CatalogueCounts(
+            original = animeDao.countOriginal(),
+            hindi = animeDao.countHindi(),
+        )
+    }
 
     override fun search(
         query: String,
