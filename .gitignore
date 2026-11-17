@@ -11,3 +11,4 @@ research/dataset/*.json
 research/resolver/*.json
 !research/dataset/summary.json
 research/vendor/animestream/
+.kotlin/
