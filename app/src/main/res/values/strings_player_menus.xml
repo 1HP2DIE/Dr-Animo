@@ -32,6 +32,9 @@
     <string name="ui_player_menu_subtitles_off">Off</string>
     <string name="ui_player_menu_subtitles_empty">No subtitle track in this stream.</string>
 
+    <!-- Speed -->
+    <string name="ui_player_menu_speed_hint">Applies to this playback and stays on for the next episode.</string>
+
     <!-- Sleep timer -->
     <string name="ui_player_menu_sleep_off">Off</string>
     <string name="ui_player_menu_sleep_end_of_episode">End of episode</string>

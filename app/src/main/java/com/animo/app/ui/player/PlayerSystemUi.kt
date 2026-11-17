@@ -41,7 +41,6 @@ internal fun ImmersiveVideoEffect(enabled: Boolean) {
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         insetsController.hide(WindowInsetsCompat.Type.systemBars())
 
-        val previousOrientation = activity.requestedOrientation
         activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
 
         // A 22-minute episode is longer than the screen timeout, and waking the phone by touching
@@ -50,7 +49,9 @@ internal fun ImmersiveVideoEffect(enabled: Boolean) {
 
         onDispose {
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            activity.requestedOrientation = previousOrientation
+            // Always back to portrait, not "whatever it was": leaving PiP hands the activity back
+            // while it is still in landscape, and every screen outside the player is portrait-first.
+            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             insetsController.show(WindowInsetsCompat.Type.systemBars())
         }
     }

@@ -508,17 +508,13 @@ private fun PlayerControlsOverlay(
                 .padding(horizontal = 16.dp, vertical = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            // Exactly centred: ±10 s either side of play/pause is the whole transport. Episode
+            // navigation lives under the seek bar with the rest of the metadata, so the middle of
+            // the screen stays symmetrical.
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(18.dp),
+                horizontalArrangement = Arrangement.spacedBy(22.dp),
             ) {
-                if (model.hasPrevious) {
-                    PlayerGlyph(
-                        icon = Icons.Rounded.SkipPrevious,
-                        description = stringResource(R.string.ui_player_previous),
-                        onClick = onPrevious,
-                    )
-                }
                 PlayerGlyph(
                     icon = Icons.Rounded.Replay10,
                     description = null,
@@ -559,13 +555,6 @@ private fun PlayerControlsOverlay(
                     onClick = { surfaceState.skipBy(SKIP_MS) },
                     size = 30.dp,
                 )
-                if (model.hasNext) {
-                    PlayerGlyph(
-                        icon = Icons.Rounded.SkipNext,
-                        description = stringResource(R.string.ui_player_next),
-                        onClick = onNext,
-                    )
-                }
             }
 
             Spacer(Modifier.height(10.dp))
@@ -584,8 +573,23 @@ private fun PlayerControlsOverlay(
                     .padding(top = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                if (model.hasPrevious) {
+                    PlayerGlyph(
+                        icon = Icons.Rounded.SkipPrevious,
+                        description = stringResource(R.string.ui_player_previous),
+                        onClick = onPrevious,
+                    )
+                }
+                if (model.hasNext) {
+                    PlayerGlyph(
+                        icon = Icons.Rounded.SkipNext,
+                        description = stringResource(R.string.ui_player_next),
+                        onClick = onNext,
+                    )
+                }
                 Text(
                     text = "${formatClock(position)} / ${formatClock(duration)}",
+                    modifier = Modifier.padding(start = 4.dp),
                     style = MaterialTheme.typography.labelSmall,
                     color = PlayerForeground.copy(alpha = 0.78f),
                 )
