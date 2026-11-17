@@ -45,6 +45,13 @@ data class TrackRow(
 
         /** Engine value for "subtitles off". */
         const val OFF_ID = "off"
+
+        /**
+         * A side-loaded subtitle file. It is not a container track, so selecting it means "turn the
+         * container's text track off and draw the file instead" — see the player screen's
+         * `onSelectText`.
+         */
+        const val FILE_ID = "file"
     }
 }
 

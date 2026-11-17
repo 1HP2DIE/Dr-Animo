@@ -13,6 +13,7 @@
     <!-- Tabs -->
     <string name="ui_player_menu_tab_quality">Quality</string>
     <string name="ui_player_menu_tab_audio">Audio</string>
+    <string name="ui_player_menu_tab_subtitle">Subtitles</string>
     <string name="ui_player_menu_tab_speed">Speed</string>
     <string name="ui_player_menu_tab_sleep">Sleep</string>
 

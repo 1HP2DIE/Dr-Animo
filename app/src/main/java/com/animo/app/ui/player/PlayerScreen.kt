@@ -55,12 +55,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -70,7 +68,19 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.animo.app.R
 import com.animo.app.domain.model.AudioTrack
 import com.animo.app.domain.model.PlayableStream
+import com.animo.app.di.ServiceLocator
 import com.animo.app.player.PlayerController
+import com.animo.app.player.TrackOption
+import com.animo.app.subtitle.SubtitleCue
+import com.animo.app.subtitle.SubtitleFiles
+import com.animo.app.subtitle.SubtitleParser
+import com.animo.app.subtitle.SubtitlePreferences
+import com.animo.app.subtitle.SubtitlePreset
+import com.animo.app.subtitle.SubtitleStyles
+import com.animo.app.subtitle.activeAt
+import com.animo.app.subtitle.online.OnlineSubtitleRepository
+import com.animo.app.subtitle.online.SubtitleQuery
+import com.animo.app.subtitle.online.SubtitleResult
 import com.animo.app.ui.LocalAppContainer
 import com.animo.app.ui.UiState
 import com.animo.app.ui.common.LoadingState
@@ -80,7 +90,11 @@ import com.animo.app.ui.common.formatClock
 import com.animo.app.ui.common.labelRes
 import com.animo.app.ui.settings.SettingsPreferences
 import com.animo.app.ui.theme.AnimoPalette
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private const val CONTROLS_AUTO_HIDE_MS = 3_000L
 
@@ -193,9 +207,216 @@ private fun PlayerStage(
     val texts by controller.texts.collectAsState()
     val selectedTextId by controller.selectedTextId.collectAsState()
 
-    // "Autoplay next" was a Settings switch nothing read. Reading it here is the only place it can
-    // take effect, because this is where a playback actually ends.
+    // ---- subtitles ---------------------------------------------------------
+    // The look is persisted, so it is loaded once and then written back debounced: a slider drag
+    // must not produce one DataStore write per pixel.
     val context = androidx.compose.ui.platform.LocalContext.current
+    val subtitlePrefs = remember(context) { SubtitlePreferences(context) }
+    var subtitleStyle by remember { mutableStateOf(SubtitleStyles.Default) }
+    var subtitleStyleReady by remember { mutableStateOf(false) }
+    var customPresets by remember { mutableStateOf(emptyList<SubtitlePreset>()) }
+    LaunchedEffect(subtitlePrefs) {
+        subtitleStyle = subtitlePrefs.style.first()
+        subtitleStyleReady = true
+        subtitlePrefs.presets.collect { customPresets = it }
+    }
+    LaunchedEffect(subtitleStyle, subtitleStyleReady) {
+        if (!subtitleStyleReady) return@LaunchedEffect
+        delay(350L)
+        subtitlePrefs.setStyle(subtitleStyle)
+    }
+
+    // A side-loaded file is per playback, not per install: it belongs to this episode's release,
+    // so it is deliberately not persisted.
+    var fileCues by remember { mutableStateOf(emptyList<SubtitleCue>()) }
+    var fileLabel by remember { mutableStateOf<String?>(null) }
+    var fileActive by remember { mutableStateOf(false) }
+    var subtitleBusy by remember { mutableStateOf<String?>(null) }
+    var subtitleError by remember { mutableStateOf<String?>(null) }
+
+    // Container cues are already "on screen now"; the player pushes them from Media3.
+    var containerLines by remember { mutableStateOf(emptyList<String>()) }
+
+    val subtitleFromFile = fileActive && fileCues.isNotEmpty()
+    var subtitleClockMs by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(subtitleFromFile) {
+        while (subtitleFromFile) {
+            subtitleClockMs = surfaceState.clockPositionMs()
+            delay(if (surfaceState.isPlaying) 90L else 300L)
+        }
+    }
+    val subtitleLines = if (subtitleFromFile) {
+        fileCues.activeAt(subtitleClockMs).flatMap { cue -> cue.text.split('\n') }
+    } else {
+        containerLines
+    }
+
+    val installSubtitle: (String, String) -> Unit = { name, content ->
+        scope.launch {
+            subtitleBusy = name
+            subtitleError = null
+            val parsed = withContext(Dispatchers.Default) {
+                runCatching { SubtitleParser.parse(name, content) }.getOrDefault(emptyList())
+            }
+            subtitleBusy = null
+            if (parsed.isEmpty()) {
+                subtitleError = context.getString(R.string.ui_sub_error_empty)
+            } else {
+                fileCues = parsed
+                fileLabel = name
+                fileActive = true
+                containerLines = emptyList()
+                // One renderer at a time: the container track would otherwise draw a second copy.
+                controller.selectTextTrack(TrackOption.OFF_ID)
+            }
+        }
+    }
+
+    /**
+     * Selecting a side-loaded file is not a container track, so it turns the engine's text track
+     * off; selecting the container's own track turns the file off. The picker shows one row per
+     * source, so the two can never both be "selected".
+     */
+    val onSelectText: (String) -> Unit = { id ->
+        when (id) {
+            TrackRow.FILE_ID -> {
+                fileActive = true
+                // The engine must stop drawing its own track, and any cue it already pushed must go
+                // too — otherwise the file and the container line overlap for a fraction of a second.
+                containerLines = emptyList()
+                controller.selectTextTrack(TrackOption.OFF_ID)
+            }
+
+            TrackOption.OFF_ID -> {
+                fileActive = false
+                containerLines = emptyList()
+                controller.selectTextTrack(TrackOption.OFF_ID)
+            }
+
+            else -> {
+                fileActive = false
+                controller.selectTextTrack(id)
+            }
+        }
+    }
+
+    // ---- online search ------------------------------------------------------
+    // Free sites are searched by title + episode. The picker stays open on the results, so the
+    // viewer sees what the match actually is before anything replaces the screen text.
+    val onlineRepository = remember { OnlineSubtitleRepository(ServiceLocator.httpClient) }
+    var onlinePhase by remember { mutableStateOf<OnlineSubtitlePhase>(OnlineSubtitlePhase.Idle) }
+    var onlineDownloadingId by remember { mutableStateOf<String?>(null) }
+    var onlineNote by remember { mutableStateOf<String?>(null) }
+
+    val subtitleQuery = remember(model.anime.id, model.episode.id) {
+        SubtitleQuery(
+            titles = listOf(model.anime.title, model.anime.alternative)
+                .filter { it.isNotBlank() }
+                .distinct(),
+            episode = model.episode.number,
+            year = model.anime.year,
+            malId = model.anime.malId,
+            aniListId = model.anime.aniId,
+            isMovie = model.anime.type.equals("movie", ignoreCase = true),
+        )
+    }
+    val onlineQueryLabel = "${model.anime.title} · E${model.episode.number}"
+
+    // Everything below is per-episode: a file or a search result for the last episode must not
+    // linger onto the next one.
+    LaunchedEffect(model.episode.id) {
+        onlinePhase = OnlineSubtitlePhase.Idle
+        onlineDownloadingId = null
+        onlineNote = null
+        fileCues = emptyList()
+        fileLabel = null
+        fileActive = false
+        containerLines = emptyList()
+    }
+
+    val startOnlineSearch: () -> Unit = {
+        if (onlinePhase !is OnlineSubtitlePhase.Searching) {
+            scope.launch {
+                onlinePhase = OnlineSubtitlePhase.Searching
+                onlineNote = null
+                val report = runCatching { onlineRepository.search(subtitleQuery) }.getOrNull()
+                onlinePhase = if (report == null) {
+                    OnlineSubtitlePhase.Failed(context.getString(R.string.ui_sub_online_failed))
+                } else {
+                    OnlineSubtitlePhase.Ready(report.results, report.failedSources)
+                }
+            }
+        }
+    }
+
+    val downloadOnline: (SubtitleResult) -> Unit = { result ->
+        if (onlineDownloadingId == null) {
+            scope.launch {
+                onlineDownloadingId = result.id
+                onlineNote = null
+                val file = runCatching { onlineRepository.download(result) }.getOrNull()
+                onlineDownloadingId = null
+                if (file == null) {
+                    onlineNote = context.getString(R.string.ui_sub_online_download_failed)
+                } else {
+                    installSubtitle(file.name, file.content)
+                    onlineNote = context.getString(R.string.ui_sub_online_downloaded, file.name)
+                }
+            }
+        }
+    }
+
+    val subtitleActions = SubtitlePanelActions(
+        onSelectTrack = onSelectText,
+        onStyleChange = { subtitleStyle = it },
+        onSavePreset = { name ->
+            val preset = SubtitlePreset(
+                id = "custom-${System.currentTimeMillis()}",
+                name = name,
+                style = subtitleStyle,
+            )
+            scope.launch { subtitlePrefs.setPresets(listOf(preset) + customPresets) }
+        },
+        onDeletePreset = { id ->
+            scope.launch { subtitlePrefs.setPresets(customPresets.filterNot { it.id == id }) }
+        },
+        onLoadFile = { uri ->
+            scope.launch {
+                subtitleBusy = context.getString(R.string.ui_sub_loading_generic)
+                subtitleError = null
+                val file = runCatching { SubtitleFiles.read(context, uri) }.getOrNull()
+                subtitleBusy = null
+                if (file == null) {
+                    subtitleError = context.getString(R.string.ui_sub_error_load)
+                } else {
+                    installSubtitle(file.name, file.content)
+                }
+            }
+        },
+        onLoadUrl = { url ->
+            scope.launch {
+                subtitleBusy = context.getString(R.string.ui_sub_loading_link)
+                subtitleError = null
+                val file = runCatching {
+                    SubtitleFiles.download(ServiceLocator.httpClient, url)
+                }.getOrNull()
+                subtitleBusy = null
+                if (file == null) {
+                    subtitleError = context.getString(R.string.ui_sub_error_load)
+                } else {
+                    installSubtitle(file.name, file.content)
+                }
+            }
+        },
+        onRemoveFile = {
+            fileCues = emptyList()
+            fileLabel = null
+            fileActive = false
+            controller.selectTextTrack(TrackOption.OFF_ID)
+        },
+        onSearchOnline = startOnlineSearch,
+        onDownloadOnline = downloadOnline,
+    )
     val inPip = rememberInPictureInPicture()
     val enterPip = rememberPipAction()
 
@@ -293,26 +514,38 @@ private fun PlayerStage(
                 onEnded = {
                     if (autoplayNext) viewModel.next()
                 },
+                onCues = { lines -> containerLines = lines },
             )
         }
 
-        // Invisible tap target under the controls: single tap shows/hides the overlay, double tap
-        // seeks ±10 s from the half you tapped. Double-tap is the gesture people already expect on a
-        // video, and it costs one pointer handler on this box.
+        // Gesture surface: tap = chrome, double tap = ±10 s, long press = accelerated seek,
+        // vertical drag = volume (right half) or brightness (left half).
+        val hudState = rememberPlayerHudState()
         Box(
             Modifier
                 .matchParentSize()
-                .pointerInput(surfaceState) {
-                    detectTapGestures(
-                        onTap = { controlsVisible = !controlsVisible },
-                        onDoubleTap = { offset ->
-                            val forward = offset.x >= size.width / 2f
-                            surfaceState.skipBy(if (forward) SKIP_MS else -SKIP_MS)
-                            controlsVisible = true
-                        },
-                    )
-                },
+                .playerGestures(
+                    surfaceState = surfaceState,
+                    hud = hudState,
+                    onToggleControls = { controlsVisible = !controlsVisible },
+                ),
         )
+
+        PlayerGestureHud(
+            hud = hudState.current,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(bottom = 24.dp),
+        )
+
+        if (!inPip) {
+            SubtitleOverlay(
+                lines = subtitleLines,
+                style = subtitleStyle,
+                liftForControls = controlsVisible,
+                modifier = Modifier.matchParentSize(),
+            )
+        }
 
         if (!inPip && !controlsVisible && surfaceState.isBuffering && model.errorMessage == null) {
             CircularProgressIndicator(
@@ -391,17 +624,28 @@ private fun PlayerStage(
                     audios = audios.map { TrackRow(it.id, it.label) },
                     selectedAudioId = selectedAudioId,
                     texts = texts.map { TrackRow(it.id, it.label) },
-                    selectedTextId = selectedTextId,
+                    selectedTextId = if (fileActive) TrackRow.FILE_ID else selectedTextId,
                     speed = speed,
                     hasQualities = qualities.size > 1,
                     hasAudioTracks = audios.size > 1,
                 ),
                 sleepMinutesLeft = sleepMinutes,
                 initialTab = settingsTab ?: PlayerMenuTab.QUALITY,
+                subtitle = SubtitlePanelState(
+                    style = subtitleStyle,
+                    presets = SubtitleStyles.builtInPresets + customPresets,
+                    fileLabel = fileLabel,
+                    busyLabel = subtitleBusy,
+                    error = subtitleError,
+                    online = onlinePhase,
+                    onlineQuery = onlineQueryLabel,
+                    downloadingId = onlineDownloadingId,
+                    onlineNote = onlineNote,
+                ),
+                subtitleActions = subtitleActions,
                 onDismiss = { settingsTab = null },
                 onSelectQuality = controller::selectQuality,
                 onSelectAudio = controller::selectAudioTrack,
-                onSelectText = controller::selectTextTrack,
                 onSelectSpeed = { value ->
                     speed = value
                     surfaceState.setSpeed(value)
@@ -603,7 +847,7 @@ private fun PlayerControlsOverlay(
                 PlayerGlyph(
                     icon = Icons.Rounded.Subtitles,
                     description = stringResource(R.string.ui_player_cc),
-                    onClick = { onOpenSettings(PlayerMenuTab.AUDIO) },
+                    onClick = { onOpenSettings(PlayerMenuTab.SUBTITLE) },
                 )
                 PlayerGlyph(
                     icon = Icons.Rounded.HighQuality,

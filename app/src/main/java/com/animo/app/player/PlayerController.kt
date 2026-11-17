@@ -117,6 +117,18 @@ class PlayerController(
      */
     private val audioOverrides = mutableMapOf<String, TrackSelectionOverride>()
     private val textOverrides = mutableMapOf<String, TrackSelectionOverride>()
+
+    /**
+     * "The user picked a track" — as opposed to "follow whatever the stream selected".
+     *
+     * Without this, choosing *Off* could never stick: [publishTracks] used to reset the value to the
+     * engine's own choice on every tracks-change, so subtitles came back on the next episode.
+     */
+    private var audioPinned = false
+    private var textPinned = false
+
+    /** Set on attach: re-apply the pins once the new player has published its track groups. */
+    private var selectionNeedsReapply = false
     private val swapIds = AtomicLong(0L)
 
     private val listener = object : Player.Listener {
@@ -131,6 +143,7 @@ class PlayerController(
         detach()
         this.player = player
         player.addListener(listener)
+        selectionNeedsReapply = true
         publishQualities(player.currentTracks)
         publishTracks(player.currentTracks)
         applyQuality(player, _activeQualityId.value)
@@ -200,12 +213,14 @@ class PlayerController(
 
     /** Switches the container audio track. The SUB/DUB *source* switch is [requestAudio]. */
     fun selectAudioTrack(id: String) {
+        audioPinned = true
         _selectedAudioTrackId.value = id
         applyAudioTrack(player ?: return, id)
     }
 
     /** Switches (or clears) the subtitle track. */
     fun selectTextTrack(id: String) {
+        textPinned = true
         _selectedTextId.value = id
         applyTextTrack(player ?: return, id)
     }
@@ -326,17 +341,31 @@ class PlayerController(
 
         _audios.value = audios.distinctBy { it.id }
         _texts.value = texts.distinctBy { it.id }
-        // Only follow the stream while the user has not made a choice; a pin that disappeared with
-        // the new source falls back to the engine's own answer.
-        if (_selectedAudioTrackId.value == TrackOption.AUTO_ID ||
-            audios.none { it.id == _selectedAudioTrackId.value }
+
+        // Follow the stream until the user makes a choice; a pin that no longer exists in this
+        // source falls back to the engine's own answer (and stops being a pin).
+        if (!audioPinned || (_selectedAudioTrackId.value != TrackOption.AUTO_ID &&
+                audios.none { it.id == _selectedAudioTrackId.value })
         ) {
+            if (audioPinned) audioPinned = false
             _selectedAudioTrackId.value = selectedAudioId
         }
-        if (_selectedTextId.value == TrackOption.OFF_ID ||
-            texts.none { it.id == _selectedTextId.value }
+        if (!textPinned || (_selectedTextId.value != TrackOption.OFF_ID &&
+                texts.none { it.id == _selectedTextId.value })
         ) {
+            if (textPinned) textPinned = false
             _selectedTextId.value = selectedTextId
+        }
+
+        // Overrides are captured above but are only valid for this player instance, so a pin has to
+        // be re-applied *after* the new groups are known — this is what keeps a subtitle choice
+        // across an episode change.
+        if (selectionNeedsReapply) {
+            selectionNeedsReapply = false
+            player?.let { attached ->
+                applyAudioTrack(attached, _selectedAudioTrackId.value)
+                applyTextTrack(attached, _selectedTextId.value)
+            }
         }
     }
 

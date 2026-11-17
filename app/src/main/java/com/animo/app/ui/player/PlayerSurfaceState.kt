@@ -1,5 +1,6 @@
 package com.animo.app.ui.player
 
+import android.os.SystemClock
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -44,6 +45,9 @@ class PlayerSurfaceState {
     private var pauseCommand: (() -> Unit)? = null
     private var speedCommand: ((Float) -> Unit)? = null
 
+    /** When [update] last ran — the base for [clockPositionMs]'s interpolation. */
+    private var positionStampMs = 0L
+
     val isPlaying: Boolean get() = playing.value
     val isBuffering: Boolean get() = buffering.value
     val positionMs: Long get() = position.value
@@ -65,6 +69,24 @@ class PlayerSurfaceState {
         buffered.value = bufferedMs.coerceAtLeast(0L)
         playing.value = isPlaying
         buffering.value = isBuffering
+        positionStampMs = SystemClock.elapsedRealtime()
+    }
+
+    /**
+     * Position for things that must land inside a frame — subtitles today.
+     *
+     * The host pushes a position four times a second, which is plenty for a seek bar and visibly
+     * late for a cue that starts on a cut. While playback is actually advancing, this extrapolates
+     * from the last tick; paused and buffering fall back to the plain value so a paused frame never
+     * drifts a cue onto the screen.
+     */
+    fun clockPositionMs(): Long {
+        val base = position.value
+        if (!playing.value || buffering.value) return base
+        val elapsed = (SystemClock.elapsedRealtime() - positionStampMs).coerceAtLeast(0L)
+        val predicted = base + elapsed
+        val total = duration.value
+        return if (total > 0L) predicted.coerceAtMost(total) else predicted
     }
 
     fun bind(

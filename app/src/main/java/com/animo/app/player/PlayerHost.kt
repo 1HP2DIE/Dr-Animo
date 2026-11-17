@@ -58,6 +58,12 @@ fun PlayerHost(
     onPlayerAvailable: ((Player?) -> Unit)? = null,
     /** Fired once when playback reaches the end, so the caller can honour "autoplay next". */
     onEnded: (() -> Unit)? = null,
+    /**
+     * The subtitle lines that are on screen right now, straight from the selected container track.
+     * Empty when nothing is showing. The app draws these itself ([com.animo.app.ui.player.SubtitleOverlay])
+     * so the viewer's colour/size/position settings apply; `PlayerView`'s own subtitle view is hidden.
+     */
+    onCues: ((List<String>) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -84,6 +90,7 @@ fun PlayerHost(
     val latestOnError by rememberUpdatedState(onError)
     val latestReResolve by rememberUpdatedState(reResolve)
     val latestOnEnded by rememberUpdatedState(onEnded)
+    val latestOnCues by rememberUpdatedState(onCues)
 
     val player = remember(source) {
         Media3Factory.buildPlayer(
@@ -107,6 +114,14 @@ fun PlayerHost(
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 playing = isPlaying
+            }
+
+            override fun onCues(cueGroup: androidx.media3.common.text.CueGroup) {
+                // Timing is the player's job; these are the lines that belong on screen right now.
+                val lines = cueGroup.cues.mapNotNull { cue ->
+                    cue.text?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+                }
+                latestOnCues?.invoke(lines)
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -209,6 +224,9 @@ fun PlayerHost(
                 // of controls (gear, ±5 s, its own seek bar and clock) on every tap, and the two
                 // never agree — measured on device.
                 setUseController(false)
+                // The Compose overlay draws subtitles with the viewer's own style; Media3's view
+                // takes one fixed style and would paint a second copy underneath.
+                subtitleView?.let { it.visibility = android.view.View.GONE }
                 setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
                 setKeepContentOnPlayerReset(true)
             }

@@ -73,17 +73,18 @@ import kotlin.math.abs
 enum class PlayerMenuTab(@StringRes val labelRes: Int, val icon: ImageVector) {
     QUALITY(R.string.ui_player_menu_tab_quality, Icons.Rounded.HighQuality),
     AUDIO(R.string.ui_player_menu_tab_audio, Icons.Rounded.GraphicEq),
+    SUBTITLE(R.string.ui_player_menu_tab_subtitle, Icons.Rounded.Subtitles),
     SPEED(R.string.ui_player_menu_tab_speed, Icons.Rounded.Speed),
     SLEEP(R.string.ui_player_menu_tab_sleep, Icons.Rounded.Bedtime),
 }
 
 private val PanelShapeBottom = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
 private val SidePanelShape = RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp)
-private val CardShape = RoundedCornerShape(16.dp)
+internal val CardShape = RoundedCornerShape(16.dp)
 
 /** Cards are 1.5dp of border apart — enough to read as a control, not enough to look boxed in. */
-private val SelectedBorder = 1.5.dp
-private val IdleBorder = 1.dp
+internal val SelectedBorder = 1.5.dp
+internal val IdleBorder = 1.dp
 private val SidePanelWidth = 400.dp
 private val WideLayoutBreakpoint = 600.dp
 
@@ -105,9 +106,10 @@ fun PlayerSettingsSheet(
     onDismiss: () -> Unit,
     onSelectQuality: (String) -> Unit,
     onSelectAudio: (String) -> Unit,
-    onSelectText: (String) -> Unit,
     onSelectSpeed: (Float) -> Unit,
     onSelectSleep: (Int?) -> Unit,
+    subtitle: SubtitlePanelState = SubtitlePanelState(),
+    subtitleActions: SubtitlePanelActions = SubtitlePanelActions(),
     initialTab: PlayerMenuTab = PlayerMenuTab.QUALITY,
 ) {
     var tabIndex by rememberSaveable { mutableIntStateOf(initialTab.ordinal) }
@@ -178,7 +180,8 @@ fun PlayerSettingsSheet(
                 ) {
                     when (PlayerMenuTab.entries[index]) {
                         PlayerMenuTab.QUALITY -> QualityPane(tuning, onSelectQuality)
-                        PlayerMenuTab.AUDIO -> AudioPane(tuning, onSelectAudio, onSelectText)
+                        PlayerMenuTab.AUDIO -> AudioPane(tuning, onSelectAudio)
+                        PlayerMenuTab.SUBTITLE -> SubtitlePane(tuning, subtitle, subtitleActions)
                         PlayerMenuTab.SPEED -> SpeedPane(tuning, onSelectSpeed)
                         PlayerMenuTab.SLEEP -> SleepPane(sleepMinutesLeft, onSelectSleep)
                     }
@@ -342,7 +345,6 @@ private fun bitrateHint(bitrate: Int): String? =
 private fun AudioPane(
     tuning: PlayerTuning,
     onSelectAudio: (String) -> Unit,
-    onSelectText: (String) -> Unit,
 ) {
     SettingCard(
         title = stringResource(R.string.ui_player_menu_audio_default),
@@ -364,26 +366,6 @@ private fun AudioPane(
         EmptyNote(stringResource(R.string.ui_player_menu_audio_single))
     }
 
-    SectionLabel(stringResource(R.string.ui_player_menu_section_subtitles))
-    SettingCard(
-        title = stringResource(R.string.ui_player_menu_subtitles_off),
-        hint = null,
-        selected = tuning.selectedTextId == TrackRow.OFF_ID,
-        glyph = Icons.Rounded.Subtitles,
-        onClick = { onSelectText(TrackRow.OFF_ID) },
-    )
-    if (tuning.texts.isEmpty()) {
-        EmptyNote(stringResource(R.string.ui_player_menu_subtitles_empty))
-    } else {
-        tuning.texts.forEach { track ->
-            SettingCard(
-                title = track.label,
-                hint = null,
-                selected = track.id == tuning.selectedTextId,
-                onClick = { onSelectText(track.id) },
-            )
-        }
-    }
 }
 
 // ---------------------------------------------------------------- speed
@@ -459,7 +441,7 @@ private fun SleepPane(sleepMinutesLeft: Int?, onSelect: (Int?) -> Unit) {
  * tint so it does not need a different widget to stand out.
  */
 @Composable
-private fun SettingCard(
+internal fun SettingCard(
     title: String,
     hint: String?,
     selected: Boolean,
@@ -526,10 +508,15 @@ private fun SettingCard(
 }
 
 @Composable
-private fun Pill(label: String, selected: Boolean, onClick: () -> Unit) {
+internal fun Pill(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val colors = MaterialTheme.colorScheme
     Row(
-        modifier = Modifier
+        modifier = modifier
             .clip(CircleShape)
             .background(if (selected) colors.primary else colors.surfaceContainer)
             .border(
@@ -577,7 +564,7 @@ private fun SelectionDot(selected: Boolean) {
 }
 
 @Composable
-private fun SectionLabel(text: String) {
+internal fun SectionLabel(text: String) {
     Text(
         text = text.uppercase(),
         modifier = Modifier.padding(top = 8.dp),
@@ -587,7 +574,7 @@ private fun SectionLabel(text: String) {
 }
 
 @Composable
-private fun EmptyNote(text: String) {
+internal fun EmptyNote(text: String) {
     Text(
         text = text,
         modifier = Modifier
@@ -639,7 +626,6 @@ private fun PlayerMenuQualityPreview() {
                 onDismiss = {},
                 onSelectQuality = {},
                 onSelectAudio = {},
-                onSelectText = {},
                 onSelectSpeed = {},
                 onSelectSleep = {},
             )
@@ -658,7 +644,6 @@ private fun PlayerMenuSleepPreview() {
                 onDismiss = {},
                 onSelectQuality = {},
                 onSelectAudio = {},
-                onSelectText = {},
                 onSelectSpeed = {},
                 onSelectSleep = {},
                 initialTab = PlayerMenuTab.SLEEP,

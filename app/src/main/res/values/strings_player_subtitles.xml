@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copy for the subtitle pane (ui/player/SubtitleSettingsPane.kt) and the on-video renderer.
+  Prefix: `ui_sub_`. Kept in its own file, like the rest of the player copy, so it never collides
+  with the shared string table.
+-->
+<resources>
+
+    <!-- Tracks -->
+    <string name="ui_sub_section_tracks">Tracks</string>
+    <string name="ui_sub_track_file">File · %1$s</string>
+    <string name="ui_sub_track_file_hint">Loaded by you for this episode</string>
+    <string name="ui_sub_track_off">Off</string>
+    <string name="ui_sub_track_none">This stream has no subtitle track — load a file below.</string>
+    <string name="ui_sub_load_file">Load subtitle file</string>
+    <string name="ui_sub_load_file_hint">SRT, VTT or ASS from your phone</string>
+    <string name="ui_sub_load_url">Load from a link</string>
+    <string name="ui_sub_load_url_hint">Paste a direct link to the subtitle file</string>
+    <string name="ui_sub_remove_file">Remove file</string>
+    <string name="ui_sub_loading_generic">Loading subtitles…</string>
+    <string name="ui_sub_loading_link">Loading from link…</string>
+    <string name="ui_sub_error_load">Could not read that subtitle file.</string>
+    <string name="ui_sub_error_empty">No readable subtitles in that file.</string>
+
+    <!-- Link dialog -->
+    <string name="ui_sub_url_title">Subtitle link</string>
+    <string name="ui_sub_url_label">https://…</string>
+    <string name="ui_sub_url_apply">Load</string>
+    <string name="ui_sub_cancel">Cancel</string>
+    <string name="ui_sub_save">Save</string>
+
+    <!-- Online search -->
+    <string name="ui_sub_section_online">Online</string>
+    <string name="ui_sub_online_search">Find subtitles online</string>
+    <string name="ui_sub_online_search_hint">Looks for “%1$s” on free subtitle sites</string>
+    <string name="ui_sub_online_searching">Searching for “%1$s”…</string>
+    <string name="ui_sub_online_empty">No online subtitles matched this episode. Search again, or load a file.</string>
+    <string name="ui_sub_online_failed">Could not search right now — check your connection.</string>
+    <string name="ui_sub_online_found">%1$d subtitles found</string>
+    <string name="ui_sub_online_partial">%1$d sites did not answer</string>
+    <string name="ui_sub_online_all">All</string>
+    <string name="ui_sub_online_more">Showing the first %1$d — pick a language to narrow it down.</string>
+    <string name="ui_sub_online_retry">Search again</string>
+    <string name="ui_sub_online_downloaded">Loaded “%1$s”</string>
+    <string name="ui_sub_online_download_failed">Could not download that subtitle.</string>
+
+    <!-- Presets -->
+    <string name="ui_sub_section_presets">Presets</string>
+    <string name="ui_sub_preset_save">Save current look</string>
+    <string name="ui_sub_preset_dialog_title">Save preset</string>
+    <string name="ui_sub_preset_name">Preset name</string>
+    <string name="ui_sub_preset_name_hint">My look</string>
+    <string name="ui_sub_preset_delete">Delete %1$s</string>
+    <string name="ui_sub_reset">Reset to default</string>
+
+    <!-- Preview -->
+    <string name="ui_sub_preview">Preview</string>
+    <string name="ui_sub_preview_line">This is how your subtitles will look on screen</string>
+
+    <!-- Style -->
+    <string name="ui_sub_section_text">Text</string>
+    <string name="ui_sub_size">Size</string>
+    <string name="ui_sub_text_color">Text colour</string>
+    <string name="ui_sub_bold">Bold</string>
+    <string name="ui_sub_italic">Italic</string>
+    <string name="ui_sub_uppercase">Uppercase</string>
+    <string name="ui_sub_alignment">Alignment</string>
+    <string name="ui_sub_align_start">Left</string>
+    <string name="ui_sub_align_center">Centre</string>
+    <string name="ui_sub_align_end">Right</string>
+    <string name="ui_sub_max_lines">Max lines</string>
+    <string name="ui_sub_letter_spacing">Letter spacing</string>
+
+    <string name="ui_sub_section_edge">Outline &amp; shadow</string>
+    <string name="ui_sub_outline_width">Outline thickness</string>
+    <string name="ui_sub_outline_color">Outline colour</string>
+    <string name="ui_sub_shadow">Drop shadow</string>
+
+    <string name="ui_sub_section_placement">Background &amp; position</string>
+    <string name="ui_sub_background">Background</string>
+    <string name="ui_sub_bg_none">None</string>
+    <string name="ui_sub_bg_box">Box</string>
+    <string name="ui_sub_bg_bar">Bar</string>
+    <string name="ui_sub_bg_opacity">Opacity</string>
+    <string name="ui_sub_bottom">Height from bottom</string>
+    <string name="ui_sub_bottom_hint">Raise the lines clear of the controls, or lower them into the black bar under a widescreen video.</string>
+    <string name="ui_sub_side_margin">Side margin</string>
+
+    <!-- Value labels -->
+    <string name="ui_sub_value_scale">%1$s×</string>
+    <string name="ui_sub_value_percent">%1$d%%</string>
+    <string name="ui_sub_value_lines">%1$d</string>
+    <string name="ui_sub_value_em">%1$s em</string>
+    <string name="ui_sub_value_dp">%1$s dp</string>
+
+</resources>
