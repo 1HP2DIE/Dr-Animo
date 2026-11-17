@@ -4,6 +4,7 @@ package com.animo.app.player
 
 import androidx.media3.common.C
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import com.animo.app.domain.model.AudioTrack
@@ -25,6 +26,20 @@ data class QualityOption(
     val bitrate: Int,
     val selected: Boolean = false,
 )
+
+/** One selectable container track (audio or subtitle). [id] is stable for the life of the source. */
+data class TrackOption(
+    val id: String,
+    val label: String,
+) {
+    companion object {
+        /** "Let the player decide" — the default audio rendition. */
+        const val AUTO_ID = "auto"
+
+        /** Subtitles off. The default, because nothing we ship carries text tracks yet. */
+        const val OFF_ID = "off"
+    }
+}
 
 /**
  * A resolved stream the host should switch to (SUB/DUB changes need a whole new [PlayableStream] —
@@ -61,6 +76,20 @@ class PlayerController(
     private val _activeQualityId = MutableStateFlow(AUTO_QUALITY_ID)
     val activeQualityId: StateFlow<String> = _activeQualityId.asStateFlow()
 
+    /** Container audio tracks (a multi-audio HLS stream), not the SUB/DUB source choice. */
+    private val _audios = MutableStateFlow<List<TrackOption>>(emptyList())
+    val audios: StateFlow<List<TrackOption>> = _audios.asStateFlow()
+
+    private val _selectedAudioTrackId = MutableStateFlow(TrackOption.AUTO_ID)
+    val selectedAudioTrackId: StateFlow<String> = _selectedAudioTrackId.asStateFlow()
+
+    /** Subtitle tracks present in the container. Empty for every source we ship today. */
+    private val _texts = MutableStateFlow<List<TrackOption>>(emptyList())
+    val texts: StateFlow<List<TrackOption>> = _texts.asStateFlow()
+
+    private val _selectedTextId = MutableStateFlow(TrackOption.OFF_ID)
+    val selectedTextId: StateFlow<String> = _selectedTextId.asStateFlow()
+
     private val _activeAudio = MutableStateFlow<AudioTrack?>(null)
     val activeAudio: StateFlow<AudioTrack?> = _activeAudio.asStateFlow()
 
@@ -81,11 +110,19 @@ class PlayerController(
 
     private var player: Player? = null
     private var audioJob: Job? = null
+
+    /**
+     * Track ids are not usable as `TrackSelectionOverride` arguments on their own, so the override
+     * objects are captured while the tracks are known (they are only valid for one player instance).
+     */
+    private val audioOverrides = mutableMapOf<String, TrackSelectionOverride>()
+    private val textOverrides = mutableMapOf<String, TrackSelectionOverride>()
     private val swapIds = AtomicLong(0L)
 
     private val listener = object : Player.Listener {
         override fun onTracksChanged(tracks: Tracks) {
             publishQualities(tracks)
+            publishTracks(tracks)
         }
     }
 
@@ -95,7 +132,11 @@ class PlayerController(
         this.player = player
         player.addListener(listener)
         publishQualities(player.currentTracks)
+        publishTracks(player.currentTracks)
         applyQuality(player, _activeQualityId.value)
+        // A new source resets Media3's track parameters, so the user's picks have to be re-applied.
+        applyAudioTrack(player, _selectedAudioTrackId.value)
+        applyTextTrack(player, _selectedTextId.value)
         _resumePositionMs.value = player.currentPosition.coerceAtLeast(0L)
     }
 
@@ -157,6 +198,44 @@ class PlayerController(
         _audioError.value = null
     }
 
+    /** Switches the container audio track. The SUB/DUB *source* switch is [requestAudio]. */
+    fun selectAudioTrack(id: String) {
+        _selectedAudioTrackId.value = id
+        applyAudioTrack(player ?: return, id)
+    }
+
+    /** Switches (or clears) the subtitle track. */
+    fun selectTextTrack(id: String) {
+        _selectedTextId.value = id
+        applyTextTrack(player ?: return, id)
+    }
+
+    private fun applyAudioTrack(player: Player, id: String) {
+        val builder = player.trackSelectionParameters.buildUpon()
+        if (id == TrackOption.AUTO_ID) {
+            builder.clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+        } else {
+            val override = audioOverrides[id] ?: return
+            builder.setOverrideForType(override)
+        }
+        player.trackSelectionParameters = builder.build()
+    }
+
+    private fun applyTextTrack(player: Player, id: String) {
+        val builder = player.trackSelectionParameters.buildUpon()
+        if (id == TrackOption.OFF_ID) {
+            builder
+                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+        } else {
+            val override = textOverrides[id] ?: return
+            builder
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                .setOverrideForType(override)
+        }
+        player.trackSelectionParameters = builder.build()
+    }
+
     fun selectQuality(qualityId: String) {
         _activeQualityId.value = qualityId
         player?.let { applyQuality(it, qualityId) }
@@ -210,6 +289,67 @@ class PlayerController(
         if (pinned != AUTO_QUALITY_ID && options.none { it.id == pinned }) {
             _activeQualityId.value = AUTO_QUALITY_ID
         }
+    }
+
+    /**
+     * Reads the container's audio and subtitle groups. Both lists are usually empty on the sources we
+     * ship (a single muxed audio track, no text), but the menu has to say that honestly rather than
+     * showing an empty picker.
+     */
+    private fun publishTracks(tracks: Tracks) {
+        val audios = mutableListOf<TrackOption>()
+        val texts = mutableListOf<TrackOption>()
+        audioOverrides.clear()
+        textOverrides.clear()
+
+        var selectedAudioId = TrackOption.AUTO_ID
+        var selectedTextId = TrackOption.OFF_ID
+
+        tracks.groups.forEachIndexed { groupIndex, group ->
+            val type = group.type
+            if (type != C.TRACK_TYPE_AUDIO && type != C.TRACK_TYPE_TEXT) return@forEachIndexed
+            for (trackIndex in 0 until group.length) {
+                val format = group.getTrackFormat(trackIndex)
+                val id = format.id ?: "$groupIndex:$trackIndex"
+                val option = TrackOption(id = id, label = trackLabel(format, type, audios.size, texts.size))
+                if (type == C.TRACK_TYPE_AUDIO) {
+                    audios += option
+                    audioOverrides[id] = TrackSelectionOverride(group.mediaTrackGroup, trackIndex)
+                    if (group.isTrackSelected(trackIndex)) selectedAudioId = id
+                } else {
+                    texts += option
+                    textOverrides[id] = TrackSelectionOverride(group.mediaTrackGroup, trackIndex)
+                    if (group.isTrackSelected(trackIndex)) selectedTextId = id
+                }
+            }
+        }
+
+        _audios.value = audios.distinctBy { it.id }
+        _texts.value = texts.distinctBy { it.id }
+        // Only follow the stream while the user has not made a choice; a pin that disappeared with
+        // the new source falls back to the engine's own answer.
+        if (_selectedAudioTrackId.value == TrackOption.AUTO_ID ||
+            audios.none { it.id == _selectedAudioTrackId.value }
+        ) {
+            _selectedAudioTrackId.value = selectedAudioId
+        }
+        if (_selectedTextId.value == TrackOption.OFF_ID ||
+            texts.none { it.id == _selectedTextId.value }
+        ) {
+            _selectedTextId.value = selectedTextId
+        }
+    }
+
+    private fun trackLabel(
+        format: androidx.media3.common.Format,
+        type: Int,
+        audioIndex: Int,
+        textIndex: Int,
+    ): String {
+        format.label?.takeIf { it.isNotBlank() }?.let { return it }
+        format.language?.takeIf { it.isNotBlank() && it != "und" }
+            ?.let { return it.uppercase(java.util.Locale.ROOT) }
+        return if (type == C.TRACK_TYPE_AUDIO) "Audio ${audioIndex + 1}" else "Subtitle ${textIndex + 1}"
     }
 
     /**

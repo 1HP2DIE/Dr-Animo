@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copy for the player settings sheet (ui/player/PlayerMenus.kt).
+  Its own file, separate from strings_ui.xml, so parallel player work never collides on one resource
+  table; every key is prefixed `ui_player_menu_`.
+-->
+<resources>
+
+    <!-- Sheet chrome -->
+    <string name="ui_player_menu_title">Playback</string>
+    <string name="ui_player_menu_close">Close settings</string>
+
+    <!-- Tabs -->
+    <string name="ui_player_menu_tab_quality">Quality</string>
+    <string name="ui_player_menu_tab_audio">Audio</string>
+    <string name="ui_player_menu_tab_speed">Speed</string>
+    <string name="ui_player_menu_tab_sleep">Sleep</string>
+
+    <!-- Quality -->
+    <string name="ui_player_menu_auto">Auto</string>
+    <string name="ui_player_menu_auto_hint">Adaptive — the master playlist decides</string>
+    <string name="ui_player_menu_quality_hint">%1$dp · %2$s Mbps</string>
+    <string name="ui_player_menu_quality_hint_bitrate_only">%1$s Mbps</string>
+    <string name="ui_player_menu_quality_hint_plain">%1$dp</string>
+    <string name="ui_player_menu_quality_single">This stream carries a single rendition — there is nothing to switch.</string>
+
+    <!-- Audio + subtitles -->
+    <string name="ui_player_menu_audio_default">Default</string>
+    <string name="ui_player_menu_audio_default_hint">The track the player picks first</string>
+    <string name="ui_player_menu_audio_single">This stream carries one audio track.</string>
+    <string name="ui_player_menu_section_subtitles">Subtitles</string>
+    <string name="ui_player_menu_subtitles_off">Off</string>
+    <string name="ui_player_menu_subtitles_empty">No subtitle track in this stream.</string>
+
+    <!-- Sleep timer -->
+    <string name="ui_player_menu_sleep_off">Off</string>
+    <string name="ui_player_menu_sleep_end_of_episode">End of episode</string>
+    <string name="ui_player_menu_sleep_minutes">%1$d minutes</string>
+    <string name="ui_player_menu_sleep_left_minutes">%1$d min left</string>
+    <string name="ui_player_menu_sleep_left_end_of_episode">Stops after this episode</string>
+
+</resources>
