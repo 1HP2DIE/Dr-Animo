@@ -51,7 +51,7 @@ object StreamTracks {
                         label = label,
                         language = languageOf(file),
                         isDefault = track["default"]?.jsonPrimitive?.booleanOrNull == true,
-                        forced = label.contains("forced", ignoreCase = true),
+                        forced = isForcedLabel(label),
                     )
                     val existing = byLabel[label]
                     byLabel[label] = when {
@@ -82,6 +82,10 @@ object StreamTracks {
                 ?: english.firstOrNull { !it.forced }
         }
     }
+
+    /** "English (Forced)", "English (Signs & Songs)" — the track a dub wants on. */
+    fun isForcedLabel(label: String): Boolean =
+        label.contains("forced", ignoreCase = true) || label.contains("signs", ignoreCase = true)
 
     private fun StreamSubtitle.isEnglish(): Boolean =
         language in setOf("en", "eng") || label.startsWith("English", ignoreCase = true)
@@ -118,7 +122,14 @@ object PreviewVtt {
     private val XYWH = Regex("""#xywh=(\d+),(\d+),(\d+),(\d+)""")
 
     fun parse(content: String, baseUrl: String): List<PreviewCell> {
-        val base = baseUrl.substringBefore('?').substringBeforeLast('/') + "/"
+        // `…/preview/thumbnails.vtt` is a file inside the folder; `…/thumbnails_vtt/<id>` (no
+        // extension) is itself the folder its sprites live under — both measured live.
+        val clean = baseUrl.substringBefore('?').trimEnd('/')
+        val base = if (clean.substringAfterLast('/').contains('.')) {
+            clean.substringBeforeLast('/') + "/"
+        } else {
+            "$clean/"
+        }
         val lines = content.replace("\r\n", "\n").lines()
         val cells = ArrayList<PreviewCell>()
         var i = 0

@@ -89,7 +89,14 @@ class AltStreamSource(
                 ResolveException.NotFound("server returned no stream"),
             )
 
-        Result.success(stream(loaded.shard, source, audio))
+        val renditions = AltStreamProtocol.alternates(loaded.payload, source).map { entry ->
+            com.animo.app.domain.model.StreamAlternate(
+                label = entry.quality,
+                height = AltStreamProtocol.heightOf(entry.quality) ?: 0,
+                url = AltStreamProtocol.playlistUrl(loaded.shard, entry),
+            )
+        }
+        Result.success(stream(loaded.shard, source, audio).copy(alternates = renditions))
     }
 
     /**

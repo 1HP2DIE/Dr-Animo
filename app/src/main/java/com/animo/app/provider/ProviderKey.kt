@@ -41,6 +41,16 @@ enum class ProviderKey(val slot: String) {
     STREAM_SOURCE_B_REFERER("source_b_referer"),
     STREAM_SOURCE_B_USER_AGENT("source_b_user_agent"),
 
+    /** File-mirror source: its JSON API (AniList-keyed) and the player host behind it. */
+    MIRROR_API("mirror_api"),
+    MIRROR_PLAYER("mirror_player"),
+
+    /** Direct-file archive source: one site, title search + per-quality files. */
+    ARCHIVE_HOST("archive_host"),
+
+    /** Community opening/ending timestamps, for sources that publish no markers. */
+    SKIP_TIMES_API("skip_api"),
+
     SUBTITLE_HOST_A("sub_a"),
     SUBTITLE_HOST_B("sub_b"),
     SUBTITLE_HOST_B_CDN("sub_b_cdn"),

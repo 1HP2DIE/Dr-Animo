@@ -89,6 +89,24 @@ data class PlayableStream(
     val subtitles: List<StreamSubtitle> = emptyList(),
     /** WebVTT index of seek-preview sprites (fetched with [referer]); `null` when there is none. */
     val previewVtt: String? = null,
+    /** HLS playlist, or a single progressive file (MP4/MKV). */
+    val container: StreamContainer = StreamContainer.HLS,
+    /**
+     * Other renditions of the same episode as separate URLs, for sources whose playlist has no
+     * variants (each quality is its own file/playlist). Empty when the playlist itself adapts.
+     */
+    val alternates: List<StreamAlternate> = emptyList(),
+    /** Audio language to select inside a multi-audio file (`jpn`, `eng`…); `null` = file default. */
+    val preferredAudioLanguage: String? = null,
+)
+
+enum class StreamContainer { HLS, PROGRESSIVE }
+
+/** One rendition of a stream at its own URL. [url] uses the stream's referer and user agent. */
+data class StreamAlternate(
+    val label: String,
+    val height: Int,
+    val url: String,
 )
 
 /** One subtitle file a source offers for a stream. */

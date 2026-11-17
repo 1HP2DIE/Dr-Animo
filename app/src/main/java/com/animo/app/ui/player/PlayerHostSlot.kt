@@ -60,7 +60,8 @@ internal fun PlayerHostSlot(
         failure = null
         masterUrlProvider().fold(
             onSuccess = {
-                stream = it
+                // The controller may start a different rendition (the viewer's pinned quality).
+                stream = controller?.prepareStream(it) ?: it
                 state.setStream(it)
             },
             onFailure = { error ->
@@ -157,5 +158,7 @@ internal fun PlayerHostSlot(
         onEnded = onEnded,
         onCues = onCues,
         resizeMode = videoFit.resizeMode,
+        progressive = activeStream.container == com.animo.app.domain.model.StreamContainer.PROGRESSIVE,
+        preferredAudioLanguage = activeStream.preferredAudioLanguage,
     )
 }

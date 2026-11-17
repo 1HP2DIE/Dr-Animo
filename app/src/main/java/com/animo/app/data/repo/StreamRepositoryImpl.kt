@@ -12,6 +12,12 @@ import com.animo.app.domain.repo.AlternativeStreamSource
 import com.animo.app.domain.repo.StreamRepository
 import com.animo.app.player.ResolveException
 import com.animo.app.player.StreamResolver
+import com.animo.app.domain.repo.FallbackStreamSource
+import com.animo.app.domain.repo.SourceRequest
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -37,6 +43,10 @@ class StreamRepositoryImpl(
     /** Titles and year of the row, used to pick the right season on the alternative server. */
     private val animeTitlesOf: suspend (animeId: Int) -> List<String> = { emptyList() },
     private val animeYearOf: suspend (animeId: Int) -> Int? = { null },
+    /** Servers 3+, tried after the primary and the alternative, in this order. */
+    private val fallbacks: List<FallbackStreamSource> = emptyList(),
+    /** How long the server menu waits for any one server's answer. */
+    private val probeTimeoutMs: Long = PROBE_TIMEOUT_MS,
 ) : StreamRepository {
 
     private data class Key(
@@ -85,11 +95,10 @@ class StreamRepositoryImpl(
         return mutex.withLock {
             read(key)?.let { return@withLock Result.success(it) }
 
-            val order = when (server) {
-                StreamServer.PRIMARY -> listOf(StreamServer.PRIMARY, StreamServer.ALTERNATIVE)
-                StreamServer.ALTERNATIVE -> listOf(StreamServer.ALTERNATIVE, StreamServer.PRIMARY)
-                null -> listOf(StreamServer.PRIMARY, StreamServer.ALTERNATIVE)
-            }
+            // Auto: numeric order. An explicit pick goes first; the rest still catch a failure.
+            val all = listOf(StreamServer.PRIMARY, StreamServer.ALTERNATIVE) + fallbacks.map { it.server }
+            val order = if (server == null || server !in all) all else listOf(server) + (all - server)
+            var request: SourceRequest? = null
 
             var last: Result<PlayableStream>? = null
             for (candidate in order) {
@@ -108,6 +117,16 @@ class StreamRepositoryImpl(
                         }
                     }
                     StreamServer.ALTERNATIVE -> resolveAlternative(animeId, episode, audio, languageId)
+                    else -> {
+                        val source = fallbacks.firstOrNull { it.server == candidate }
+                        if (source == null) {
+                            Result.failure(ResolveException.NotFound("no such server"))
+                        } else {
+                            val built = request ?: sourceRequest(animeId, episode).also { request = it }
+                            source.resolve(built, audio, languageId)
+                                .onFailure { AppLog.w("server ${candidate.number} failed for ep${episode.id}: ${it.message}") }
+                        }
+                    }
                 }
                 if (attempt.isSuccess) {
                     val stream = attempt.getOrThrow()
@@ -122,64 +141,103 @@ class StreamRepositoryImpl(
         }
     }
 
-    /** Every server, with the languages it actually offers for this episode. */
-    override suspend fun serverOptions(animeId: Int, episode: Episode): List<ServerOption> {
-        val primary = ServerOption(
+    /**
+     * Every server, with the languages it actually offers for this episode.
+     *
+     * All servers are asked at once and each answer is capped at [probeTimeoutMs], so one slow host
+     * cannot hold the menu. A server that times out is shown as unreachable rather than missing.
+     */
+    override suspend fun serverOptions(animeId: Int, episode: Episode): List<ServerOption> = coroutineScope {
+        val request = async { sourceRequest(animeId, episode) }
+        val primary = async { primaryOption(episode) }
+        val alternativeOption = async { alternativeOption(animeId, episode) }
+        val others = fallbacks.map { source ->
+            async {
+                val languages = withTimeoutOrNull(probeTimeoutMs) {
+                    runCatching { source.languages(request.await()) }.getOrDefault(emptyList())
+                }
+                ServerOption(
+                    server = source.server,
+                    languages = languages.orEmpty(),
+                    probed = true,
+                    reachable = !languages.isNullOrEmpty(),
+                )
+            }
+        }
+        listOfNotNull(primary.await(), alternativeOption.await()) + others.awaitAll()
+    }
+
+    /**
+     * The primary's languages, as the catalogue lists them — except that a listed dub is *checked*.
+     *
+     * Measured: 8 of 13 dub links the catalogue lists are dead embeds ("no player"). Showing those as
+     * available sent viewers to a failure and then a silent fall-through. The check is a real
+     * resolve, so a live dub is also cached and starts instantly when picked.
+     */
+    private suspend fun primaryOption(episode: Episode): ServerOption {
+        val hasSub = !episode.subUrl.isNullOrBlank()
+        val dubUrl = episode.dubUrl?.takeIf { it.isNotBlank() }
+        val dubAlive = dubUrl != null && withTimeoutOrNull(probeTimeoutMs) {
+            resolverProvider().resolve(dubUrl, AudioTrack.DUB).exceptionOrNull()
+                .let { it !is ResolveException.NotFound && it !is ResolveException.Dead }
+        } != false
+        val languages = buildList {
+            if (hasSub) add(ServerLanguage(id = "sub", label = "Original (SUB)", audio = AudioTrack.SUB))
+            if (dubAlive) {
+                // The catalogue's dub track is the English dub; Hindi dubs are their own
+                // catalogue rows and reach the player through the Hindi repository.
+                add(ServerLanguage(id = "dub", label = "English (DUB)", audio = AudioTrack.DUB, languageCode = "en"))
+            }
+        }
+        return ServerOption(
             server = StreamServer.PRIMARY,
-            languages = buildList {
-                if (!episode.subUrl.isNullOrBlank()) {
-                    add(ServerLanguage(id = "sub", label = "Original (SUB)", audio = AudioTrack.SUB))
-                }
-                if (!episode.dubUrl.isNullOrBlank()) {
-                    // The catalogue's dub track is the English dub; Hindi dubs are their own
-                    // catalogue rows and reach the player through the Hindi repository.
-                    add(
-                        ServerLanguage(
-                            id = "dub",
-                            label = "English (DUB)",
-                            audio = AudioTrack.DUB,
-                            languageCode = "en",
-                        ),
-                    )
-                }
-            },
+            languages = languages,
             probed = true,
-            reachable = !episode.subUrl.isNullOrBlank() || !episode.dubUrl.isNullOrBlank(),
-        )
-
-        val alternative = alternative ?: return listOf(primary)
-        val anilistId = runCatching { anilistIdOf(animeId) }.getOrNull()?.takeIf { it.isNotBlank() }
-            ?: return listOf(
-                primary,
-                ServerOption(StreamServer.ALTERNATIVE, probed = true, reachable = false),
-            )
-
-        val tracks = runCatching {
-            alternative.languages(anilistId, episode, seasonHintOf(animeId), yearOf(animeId))
-        }.getOrDefault(emptyList())
-        return listOf(
-            primary,
-            ServerOption(
-                server = StreamServer.ALTERNATIVE,
-                languages = tracks.map { track ->
-                    val code = track.language.ifBlank { "und" }
-                    ServerLanguage(
-                        id = code,
-                        label = when (code) {
-                            "ja" -> "Original (Japanese)"
-                            "hi" -> "Hindi"
-                            "en" -> "English"
-                            else -> track.label.ifBlank { code.uppercase() }
-                        },
-                        audio = if (code == "hi") AudioTrack.DUB else AudioTrack.SUB,
-                        languageCode = code,
-                    )
-                },
-                probed = true,
-                reachable = tracks.isNotEmpty(),
-            ),
+            reachable = languages.isNotEmpty(),
         )
     }
+
+    private suspend fun alternativeOption(animeId: Int, episode: Episode): ServerOption? {
+        val alternative = alternative ?: return null
+        val anilistId = runCatching { anilistIdOf(animeId) }.getOrNull()?.takeIf { it.isNotBlank() }
+            ?: return ServerOption(StreamServer.ALTERNATIVE, probed = true, reachable = false)
+
+        val tracks = withTimeoutOrNull(probeTimeoutMs) {
+            runCatching {
+                alternative.languages(anilistId, episode, seasonHintOf(animeId), yearOf(animeId))
+            }.getOrDefault(emptyList())
+        }.orEmpty()
+        return ServerOption(
+            server = StreamServer.ALTERNATIVE,
+            languages = tracks.map { track ->
+                val code = track.language.ifBlank { "und" }
+                ServerLanguage(
+                    id = code,
+                    label = when (code) {
+                        "ja" -> "Original (Japanese)"
+                        "hi" -> "Hindi"
+                        "en" -> "English"
+                        "ta" -> "Tamil"
+                        "te" -> "Telugu"
+                        "ml" -> "Malayalam"
+                        "kn" -> "Kannada"
+                        else -> track.label.ifBlank { code.uppercase() }
+                    },
+                    audio = if (code == "ja") AudioTrack.SUB else AudioTrack.DUB,
+                    languageCode = code,
+                )
+            },
+            probed = true,
+            reachable = tracks.isNotEmpty(),
+        )
+    }
+
+    private suspend fun sourceRequest(animeId: Int, episode: Episode): SourceRequest = SourceRequest(
+        episode = episode,
+        anilistId = runCatching { anilistIdOf(animeId) }.getOrNull()?.takeIf { it.isNotBlank() },
+        titles = runCatching { animeTitlesOf(animeId) }.getOrDefault(emptyList()).filter { it.isNotBlank() },
+        year = yearOf(animeId),
+    )
 
     /**
      * Which primary track can satisfy a requested language: the original track speaks for `sub`/`ja`,
@@ -286,5 +344,6 @@ class StreamRepositoryImpl(
         const val CACHE_TTL_MS = 15 * 60 * 1000L
         const val MAX_ENTRIES = 24
         const val INITIAL_CAPACITY = 16
+        const val PROBE_TIMEOUT_MS = 10_000L
     }
 }

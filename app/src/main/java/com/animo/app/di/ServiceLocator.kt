@@ -136,6 +136,10 @@ object ServiceLocator {
                     animeDao.findById(id)?.let { row -> listOf(row.title, row.alternative) }.orEmpty()
                 },
                 animeYearOf = { id -> animeDao.findById(id)?.year },
+                fallbacks = listOf(
+                    com.animo.app.player.MirrorStreamSource(httpClient),
+                    com.animo.app.player.ArchiveStreamSource(httpClient),
+                ),
             ),
             hindi = { hindiStreamRef.get() },
         )

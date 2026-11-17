@@ -14,6 +14,7 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
@@ -142,6 +143,10 @@ object Media3Factory {
         userAgent: String = DEFAULT_USER_AGENT,
         client: OkHttpClient = playbackClient,
         mediaId: String = masterUrl,
+        /** A single MP4/MKV file instead of an HLS playlist. */
+        progressive: Boolean = false,
+        /** Language to pick inside a multi-audio file; `null` keeps the file's default. */
+        preferredAudioLanguage: String? = null,
     ): ExoPlayer {
         val dataSourceFactory = dataSourceFactory(referer, userAgent, client)
         val policy = errorPolicy()
@@ -149,7 +154,22 @@ object Media3Factory {
             context,
             DefaultMediaSourceFactory(dataSourceFactory).setLoadErrorHandlingPolicy(policy),
         )
-        player.setMediaSource(hlsSource(dataSourceFactory, mediaItem(masterUrl, mediaId), policy))
+        val item = mediaItem(masterUrl, mediaId)
+        player.setMediaSource(
+            if (progressive) {
+                // Matroska and MP4 extractors are both in the default set; the file sniffs itself.
+                ProgressiveMediaSource.Factory(dataSourceFactory)
+                    .setLoadErrorHandlingPolicy(policy)
+                    .createMediaSource(item)
+            } else {
+                hlsSource(dataSourceFactory, item, policy)
+            },
+        )
+        if (preferredAudioLanguage != null) {
+            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                .setPreferredAudioLanguage(preferredAudioLanguage)
+                .build()
+        }
         return player
     }
 }

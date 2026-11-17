@@ -112,6 +112,14 @@ class PlayerController(
     private var audioJob: Job? = null
 
     /**
+     * Source-level renditions (each quality its own URL). When present they *are* the quality menu
+     * and a pick swaps the source; otherwise the menu comes from the playlist's own variants.
+     */
+    private var alternateBase: PlayableStream? = null
+    private var alternates: List<com.animo.app.domain.model.StreamAlternate> = emptyList()
+    private var currentUrl: String? = null
+
+    /**
      * Track ids are not usable as `TrackSelectionOverride` arguments on their own, so the override
      * objects are captured while the tracks are known (they are only valid for one player instance).
      */
@@ -253,8 +261,56 @@ class PlayerController(
 
     fun selectQuality(qualityId: String) {
         _activeQualityId.value = qualityId
+        val base = alternateBase
+        if (alternates.isNotEmpty() && base != null) {
+            val target = urlFor(base, qualityId)
+            if (target != currentUrl) {
+                currentUrl = target
+                _qualities.value = _qualities.value.map { it.copy(selected = it.id == qualityId) }
+                _pendingSwap.value = StreamSwap(
+                    id = swapIds.incrementAndGet(),
+                    stream = base.copy(masterUrl = target),
+                    positionMs = currentPositionMs(),
+                )
+            }
+            return
+        }
         player?.let { applyQuality(it, qualityId) }
     }
+
+    /**
+     * Call with every freshly resolved stream. Returns the stream to actually start, which is the
+     * viewer's pinned rendition when the source publishes renditions as separate URLs — so a
+     * "480p" pick survives into the next episode without loading the default first.
+     */
+    fun prepareStream(stream: PlayableStream): PlayableStream {
+        alternateBase = stream
+        alternates = stream.alternates
+        if (alternates.isEmpty()) {
+            currentUrl = stream.masterUrl
+            if (_qualities.value.any { it.id.startsWith(ALTERNATE_PREFIX) }) _qualities.value = emptyList()
+            return stream
+        }
+        val pinned = _activeQualityId.value
+        val target = urlFor(stream, pinned)
+        currentUrl = target
+        _qualities.value = alternates
+            .sortedByDescending { it.height }
+            .map { alternate ->
+                QualityOption(
+                    id = ALTERNATE_PREFIX + alternate.label,
+                    label = alternate.label,
+                    width = 0,
+                    height = alternate.height,
+                    bitrate = 0,
+                    selected = alternate.url == target,
+                )
+            }
+        return if (target == stream.masterUrl) stream else stream.copy(masterUrl = target)
+    }
+
+    private fun urlFor(base: PlayableStream, qualityId: String): String =
+        alternates.firstOrNull { ALTERNATE_PREFIX + it.label == qualityId }?.url ?: base.masterUrl
 
     fun next() {
         onNext?.invoke()
@@ -277,6 +333,8 @@ class PlayerController(
     }
 
     private fun publishQualities(tracks: Tracks) {
+        // Renditions-as-URLs own the menu; the single playlist underneath has one track.
+        if (alternates.isNotEmpty()) return
         val options = buildList {
             for (group in tracks.groups) {
                 if (group.type != C.TRACK_TYPE_VIDEO) continue
@@ -389,7 +447,7 @@ class PlayerController(
     private fun applyQuality(player: Player, qualityId: String) {
         val builder = player.trackSelectionParameters.buildUpon()
             .clearOverridesOfType(C.TRACK_TYPE_VIDEO)
-        if (qualityId == AUTO_QUALITY_ID) {
+        if (qualityId == AUTO_QUALITY_ID || qualityId.startsWith(ALTERNATE_PREFIX)) {
             builder
                 .setMaxVideoSize(Int.MAX_VALUE, Int.MAX_VALUE)
                 .setMaxVideoBitrate(Int.MAX_VALUE)
@@ -406,5 +464,8 @@ class PlayerController(
 
     companion object {
         const val AUTO_QUALITY_ID: String = "auto"
+
+        /** Quality ids that name a source-level rendition (a separate URL), e.g. `url:720p`. */
+        const val ALTERNATE_PREFIX: String = "url:"
     }
 }

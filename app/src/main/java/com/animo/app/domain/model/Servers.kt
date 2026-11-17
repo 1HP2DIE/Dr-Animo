@@ -13,7 +13,13 @@ enum class StreamServer(val number: Int) {
     PRIMARY(1),
 
     /** The multi-language alternative, keyed by AniList id. */
-    ALTERNATIVE(2);
+    ALTERNATIVE(2),
+
+    /** File mirror keyed by AniList id: one multi-audio file per episode, with chapters. */
+    MIRROR(3),
+
+    /** Direct-file archive found by title: per-quality files, its own sub/dub split. */
+    ARCHIVE(4);
 
     val label: String get() = "Server $number"
 

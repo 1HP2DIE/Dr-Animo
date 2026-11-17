@@ -94,6 +94,24 @@ object AltStreamProtocol {
     }
 
     /**
+     * The other renditions of [picked]'s language. This source publishes one playlist per
+     * `(quality, language)` with no variants inside, so quality is a choice between URLs: same audio,
+     * a real height, one entry per height.
+     */
+    fun alternates(payload: AltStreamPayload, picked: AltStreamEntry): List<AltStreamEntry> =
+        payload.sources
+            .filter { it.audio == picked.audio && it.proxyPath().isNotBlank() }
+            .filter { heightOf(it.quality) != null }
+            .distinctBy { heightOf(it.quality) }
+            .sortedByDescending { heightOf(it.quality) }
+
+    /** `720p` → 720; `Auto` and anything else → null. */
+    fun heightOf(quality: String): Int? =
+        HEIGHT.find(quality)?.groupValues?.get(1)?.toIntOrNull()
+
+    private val HEIGHT = Regex("""(\d{3,4})p""", RegexOption.IGNORE_CASE)
+
+    /**
      * Playlist URL handed to Media3.
      *
      * It is the site's own proxy path, not the raw CDN URL: the raw segments are MPEG-TS wearing a

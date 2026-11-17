@@ -380,7 +380,7 @@ private fun PlayerStage(
         val subs = surfaceState.stream?.subtitles.orEmpty()
         if (subs.isEmpty() || subtitlesOffByViewer || streamTrackId != null || fileActive) return@LaunchedEffect
         val pick = preferredStreamLabel?.let { label -> subs.firstOrNull { it.label == label } }
-            ?: StreamTracks.autoPick(subs, dub = model.audio == AudioTrack.DUB)
+            ?: StreamTracks.autoPick(subs, dub = isDubbedAudio(model))
         pick?.let { loadStreamTrack(subs.indexOf(it)) }
     }
 
@@ -613,6 +613,23 @@ private fun PlayerStage(
             delay(CONTROLS_AUTO_HIDE_MS)
             controlsVisible = false
         }
+    }
+
+    // ---- markers fallback -------------------------------------------------------
+    // Sources without their own intro/outro (Server 2, Hindi) borrow community timestamps once the
+    // duration is known — the lookup is matched against the episode length.
+    val durationKnown = surfaceState.durationMs > 0L
+    LaunchedEffect(surfaceState, durationKnown) {
+        if (!durationKnown || surfaceState.stream == null) return@LaunchedEffect
+        if (surfaceState.intro != null || surfaceState.outro != null) return@LaunchedEffect
+        val malId = model.anime.malId?.toIntOrNull() ?: return@LaunchedEffect
+        val markers = com.animo.app.player.SkipTimes.fetch(
+            client = ServiceLocator.httpClient,
+            malId = malId,
+            episode = model.episode.number,
+            episodeLengthMs = surfaceState.durationMs,
+        ) ?: return@LaunchedEffect
+        surfaceState.setMarkers(markers.intro, markers.outro)
     }
 
     // ---- chapters & up next ---------------------------------------------------
@@ -1233,6 +1250,14 @@ private fun PlayerChip(
         color = if (accent) PlayerChrome.accentSoft else PlayerForeground,
     )
 }
+
+/**
+ * Whether the viewer is hearing a dub. The language id is the truth when one was picked (a server-2
+ * "en" or "hi" is a dub even if the catalogue row has no dub link, which collapses [PlayerUiModel.audio]
+ * to SUB); otherwise the audio track.
+ */
+private fun isDubbedAudio(model: PlayerUiModel): Boolean =
+    model.languageId?.let { it != "sub" && it != "ja" } ?: (model.audio == AudioTrack.DUB)
 
 /** `Server 2 · Hindi`, falling back to the audio label when the probe has not answered yet. */
 private fun serverChipLabel(model: PlayerUiModel): String {

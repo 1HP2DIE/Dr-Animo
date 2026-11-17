@@ -66,6 +66,10 @@ fun PlayerHost(
     onCues: ((List<String>) -> Unit)? = null,
     /** An `AspectRatioFrameLayout.RESIZE_MODE_*`; applied live, no rebuild. */
     resizeMode: Int = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT,
+    /** A single MP4/MKV file rather than an HLS playlist. */
+    progressive: Boolean = false,
+    /** Audio language to pick inside a multi-audio file. */
+    preferredAudioLanguage: String? = null,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -79,6 +83,8 @@ fun PlayerHost(
                 referer = referer,
                 userAgent = userAgent,
                 startPositionMs = startPositionMs.coerceAtLeast(0L),
+                progressive = progressive,
+                audioLanguage = preferredAudioLanguage,
             ),
         )
     }
@@ -102,6 +108,8 @@ fun PlayerHost(
             userAgent = source.userAgent,
             client = client,
             mediaId = source.masterUrl,
+            progressive = source.progressive,
+            preferredAudioLanguage = source.audioLanguage,
         )
     }
 
@@ -154,6 +162,8 @@ fun PlayerHost(
                             referer = fresh.referer,
                             userAgent = fresh.userAgent,
                             startPositionMs = position,
+                            progressive = fresh.container == com.animo.app.domain.model.StreamContainer.PROGRESSIVE,
+                            audioLanguage = fresh.preferredAudioLanguage,
                         )
                     } else {
                         latestOnError(error.toResolveException())
@@ -211,6 +221,8 @@ fun PlayerHost(
             referer = swap.stream.referer,
             userAgent = swap.stream.userAgent,
             startPositionMs = swap.positionMs.coerceAtLeast(0L),
+            progressive = swap.stream.container == com.animo.app.domain.model.StreamContainer.PROGRESSIVE,
+            audioLanguage = swap.stream.preferredAudioLanguage,
         )
     }
 
@@ -252,4 +264,6 @@ private data class ActiveSource(
     val referer: String,
     val userAgent: String,
     val startPositionMs: Long,
+    val progressive: Boolean = false,
+    val audioLanguage: String? = null,
 )
