@@ -73,6 +73,10 @@ android {
     lint {
         abortOnError = false
         checkReleaseBuilds = false
+        // Media3 1.5.1 marks nearly its entire API @UnstableApi. Every player file is already
+        // annotated with `@file:OptIn(UnstableApi::class)`; lint's Java-marker check still reports
+        // each call site, which drowns the real findings in ~50 duplicates.
+        disable += "UnsafeOptInUsageError"
     }
 }
 

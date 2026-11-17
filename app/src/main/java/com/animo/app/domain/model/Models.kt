@@ -63,10 +63,31 @@ data class PlayableStream(
 )
 
 data class Filters(
-    val genre: String? = null,
-    val year: Int? = null,
+    /** Multi-select genres. Empty = any. Matched case-insensitively against the CSV column. */
+    val genres: Set<String> = emptySet(),
+    /** Inclusive year window. Either bound may be null. */
+    val yearFrom: Int? = null,
+    val yearTo: Int? = null,
+    /** "TV" | "Movie" | "ONA" | "OVA" | "Special" | null = any. */
     val type: String? = null,
+    /** Normalised status: "airing" | "finished" | "upcoming" | null = any. */
     val status: String? = null,
+    /** A–Z browse index (first letter of the normalised title). */
+    val letter: Char? = null,
+    /** Only titles that actually have dub episodes. */
+    val hasDub: Boolean = false,
+    val sort: SortOrder = SortOrder.RECENT,
+)
+
+enum class SortOrder { RECENT, TITLE_ASC, TITLE_DESC, YEAR_DESC, YEAR_ASC, SCORE_DESC }
+
+/** Facet values for the filter sheet, computed from the local catalogue. */
+data class FilterFacets(
+    val genres: List<String> = emptyList(),
+    val years: List<Int> = emptyList(),
+    val types: List<String> = emptyList(),
+    val statuses: List<String> = emptyList(),
+    val letters: List<Char> = emptyList(),
 )
 
 enum class SyncState { IDLE, RUNNING, THROTTLED, ERROR }

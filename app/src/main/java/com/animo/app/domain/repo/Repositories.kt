@@ -6,6 +6,8 @@ import kotlinx.coroutines.flow.Flow
 interface AnimeRepository {
     fun observeRecent(limit: Int = 60): Flow<List<Anime>>
     fun search(query: String, filters: Filters = Filters(), limit: Int = 60, offset: Int = 0): Flow<List<Anime>>
+    /** Facet values for the filter sheet — derived from the local catalogue, never the network. */
+    fun observeFacets(): Flow<FilterFacets>
     fun observeAnime(id: Int): Flow<Anime?>
     fun observeEpisodes(animeId: Int): Flow<List<Episode>>
     fun observeContinueWatching(limit: Int = 20): Flow<List<Anime>>
