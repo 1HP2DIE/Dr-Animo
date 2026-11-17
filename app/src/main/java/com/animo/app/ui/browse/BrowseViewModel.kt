@@ -49,7 +49,8 @@ val Filters.activeFilterCount: Int
         (if (type != null) 1 else 0) +
         (if (status != null) 1 else 0) +
         (if (letter != null) 1 else 0) +
-        (if (hasDub) 1 else 0)
+        (if (hasDub) 1 else 0) +
+        (if (hindiOnly) 1 else 0)
 
 val Filters.hasActiveFilters: Boolean
     get() = activeFilterCount > 0
@@ -87,6 +88,7 @@ class BrowseViewModel(private val repository: AnimeRepository) : ViewModel() {
     private val retryToken = MutableStateFlow(0)
 
     private var initialApplied = false
+    private var hindiApplied = false
     private var loadInFlight = false
 
     /** Catalog-derived facet values. An unimplemented/throwing source degrades to "no facets". */
@@ -164,10 +166,19 @@ class BrowseViewModel(private val repository: AnimeRepository) : ViewModel() {
     }
 
     /**
-     * Deep-link arguments (`browse?genre=Action&letter=A`) are applied once, on the first
+     * Deep-link arguments (`browse?genre=Action&letter=A&hindi=true`) are applied on the first
      * composition only. Everything after that is user-driven.
+     *
+     * The Hindi flag is tracked separately from the genre/letter preset: a `browse?hindi=true` jump
+     * from the drawer lands on the existing Browse destination, so the ViewModel is not necessarily
+     * fresh even though the arguments are. Guarding it on its own keeps the source filter applied
+     * exactly once per navigation without re-clobbering a genre the user has since changed.
      */
-    fun applyInitial(genre: String?, letter: String?) {
+    fun applyInitial(genre: String?, letter: String?, hindi: Boolean = false) {
+        if (hindi && !hindiApplied) {
+            hindiApplied = true
+            updateFilters { it.copy(hindiOnly = true) }
+        }
         if (initialApplied) return
         initialApplied = true
         val initialGenre = genre?.trim()?.takeIf { it.isNotEmpty() }
@@ -203,6 +214,8 @@ class BrowseViewModel(private val repository: AnimeRepository) : ViewModel() {
     fun setLetter(letter: Char?) = updateFilters { it.copy(letter = letter) }
 
     fun setHasDub(enabled: Boolean) = updateFilters { it.copy(hasDub = enabled) }
+
+    fun setHindiOnly(enabled: Boolean) = updateFilters { it.copy(hindiOnly = enabled) }
 
     fun setSort(sort: SortOrder) = updateFilters { it.copy(sort = sort) }
 

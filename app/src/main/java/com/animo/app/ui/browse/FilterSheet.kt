@@ -286,6 +286,34 @@ internal fun FilterSheetBody(
                         onCheckedChange = { onFiltersChange(filters.copy(hasDub = it)) },
                     )
                 }
+
+                HorizontalDivider(color = colors.outline.copy(alpha = 0.4f))
+
+                // Source filter, not an audio-track filter: it narrows the whole catalogue to the
+                // Hindi-dub provider (negative-id rows). Sits next to "Has dub" because that is where
+                // a dub-shaped filter is looked for, but the body line says what it actually does.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.browse_hindi_only),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colors.onSurface,
+                        )
+                        Text(
+                            text = stringResource(R.string.browse_hindi_only_body),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.size(12.dp))
+                    Switch(
+                        checked = filters.hindiOnly,
+                        onCheckedChange = { onFiltersChange(filters.copy(hindiOnly = it)) },
+                    )
+                }
             }
 
             SheetSection(title = stringResource(R.string.browse_alphabet)) {
@@ -551,6 +579,7 @@ private fun FilterSheetPreview() {
                     type = "TV",
                     letter = 'S',
                     hasDub = true,
+                    hindiOnly = true,
                     sort = SortOrder.SCORE_DESC,
                 ),
                 facets = PreviewFacets,

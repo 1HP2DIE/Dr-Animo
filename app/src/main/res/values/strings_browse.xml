@@ -38,6 +38,8 @@
     <string name="browse_status">Status</string>
     <string name="browse_audio">Audio</string>
     <string name="browse_has_dub">Has dub</string>
+    <string name="browse_hindi_only">Hindi dub only</string>
+    <string name="browse_hindi_only_body">Catalogue source, not the audio track — shows only Hindi-dub titles.</string>
     <string name="browse_alphabet">A–Z</string>
     <string name="browse_reset">Reset</string>
     <string name="browse_show_results">Show %1$d results</string>
@@ -63,6 +65,7 @@
     <string name="browse_chip_year_to">Until %1$d</string>
     <string name="browse_chip_letter">Letter %1$s</string>
     <string name="browse_chip_dub">Dubbed</string>
+    <string name="browse_chip_hindi">Hindi dub</string>
     <string name="browse_chip_remove">Remove %1$s filter</string>
 
     <!-- Empty / error copy -->

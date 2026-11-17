@@ -79,14 +79,15 @@ private const val LOAD_MORE_LOOKAHEAD = 12
 /**
  * Browse: search, facets and an A–Z rail over the local catalog.
  *
- * The two optional arguments come from the `browse?genre=…&letter=…` deep link and are applied once
- * on first composition. [onOpenAnime] is the navigation hook; it defaults to a no-op so a caller that
- * only wants the data surface can still render the screen.
+ * The three optional arguments come from the `browse?genre=…&letter=…&hindi=true` deep link and are
+ * applied on first composition. [onOpenAnime] is the navigation hook; it defaults to a no-op so a
+ * caller that only wants the data surface can still render the screen.
  */
 @Composable
 fun BrowseScreen(
     initialGenre: String? = null,
     initialLetter: String? = null,
+    initialHindi: Boolean = false,
     modifier: Modifier = Modifier,
     onOpenAnime: (Int) -> Unit = {},
 ) {
@@ -108,8 +109,8 @@ fun BrowseScreen(
     val loadedCount by rememberUpdatedState(items.size)
     val canLoadMore by rememberUpdatedState(hasMore)
 
-    LaunchedEffect(Unit) {
-        viewModel.applyInitial(initialGenre, initialLetter)
+    LaunchedEffect(initialGenre, initialLetter, initialHindi) {
+        viewModel.applyInitial(initialGenre, initialLetter, initialHindi)
     }
 
     // Re-arms on every distinct "last visible index". Appending a page does not change it, so this
@@ -354,6 +355,15 @@ private fun ActiveFilterRow(
                 RemovableFilterChip(
                     label = stringResource(R.string.browse_chip_letter, letter.toString()),
                     onRemove = { onChange(filters.copy(letter = null)) },
+                )
+            }
+        }
+
+        if (filters.hindiOnly) {
+            item(key = "hindi", contentType = "chip") {
+                RemovableFilterChip(
+                    label = stringResource(R.string.browse_chip_hindi),
+                    onRemove = { onChange(filters.copy(hindiOnly = false)) },
                 )
             }
         }

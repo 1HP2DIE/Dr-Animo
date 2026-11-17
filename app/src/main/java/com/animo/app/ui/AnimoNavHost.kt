@@ -30,6 +30,7 @@ const val ARG_EPISODE_ID = "episodeId"
 const val ARG_AUDIO = "audio"
 const val ARG_GENRE = "genre"
 const val ARG_LETTER = "letter"
+const val ARG_HINDI = "hindi"
 
 /**
  * String routes (navigation-compose 2.8.5). Kept as a single object so call sites never hand-build
@@ -40,7 +41,8 @@ object Routes {
 
     /** Navigable base for Browse; the destination pattern adds the optional filters. */
     const val BROWSE_BASE = "browse"
-    const val BROWSE = "$BROWSE_BASE?$ARG_GENRE={$ARG_GENRE}&$ARG_LETTER={$ARG_LETTER}"
+    const val BROWSE =
+        "$BROWSE_BASE?$ARG_GENRE={$ARG_GENRE}&$ARG_LETTER={$ARG_LETTER}&$ARG_HINDI={$ARG_HINDI}"
 
     const val LIBRARY = "library"
     const val SETTINGS = "settings"
@@ -48,11 +50,18 @@ object Routes {
     const val DETAIL = "detail/{$ARG_ANIME_ID}"
     const val PLAYER = "player/{$ARG_ANIME_ID}/{$ARG_EPISODE_ID}/{$ARG_AUDIO}"
 
-    /** Browse with an optional preset. Empty args collapse to the plain `browse` route. */
-    fun browse(genre: String? = null, letter: Char? = null): String {
+    /**
+     * Browse with an optional preset. Empty args collapse to the plain `browse` route.
+     *
+     * [hindi] is written as the literal `hindi=true` (never `false`), so the plain Browse route stays
+     * untouched for every existing caller and the flag survives process death as a route argument.
+     * Tapping the drawer's Hindi row therefore lands on `browse?hindi=true`.
+     */
+    fun browse(genre: String? = null, letter: Char? = null, hindi: Boolean = false): String {
         val query = buildList {
             if (!genre.isNullOrBlank()) add("$ARG_GENRE=${Uri.encode(genre)}")
             if (letter != null) add("$ARG_LETTER=${Uri.encode(letter.toString())}")
+            if (hindi) add("$ARG_HINDI=true")
         }
         return if (query.isEmpty()) BROWSE_BASE else "$BROWSE_BASE?${query.joinToString("&")}"
     }
@@ -108,11 +117,17 @@ fun AnimoNavHost(
                                 nullable = true
                                 defaultValue = null
                             },
+                            navArgument(ARG_HINDI) {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
                         ),
                     ) { entry ->
                         BrowseScreen(
                             initialGenre = entry.arguments?.getString(ARG_GENRE),
                             initialLetter = entry.arguments?.getString(ARG_LETTER),
+                            initialHindi = entry.arguments?.getString(ARG_HINDI) == "true",
                             modifier = Modifier.fillMaxSize(),
                             onOpenAnime = { animeId -> navController.navigate(Routes.detail(animeId)) },
                         )

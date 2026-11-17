@@ -26,6 +26,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
@@ -42,6 +43,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -54,6 +56,7 @@ import com.animo.app.ui.LocalAppContainer
 import com.animo.app.ui.common.BrandMark
 import com.animo.app.ui.shell.AnimoTopBar
 import com.animo.app.ui.shell.formatCount
+import com.animo.app.ui.theme.AnimoTheme
 import com.animo.app.ui.theme.LocalThemePreference
 import com.animo.app.ui.theme.ThemeMode
 import com.animo.app.ui.theme.labelRes
@@ -70,7 +73,7 @@ fun SettingsScreen(
     val container = LocalAppContainer.current
     val context = LocalContext.current.applicationContext
     val factory = remember(container, context) {
-        settingsViewModelFactory(container.animeRepository, context)
+        settingsViewModelFactory(container.animeRepository, context, container.hindiCatalog)
     }
     val viewModel: SettingsViewModel = viewModel(factory = factory)
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -83,6 +86,7 @@ fun SettingsScreen(
         onAutoplayChange = viewModel::setAutoplayNext,
         onDefaultAudioChange = viewModel::setDefaultAudio,
         onSyncNow = viewModel::syncNow,
+        onSyncHindi = viewModel::syncHindiNow,
         onOpenDrawer = onOpenDrawer,
         onOpenChangelog = {
             viewModel.markChangelogSeen()
@@ -101,6 +105,7 @@ private fun SettingsScreenContent(
     onAutoplayChange: (Boolean) -> Unit,
     onDefaultAudioChange: (AudioTrack) -> Unit,
     onSyncNow: () -> Unit,
+    onSyncHindi: () -> Unit,
     onOpenDrawer: () -> Unit,
     onOpenChangelog: () -> Unit,
     modifier: Modifier = Modifier,
@@ -126,7 +131,7 @@ private fun SettingsScreenContent(
                 AppearanceSection(themeMode = themeMode, onThemeModeChange = onThemeModeChange)
             }
             item(key = "catalogue") {
-                CatalogueSection(state = state, onSyncNow = onSyncNow)
+                CatalogueSection(state = state, onSyncNow = onSyncNow, onSyncHindi = onSyncHindi)
             }
             item(key = "playback") {
                 PlaybackSection(
@@ -204,6 +209,7 @@ private fun AppearanceSection(
 private fun CatalogueSection(
     state: SettingsUiState,
     onSyncNow: () -> Unit,
+    onSyncHindi: () -> Unit,
 ) {
     SettingsSection(title = stringResource(R.string.ui_settings_catalogue)) {
         SettingsValueRow(
@@ -273,6 +279,82 @@ private fun CatalogueSection(
                 color = MaterialTheme.colorScheme.error,
             )
         }
+
+        // Hindi is a separate catalogue with its own provider and budget, so it gets its own count,
+        // its own button and its own progress. Hidden entirely when the build has no Hindi source.
+        if (state.hindiAvailable) {
+            HorizontalDivider(
+                thickness = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f),
+                modifier = Modifier.padding(vertical = 12.dp),
+            )
+            SettingsValueRow(
+                label = stringResource(R.string.ui_settings_hindi_titles),
+                value = formatCount(state.hindiCount),
+            )
+            OutlinedButton(
+                onClick = onSyncHindi,
+                enabled = !state.hindiSyncing,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (state.hindiSyncing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        strokeWidth = 2.dp,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(
+                    text = stringResource(
+                        if (state.hindiSyncing) {
+                            R.string.ui_settings_hindi_syncing
+                        } else {
+                            R.string.ui_settings_hindi_sync
+                        },
+                    ),
+                )
+            }
+
+            if (state.hindiSyncing && state.hindiTotal > 0) {
+                Spacer(Modifier.height(10.dp))
+                LinearProgressIndicator(
+                    progress = { state.hindiProgressFraction },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = stringResource(
+                        R.string.ui_settings_hindi_progress,
+                        state.hindiDone,
+                        state.hindiTotal,
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            state.hindiResultCount?.let { count ->
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = stringResource(R.string.ui_settings_hindi_result, count),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            state.hindiMessage?.let { message ->
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = stringResource(R.string.ui_settings_hindi_failed, message),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+
         Spacer(Modifier.height(8.dp))
     }
 }
@@ -478,4 +560,39 @@ private fun formatBytes(bytes: Long): String = when {
     bytes >= 1_000_000L -> String.format(Locale.US, "%.1f MB", bytes / 1_000_000.0)
     bytes >= 1_000L -> String.format(Locale.US, "%.0f KB", bytes / 1_000.0)
     else -> "$bytes B"
+}
+
+// ---------------------------------------------------------------------------- preview
+
+/** Container-free: the catalogue block (including the Hindi rows) is driven by a plain state value. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Preview(
+    name = "Settings · Hindi catalogue",
+    showBackground = true,
+    backgroundColor = 0xFF0D1113,
+    widthDp = 390,
+    heightDp = 900,
+)
+@Composable
+private fun SettingsHindiPreview() {
+    AnimoTheme {
+        SettingsScreenContent(
+            state = SettingsUiState(
+                catalogueSize = 9_404,
+                catalogueBytes = 128_000_000L,
+                lastSyncEpoch = 1_700_000_000_000L,
+                hindiAvailable = true,
+                hindiCount = 412,
+                hindiResultCount = 412,
+            ),
+            themeMode = ThemeMode.DARK,
+            onThemeModeChange = {},
+            onAutoplayChange = {},
+            onDefaultAudioChange = {},
+            onSyncNow = {},
+            onSyncHindi = {},
+            onOpenDrawer = {},
+            onOpenChangelog = {},
+        )
+    }
 }

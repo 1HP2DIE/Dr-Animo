@@ -125,9 +125,7 @@ fun AnimoDrawerContent(
                 icon = Icons.Outlined.Language,
                 label = stringResource(R.string.ui_drawer_hindi),
                 selected = false,
-                enabled = false,
-                onClick = {},
-                trailing = { SoonTag() },
+                onClick = { onNavigate(Routes.browse(hindi = true)) },
             )
             DrawerItem(
                 icon = Icons.Outlined.PlayCircle,
