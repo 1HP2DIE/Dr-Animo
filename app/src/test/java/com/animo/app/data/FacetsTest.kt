@@ -49,6 +49,36 @@ class FacetsTest {
     }
 
     @Test
+    fun `non-genre values from the polluted column are never offered`() {
+        // Measured in the real catalogue: Crunchyroll 33 rows, Doraemon 12, Ancient Magus, Ben 10,
+        // Beyblade, Detective Conan, DuckTales, English, Hindi. None of them are genres.
+        val genres = filterFacetsOf(
+            listOf(
+                row(genres = "Action, Crunchyroll"),
+                row(genres = "Comedy, Doraemon"),
+                row(genres = "Ancient Magus, Animation"),
+                row(genres = "Ben 10, Beyblade"),
+                row(genres = "Detective Conan, DuckTales"),
+                row(genres = "English, Hindi, Drama"),
+            ),
+        ).genres
+
+        assertEquals(listOf("Action", "Animation", "Comedy", "Drama"), genres)
+    }
+
+    @Test
+    fun `real but uncommon genres still survive the vocabulary`() {
+        val genres = filterFacetsOf(
+            listOf(
+                row(genres = "Mahou Shoujo, Avant Garde"),
+                row(genres = "Award Winning, Gourmet"),
+            ),
+        ).genres
+
+        assertEquals(listOf("Avant Garde", "Award Winning", "Gourmet", "Mahou Shoujo"), genres)
+    }
+
+    @Test
     fun `the literal genre unknown is never offered`() {
         val facets = filterFacetsOf(listOf(row(genres = "unknown, Action, Unknown")))
 
