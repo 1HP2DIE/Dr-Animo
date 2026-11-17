@@ -266,7 +266,10 @@ private fun DetailContent(
 
     Box(Modifier.fillMaxSize()) {
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 104.dp),
+            // 160dp, not 104dp: the tile now carries a big number, a real title and up to three
+            // audio badges, and three of those on a 393dp phone was the cramped grid this replaced.
+            // Two columns on a phone, more on a tablet.
+            columns = GridCells.Adaptive(minSize = 160.dp),
             state = gridState,
             modifier = Modifier
                 .fillMaxSize()
