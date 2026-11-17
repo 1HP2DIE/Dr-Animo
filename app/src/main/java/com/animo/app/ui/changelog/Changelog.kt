@@ -28,6 +28,20 @@ object Changelog {
 
     val releases: List<Release> = listOf(
         Release(
+            version = "1.5.0",
+            date = "17 Nov 2026",
+            headline = "The player is a real player now: episodes, quality, speed and a sleep timer.",
+            changes = listOf(
+                Change(ChangeKind.NEW, "Episode list inside the player — open it from the top bar and jump to any episode without leaving playback"),
+                Change(ChangeKind.NEW, "Quality picker with the renditions this stream actually offers, not just \"Auto\""),
+                Change(ChangeKind.NEW, "Playback speed from 0.5x to 2x, kept when you change episode"),
+                Change(ChangeKind.NEW, "Sleep timer — 15/30/45/60 minutes, or stop at the end of the episode"),
+                Change(ChangeKind.NEW, "Audio and subtitle track picker for streams that carry more than one"),
+                Change(ChangeKind.IMPROVED, "Episode list on a detail page shows your progress and what you already finished"),
+                Change(ChangeKind.IMPROVED, "Resume goes straight to where you stopped in that episode"),
+            ),
+        ),
+        Release(
             version = "1.3.0",
             date = "17 Nov 2026",
             headline = "Home rebuilt around shelves, and a warmer, easier-to-read look.",
