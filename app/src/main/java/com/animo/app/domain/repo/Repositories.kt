@@ -121,6 +121,24 @@ interface HindiCatalog {
 }
 
 interface StreamRepository {
+
     suspend fun resolve(animeId: Int, episode: Episode, audio: AudioTrack): Result<PlayableStream>
+
+    /**
+     * Resolve on a specific server and language. `server = null` means "auto": the primary is tried
+     * first and the next server is used when it fails, which is what makes a dead server invisible
+     * to the viewer. Defaults keep the Hindi repository (which has no server concept) untouched.
+     */
+    suspend fun resolve(
+        animeId: Int,
+        episode: Episode,
+        audio: AudioTrack,
+        server: StreamServer? = null,
+        languageId: String? = null,
+    ): Result<PlayableStream> = resolve(animeId, episode, audio)
+
+    /** Servers and the languages each one actually offers for [episode]. Cheap for the primary, a probe for the rest. */
+    suspend fun serverOptions(animeId: Int, episode: Episode): List<ServerOption> = emptyList()
+
     suspend fun invalidate(episodeId: Long)
 }

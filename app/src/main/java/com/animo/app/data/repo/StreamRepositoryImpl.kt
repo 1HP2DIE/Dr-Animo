@@ -5,6 +5,9 @@ import com.animo.app.AppLog
 import com.animo.app.domain.model.AudioTrack
 import com.animo.app.domain.model.Episode
 import com.animo.app.domain.model.PlayableStream
+import com.animo.app.domain.model.ServerLanguage
+import com.animo.app.domain.model.ServerOption
+import com.animo.app.domain.model.StreamServer
 import com.animo.app.domain.repo.AlternativeStreamSource
 import com.animo.app.domain.repo.StreamRepository
 import com.animo.app.player.ResolveException
@@ -33,11 +36,15 @@ class StreamRepositoryImpl(
     private val anilistIdOf: suspend (animeId: Int) -> String? = { null },
 ) : StreamRepository {
 
-    private data class Key(val episodeId: Long, val audio: AudioTrack)
+    private data class Key(
+        val episodeId: Long,
+        val audio: AudioTrack,
+        val server: StreamServer?,
+        val languageId: String?,
+    )
 
     private class Entry(
         val stream: PlayableStream,
-        val embedUrl: String,
         val storedAt: Long,
     )
 
@@ -52,44 +59,123 @@ class StreamRepositoryImpl(
         animeId: Int,
         episode: Episode,
         audio: AudioTrack,
+    ): Result<PlayableStream> = resolve(animeId, episode, audio, server = null, languageId = null)
+
+    /**
+     * Resolves on one server.
+     *
+     * `server = null` is the "auto" path that keeps a dead server invisible: the primary embed is
+     * tried first, then the alternative. An explicit choice is respected — if the viewer picked
+     * Server 2 it is not silently swapped for Server 1, but a *failure* still falls through to the
+     * other server so playback can start.
+     */
+    override suspend fun resolve(
+        animeId: Int,
+        episode: Episode,
+        audio: AudioTrack,
+        server: StreamServer?,
+        languageId: String?,
+    ): Result<PlayableStream> {
+        val key = Key(episode.id, audio, server, languageId)
+        read(key)?.let { return Result.success(it) }
+
+        return mutex.withLock {
+            read(key)?.let { return@withLock Result.success(it) }
+
+            val order = when (server) {
+                StreamServer.PRIMARY -> listOf(StreamServer.PRIMARY, StreamServer.ALTERNATIVE)
+                StreamServer.ALTERNATIVE -> listOf(StreamServer.ALTERNATIVE, StreamServer.PRIMARY)
+                null -> listOf(StreamServer.PRIMARY, StreamServer.ALTERNATIVE)
+            }
+
+            var last: Result<PlayableStream>? = null
+            for (candidate in order) {
+                val attempt = when (candidate) {
+                    StreamServer.PRIMARY -> resolvePrimary(episode, audio)
+                    StreamServer.ALTERNATIVE -> resolveAlternative(animeId, episode, audio, languageId)
+                }
+                if (attempt.isSuccess) {
+                    val stream = attempt.getOrThrow()
+                    store(key, Entry(stream, clock()))
+                    AppLog.d("resolved ep${episode.id} $audio via $candidate/${languageId ?: "-"}")
+                    return@withLock Result.success(stream)
+                }
+                last = attempt
+            }
+
+            last ?: Result.failure(ResolveException.NotFound("no server for this episode"))
+        }
+    }
+
+    /** Every server, with the languages it actually offers for this episode. */
+    override suspend fun serverOptions(animeId: Int, episode: Episode): List<ServerOption> {
+        val primary = ServerOption(
+            server = StreamServer.PRIMARY,
+            languages = buildList {
+                if (!episode.subUrl.isNullOrBlank()) {
+                    add(ServerLanguage(id = "sub", label = "Original (SUB)", audio = AudioTrack.SUB))
+                }
+                if (!episode.dubUrl.isNullOrBlank()) {
+                    add(
+                        ServerLanguage(
+                            id = "dub",
+                            label = "Hindi (DUB)",
+                            audio = AudioTrack.DUB,
+                            languageCode = "hi",
+                        ),
+                    )
+                }
+            },
+            probed = true,
+            reachable = !episode.subUrl.isNullOrBlank() || !episode.dubUrl.isNullOrBlank(),
+        )
+
+        val alternative = alternative ?: return listOf(primary)
+        val anilistId = runCatching { anilistIdOf(animeId) }.getOrNull()?.takeIf { it.isNotBlank() }
+            ?: return listOf(
+                primary,
+                ServerOption(StreamServer.ALTERNATIVE, probed = true, reachable = false),
+            )
+
+        val tracks = runCatching { alternative.languages(anilistId, episode) }.getOrDefault(emptyList())
+        return listOf(
+            primary,
+            ServerOption(
+                server = StreamServer.ALTERNATIVE,
+                languages = tracks.map { track ->
+                    val code = track.language.ifBlank { "und" }
+                    ServerLanguage(
+                        id = code,
+                        label = when (code) {
+                            "ja" -> "Original (Japanese)"
+                            "hi" -> "Hindi"
+                            "en" -> "English"
+                            else -> track.label.ifBlank { code.uppercase() }
+                        },
+                        audio = if (code == "hi") AudioTrack.DUB else AudioTrack.SUB,
+                        languageCode = code,
+                    )
+                },
+                probed = true,
+                reachable = tracks.isNotEmpty(),
+            ),
+        )
+    }
+
+    private suspend fun resolvePrimary(
+        episode: Episode,
+        audio: AudioTrack,
     ): Result<PlayableStream> {
         val embedUrl = when (audio) {
             AudioTrack.SUB -> episode.subUrl
             AudioTrack.DUB -> episode.dubUrl
         }?.takeIf { it.isNotBlank() }
-
-        val key = Key(episode.id, audio)
-        if (embedUrl != null) read(key, embedUrl)?.let { return Result.success(it) }
-
-        return mutex.withLock {
-            // Second check: another caller may have resolved while we queued for the lock.
-            if (embedUrl != null) read(key, embedUrl)?.let { return@withLock Result.success(it) }
-
-            val primary = if (embedUrl == null) {
-                Result.failure(
-                    ResolveException.NotFound(
-                        "episode ${episode.id} has no ${audio.name.lowercase()} source",
-                    ),
-                )
-            } else {
-                resolverProvider().resolve(embedUrl, audio)
-            }
-
-            val result = if (primary.isSuccess) {
-                primary
-            } else {
-                resolveAlternative(animeId, episode, audio) ?: primary
-            }
-
-            result
-                .onSuccess { stream ->
-                    store(key, Entry(stream, embedUrl.orEmpty(), clock()))
-                    AppLog.d("resolved ep${episode.id} ${audio.name} -> ${stream.masterUrl}")
-                }
-                .onFailure { error ->
-                    AppLog.w("resolve failed for ep${episode.id} ${audio.name}: ${error.message}")
-                }
-        }
+            ?: return Result.failure(
+                ResolveException.NotFound(
+                    "episode ${episode.id} has no ${audio.name.lowercase()} source",
+                ),
+            )
+        return resolverProvider().resolve(embedUrl, audio)
     }
 
     /**
@@ -101,15 +187,22 @@ class StreamRepositoryImpl(
         animeId: Int,
         episode: Episode,
         audio: AudioTrack,
-    ): Result<PlayableStream>? {
-        val source = alternative ?: return null
+        languageId: String?,
+    ): Result<PlayableStream> {
+        val source = alternative
+            ?: return Result.failure(ResolveException.NotFound("no alternative server"))
         val anilistId = runCatching { anilistIdOf(animeId) }.getOrNull()?.takeIf { it.isNotBlank() }
-            ?: return null
-        val result = source.resolve(anilistId, episode, audio)
-        result.onFailure { error ->
-            AppLog.w("alternative source failed for ep${episode.id}: ${error.message}")
+            ?: return Result.failure(ResolveException.NotFound("title has no AniList id"))
+        // The primary server names its languages "sub"/"dub"; the alternative speaks ISO codes.
+        val altLanguage = when (languageId) {
+            null, "sub" -> null
+            "dub" -> "hi"
+            else -> languageId
         }
-        return result
+        return source.resolve(anilistId, episode, audio, altLanguage)
+            .onFailure { error ->
+                AppLog.w("alternative source failed for ep${episode.id}: ${error.message}")
+            }
     }
 
     override suspend fun invalidate(episodeId: Long) {
@@ -124,11 +217,12 @@ class StreamRepositoryImpl(
         synchronized(lock) { cache.clear() }
     }
 
-    private fun read(key: Key, embedUrl: String): PlayableStream? = synchronized(lock) {
+    private fun read(key: Key): PlayableStream? = synchronized(lock) {
         val entry = cache[key] ?: return@synchronized null
+        // The key already carries server + language, and a URL change within the TTL is covered by
+        // the error path (403/410 -> invalidate), so age is the only thing to check here.
         val expired = clock() - entry.storedAt > ttlMs
-        val urlChanged = entry.embedUrl != embedUrl
-        if (expired || urlChanged) {
+        if (expired) {
             cache.remove(key)
             null
         } else {

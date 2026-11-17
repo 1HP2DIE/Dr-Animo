@@ -3,6 +3,8 @@ package com.animo.app.data.repo
 import com.animo.app.domain.model.AudioTrack
 import com.animo.app.domain.model.Episode
 import com.animo.app.domain.model.PlayableStream
+import com.animo.app.domain.model.ServerOption
+import com.animo.app.domain.model.StreamServer
 import com.animo.app.domain.repo.StreamRepository
 
 /**
@@ -36,6 +38,31 @@ class RoutingStreamRepository(
             )
         return delegate.resolve(animeId, episode, audio)
     }
+
+    /** Server choice only exists on the original catalogue; Hindi rows keep their own resolver. */
+    override suspend fun resolve(
+        animeId: Int,
+        episode: Episode,
+        audio: AudioTrack,
+        server: StreamServer?,
+        languageId: String?,
+    ): Result<PlayableStream> {
+        if (animeId >= 0) return original.resolve(animeId, episode, audio, server, languageId)
+
+        val delegate = hindi()
+            ?: return Result.failure(
+                IllegalStateException("Hindi playback is not available in this build (id $animeId)"),
+            )
+        return delegate.resolve(animeId, episode, audio, server, languageId)
+    }
+
+    /** Each backend knows its own servers: the original has two, a Hindi row has only its own. */
+    override suspend fun serverOptions(animeId: Int, episode: Episode): List<ServerOption> =
+        if (animeId >= 0) {
+            original.serverOptions(animeId, episode)
+        } else {
+            hindi()?.serverOptions(animeId, episode).orEmpty()
+        }
 
     /**
      * Beats both caches: the id spaces never overlap, so a blind two-sided invalidate is cheaper than

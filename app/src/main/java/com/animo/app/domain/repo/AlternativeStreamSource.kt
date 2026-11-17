@@ -24,5 +24,11 @@ interface AlternativeStreamSource {
         anilistId: String,
         episode: Episode,
         audio: AudioTrack,
+        /** A server language id (`hi`, `en`, `ja`, …); null means "server default". */
+        languageId: String? = null,
     ): Result<PlayableStream>
+
+    /** The languages this server carries for the episode, best-effort. */
+    suspend fun languages(anilistId: String, episode: Episode): List<com.animo.app.player.AltStreamAudio> =
+        emptyList()
 }

@@ -22,6 +22,27 @@ data class PlayerTuning(
     val hasQualities: Boolean = false,
     /** True when the container has more than one audio track worth switching between. */
     val hasAudioTracks: Boolean = false,
+    /** Stream servers and the languages each offers for this episode. */
+    val servers: List<ServerRow> = emptyList(),
+    /** Number of the server the viewer picked; `null` = auto. */
+    val activeServer: Int? = null,
+    val activeLanguageId: String? = null,
+)
+
+/** One numbered server in the picker. */
+@Immutable
+data class ServerRow(
+    val number: Int,
+    val label: String,
+    val reachable: Boolean,
+    val languages: List<LanguageRow>,
+)
+
+/** One selectable language on a server. */
+@Immutable
+data class LanguageRow(
+    val id: String,
+    val label: String,
 )
 
 /** One selectable rendition. [id] is the engine's stable key. */

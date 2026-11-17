@@ -87,7 +87,6 @@ import com.animo.app.ui.common.LoadingState
 import com.animo.app.ui.common.ErrorState
 import com.animo.app.ui.common.displayTitle
 import com.animo.app.ui.common.formatClock
-import com.animo.app.ui.common.labelRes
 import com.animo.app.ui.settings.SettingsPreferences
 import com.animo.app.ui.theme.AnimoPalette
 import kotlinx.coroutines.Dispatchers
@@ -583,7 +582,6 @@ private fun PlayerStage(
                     controlsVisible = true
                 },
                 sleepActive = sleepMinutes != null,
-                onToggleAudio = viewModel::toggleAudio,
                 onNext = viewModel::next,
                 onPrevious = viewModel::previous,
                 onEnterPip = enterPip,
@@ -628,6 +626,16 @@ private fun PlayerStage(
                     speed = speed,
                     hasQualities = qualities.size > 1,
                     hasAudioTracks = audios.size > 1,
+                    servers = model.servers.map { option ->
+                        ServerRow(
+                            number = option.server.number,
+                            label = option.server.label,
+                            reachable = option.reachable,
+                            languages = option.languages.map { LanguageRow(it.id, it.label) },
+                        )
+                    },
+                    activeServer = model.server?.number,
+                    activeLanguageId = model.displayedLanguageId,
                 ),
                 sleepMinutesLeft = sleepMinutes,
                 initialTab = settingsTab ?: PlayerMenuTab.QUALITY,
@@ -646,6 +654,11 @@ private fun PlayerStage(
                 onDismiss = { settingsTab = null },
                 onSelectQuality = controller::selectQuality,
                 onSelectAudio = controller::selectAudioTrack,
+                onSelectLanguage = { number, languageId ->
+                    com.animo.app.domain.model.StreamServer.fromNumber(number)?.let { server ->
+                        viewModel.selectLanguage(server, languageId)
+                    }
+                },
                 onSelectSpeed = { value ->
                     speed = value
                     surfaceState.setSpeed(value)
@@ -670,7 +683,6 @@ private fun PlayerControlsOverlay(
     onOpenSettings: (PlayerMenuTab) -> Unit,
     onOpenEpisodes: () -> Unit,
     sleepActive: Boolean,
-    onToggleAudio: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onEnterPip: () -> Unit,
@@ -838,8 +850,11 @@ private fun PlayerControlsOverlay(
                     color = PlayerForeground.copy(alpha = 0.78f),
                 )
                 Spacer(Modifier.weight(1f))
-                if (model.canSwitchAudio) {
-                    AudioSwitchChip(audio = model.audio, onClick = onToggleAudio)
+                if (model.servers.isNotEmpty()) {
+                    ServerChip(
+                        label = serverChipLabel(model),
+                        onClick = { onOpenSettings(PlayerMenuTab.AUDIO) },
+                    )
                     Spacer(Modifier.width(6.dp))
                 }
                 // Subtitles open on the track pane; quality/speed/sleep open their own pane. One
@@ -898,13 +913,19 @@ private fun PlayerGlyph(
     }
 }
 
+/**
+ * "Server 2 · Hindi" — the single entry point for servers and languages.
+ *
+ * The old chip toggled SUB/DUB blindly; with more than one server that is no longer one switch, so
+ * tapping now opens the server list where the languages each one actually has are visible.
+ */
 @Composable
-private fun AudioSwitchChip(
-    audio: AudioTrack,
+private fun ServerChip(
+    label: String,
     onClick: () -> Unit,
 ) {
     Text(
-        text = stringResource(audio.labelRes()),
+        text = label,
         modifier = Modifier
             .clip(RoundedCornerShape(6.dp))
             .background(PlayerControlScrim)
@@ -913,6 +934,18 @@ private fun AudioSwitchChip(
         style = MaterialTheme.typography.labelSmall,
         color = PlayerForeground,
     )
+}
+
+/** `Server 2 · Hindi`, falling back to the audio label when the probe has not answered yet. */
+private fun serverChipLabel(model: PlayerUiModel): String {
+    val number = model.server?.number ?: 1
+    val language = model.servers
+        .firstOrNull { it.server.number == number }
+        ?.languages
+        ?.firstOrNull { it.id == model.displayedLanguageId }
+        ?.label
+        ?: if (model.audio == AudioTrack.DUB) "DUB" else "SUB"
+    return "S$number · $language"
 }
 
 @Composable

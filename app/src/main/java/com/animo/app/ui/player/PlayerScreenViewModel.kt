@@ -9,6 +9,8 @@ import com.animo.app.domain.model.Anime
 import com.animo.app.domain.model.AudioTrack
 import com.animo.app.domain.model.Episode
 import com.animo.app.domain.model.PlayableStream
+import com.animo.app.domain.model.ServerOption
+import com.animo.app.domain.model.StreamServer
 import com.animo.app.domain.repo.AnimeRepository
 import com.animo.app.domain.repo.StreamRepository
 import com.animo.app.ui.UiState
@@ -29,10 +31,33 @@ data class PlayerUiModel(
     val startPositionMs: Long,
     val reloadToken: Int,
     val errorMessage: String? = null,
+    /** Server the viewer picked; `null` = auto (primary first, alternative on failure). */
+    val server: StreamServer? = null,
+    /** Language id on that server (`sub`, `dub`, `hi`, `en`, …), `null` = server default. */
+    val languageId: String? = null,
+    /** Every server and the languages it offers for this episode, filled as the probe answers. */
+    val servers: List<ServerOption> = emptyList(),
 ) {
     val hasSub: Boolean get() = !episode.subUrl.isNullOrBlank()
     val hasDub: Boolean get() = !episode.dubUrl.isNullOrBlank()
     val canSwitchAudio: Boolean get() = hasSub && hasDub
+    /**
+     * The language row that should read as selected when the viewer has not chosen one explicitly:
+     * the primary names its languages "sub"/"dub", a Hindi row just has "hi", and the multi-language
+     * server has ISO codes. One derivation, used by both the chip and the server pane.
+     */
+    val displayedLanguageId: String?
+        get() {
+            val number = server?.number ?: StreamServer.PRIMARY.number
+            val row = servers.firstOrNull { it.server.number == number }
+            languageId?.let { return it }
+            if (row == null) return null
+            val audioId = if (audio == AudioTrack.DUB) "dub" else "sub"
+            return row.languages.firstOrNull { it.id == audioId }?.id
+                ?: row.languages.firstOrNull { it.id == "hi" && audio == AudioTrack.DUB }?.id
+                ?: row.languages.firstOrNull()?.id
+        }
+
     val hasNext: Boolean get() = index >= 0 && index < episodes.lastIndex
     val hasPrevious: Boolean get() = index > 0
     val nextEpisode: Episode? get() = episodes.getOrNull(index + 1)
@@ -114,17 +139,41 @@ class PlayerScreenViewModel(
     suspend fun resolveStream(): Result<PlayableStream> {
         val current = (_state.value as? UiState.Content)?.data
             ?: return Result.failure(IllegalStateException("player is not ready"))
-        return streamRepository.resolve(animeId, current.episode, current.audio)
+        return streamRepository.resolve(
+            animeId = animeId,
+            episode = current.episode,
+            audio = current.audio,
+            server = current.server,
+            languageId = current.languageId,
+        )
     }
 
     fun next() {
         val current = current() ?: return
-        current.nextEpisode?.let { open(it, current.audio, reloadToken = 0, startPositionMs = null) }
+        current.nextEpisode?.let {
+            open(
+                it,
+                current.audio,
+                reloadToken = 0,
+                startPositionMs = null,
+                server = current.server,
+                languageId = current.languageId,
+            )
+        }
     }
 
     fun previous() {
         val current = current() ?: return
-        current.previousEpisode?.let { open(it, current.audio, reloadToken = 0, startPositionMs = null) }
+        current.previousEpisode?.let {
+            open(
+                it,
+                current.audio,
+                reloadToken = 0,
+                startPositionMs = null,
+                server = current.server,
+                languageId = current.languageId,
+            )
+        }
     }
 
     /**
@@ -134,7 +183,14 @@ class PlayerScreenViewModel(
     fun selectEpisode(episode: Episode) {
         val current = current() ?: return
         if (episode.id == current.episode.id) return
-        open(episode, current.audio, reloadToken = 0, startPositionMs = null)
+        open(
+            episode,
+            current.audio,
+            reloadToken = 0,
+            startPositionMs = null,
+            server = current.server,
+            languageId = current.languageId,
+        )
     }
 
     fun selectAudio(audio: AudioTrack) {
@@ -151,12 +207,6 @@ class PlayerScreenViewModel(
             reloadToken = current.reloadToken + 1,
             startPositionMs = resumePosition(current.startPositionMs),
         )
-    }
-
-    fun toggleAudio() {
-        val current = current() ?: return
-        if (!current.canSwitchAudio) return
-        selectAudio(if (current.audio == AudioTrack.SUB) AudioTrack.DUB else AudioTrack.SUB)
     }
 
     fun retry() {
@@ -212,6 +262,8 @@ class PlayerScreenViewModel(
         preferredAudio: AudioTrack,
         reloadToken: Int,
         startPositionMs: Long?,
+        server: StreamServer? = null,
+        languageId: String? = null,
     ) {
         val loadedAnime = anime ?: return
         if (opening) return
@@ -230,12 +282,60 @@ class PlayerScreenViewModel(
                         audio = episode.pickAudio(preferredAudio),
                         startPositionMs = if (position > MIN_RESUME_MS) position else 0L,
                         reloadToken = reloadToken,
+                        server = server,
+                        languageId = languageId,
                     ),
                 )
+                // The primary answers instantly; the alternative costs one probe. Filling it in
+                // afterwards keeps the player start fast and the server list honest.
+                refreshServers(episode, reloadToken, server, languageId)
             } finally {
                 opening = false
             }
         }
+    }
+
+    private fun refreshServers(
+        episode: Episode,
+        reloadToken: Int,
+        server: StreamServer?,
+        languageId: String?,
+    ) {
+        viewModelScope.launch {
+            val options = runCatching { streamRepository.serverOptions(animeId, episode) }
+                .getOrDefault(emptyList())
+            if (options.isEmpty()) return@launch
+
+            val current = current() ?: return@launch
+            if (current.episode.id != episode.id || current.reloadToken != reloadToken) return@launch
+            _state.value = UiState.Content(
+                current.copy(servers = options, server = server, languageId = languageId),
+            )
+        }
+    }
+
+    /**
+     * The server chip in the player: pick a server and one of the languages it offers.
+     *
+     * Changing either re-resolves from the resume position, so the switch keeps the timestamp the
+     * viewer was at.
+     */
+    fun selectLanguage(server: StreamServer, languageId: String) {
+        val current = current() ?: return
+        val language = current.servers
+            .firstOrNull { it.server == server }
+            ?.languages
+            ?.firstOrNull { it.id == languageId }
+            ?: return
+
+        open(
+            episode = current.episode,
+            preferredAudio = language.audio,
+            reloadToken = current.reloadToken + 1,
+            startPositionMs = resumePosition(current.startPositionMs),
+            server = server,
+            languageId = languageId,
+        )
     }
 
     private fun resumePosition(fallback: Long): Long =

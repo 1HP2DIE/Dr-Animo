@@ -106,6 +106,7 @@ fun PlayerSettingsSheet(
     onDismiss: () -> Unit,
     onSelectQuality: (String) -> Unit,
     onSelectAudio: (String) -> Unit,
+    onSelectLanguage: (serverNumber: Int, languageId: String) -> Unit = { _, _ -> },
     onSelectSpeed: (Float) -> Unit,
     onSelectSleep: (Int?) -> Unit,
     subtitle: SubtitlePanelState = SubtitlePanelState(),
@@ -180,7 +181,7 @@ fun PlayerSettingsSheet(
                 ) {
                     when (PlayerMenuTab.entries[index]) {
                         PlayerMenuTab.QUALITY -> QualityPane(tuning, onSelectQuality)
-                        PlayerMenuTab.AUDIO -> AudioPane(tuning, onSelectAudio)
+                        PlayerMenuTab.AUDIO -> AudioPane(tuning, onSelectAudio, onSelectLanguage)
                         PlayerMenuTab.SUBTITLE -> SubtitlePane(tuning, subtitle, subtitleActions)
                         PlayerMenuTab.SPEED -> SpeedPane(tuning, onSelectSpeed)
                         PlayerMenuTab.SLEEP -> SleepPane(sleepMinutesLeft, onSelectSleep)
@@ -345,7 +346,31 @@ private fun bitrateHint(bitrate: Int): String? =
 private fun AudioPane(
     tuning: PlayerTuning,
     onSelectAudio: (String) -> Unit,
+    onSelectLanguage: (Int, String) -> Unit,
 ) {
+    if (tuning.servers.isEmpty()) {
+        EmptyNote(stringResource(R.string.ui_player_menu_servers_checking))
+    } else {
+        tuning.servers.forEach { server ->
+            SectionLabel(server.label)
+            if (!server.reachable) {
+                EmptyNote(stringResource(R.string.ui_player_menu_server_unavailable, server.number))
+            } else {
+                server.languages.forEach { language ->
+                    val selected = tuning.activeServer == server.number &&
+                        tuning.activeLanguageId == language.id
+                    SettingCard(
+                        title = language.label,
+                        hint = if (selected) stringResource(R.string.ui_player_menu_server_playing) else null,
+                        selected = selected,
+                        onClick = { onSelectLanguage(server.number, language.id) },
+                    )
+                }
+            }
+        }
+    }
+
+    SectionLabel(stringResource(R.string.ui_player_menu_section_audio_track))
     SettingCard(
         title = stringResource(R.string.ui_player_menu_audio_default),
         hint = stringResource(R.string.ui_player_menu_audio_default_hint),

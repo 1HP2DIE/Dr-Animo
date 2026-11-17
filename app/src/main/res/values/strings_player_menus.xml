@@ -12,7 +12,7 @@
 
     <!-- Tabs -->
     <string name="ui_player_menu_tab_quality">Quality</string>
-    <string name="ui_player_menu_tab_audio">Audio</string>
+    <string name="ui_player_menu_tab_audio">Servers</string>
     <string name="ui_player_menu_tab_subtitle">Subtitles</string>
     <string name="ui_player_menu_tab_speed">Speed</string>
     <string name="ui_player_menu_tab_sleep">Sleep</string>
@@ -32,6 +32,12 @@
     <string name="ui_player_menu_section_subtitles">Subtitles</string>
     <string name="ui_player_menu_subtitles_off">Off</string>
     <string name="ui_player_menu_subtitles_empty">No subtitle track in this stream.</string>
+
+    <!-- Servers -->
+    <string name="ui_player_menu_servers_checking">Looking for available servers…</string>
+    <string name="ui_player_menu_server_unavailable">Server %1$d has nothing for this episode.</string>
+    <string name="ui_player_menu_server_playing">Playing</string>
+    <string name="ui_player_menu_section_audio_track">Audio track in this stream</string>
 
     <!-- Speed -->
     <string name="ui_player_menu_speed_hint">Applies to this playback and stays on for the next episode.</string>
