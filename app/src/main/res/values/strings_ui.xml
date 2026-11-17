@@ -107,6 +107,12 @@
     <string name="ui_home_browse_all_count">Browse all %1$s</string>
     <string name="ui_home_badge_hindi">HINDI</string>
 
+    <!-- Continue-watching cards (Home rail + Library) -->
+    <string name="ui_card_progress_episode">E%1$d · %2$d%%</string>
+    <string name="ui_card_progress_percent">%1$d%%</string>
+    <string name="ui_card_progress_state_episode">Episode %1$d, %2$d%% watched</string>
+    <string name="ui_card_progress_state_percent">%1$d%% watched</string>
+
     <!-- Settings -->
     <string name="ui_settings_title">Settings</string>
     <string name="ui_settings_appearance">Appearance</string>
@@ -115,6 +121,9 @@
     <string name="ui_settings_storage">Storage on device</string>
     <string name="ui_settings_last_sync">Last sync</string>
     <string name="ui_settings_never_synced">Never</string>
+    <string name="ui_settings_last_sync_today">Today, %1$s</string>
+    <string name="ui_settings_last_sync_yesterday">Yesterday, %1$s</string>
+    <string name="ui_settings_sync_just_now">Just now</string>
     <string name="ui_settings_sync_now">Sync now</string>
     <string name="ui_settings_syncing">Syncing…</string>
     <string name="ui_settings_sync_failed">Sync failed: %1$s</string>

@@ -1,5 +1,6 @@
 package com.animo.app.ui.settings
 
+import android.text.format.DateUtils
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -60,8 +61,11 @@ import com.animo.app.ui.theme.AnimoTheme
 import com.animo.app.ui.theme.LocalThemePreference
 import com.animo.app.ui.theme.ThemeMode
 import com.animo.app.ui.theme.labelRes
-import java.text.DateFormat
-import java.util.Date
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.util.Locale
 
 @Composable
@@ -224,6 +228,7 @@ private fun CatalogueSection(
             label = stringResource(R.string.ui_settings_last_sync),
             value = formatSyncTime(state.lastSyncEpoch)
                 ?: stringResource(R.string.ui_settings_never_synced),
+            secondary = formatSyncAge(state.lastSyncEpoch),
         )
 
         Spacer(Modifier.height(12.dp))
@@ -529,19 +534,27 @@ private fun SettingsActionRow(
 }
 
 @Composable
-private fun SettingsValueRow(label: String, value: String) {
+private fun SettingsValueRow(label: String, value: String, secondary: String? = null) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f),
-        )
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (secondary != null) {
+                Text(
+                    text = secondary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         Spacer(Modifier.width(12.dp))
         Text(
             text = value,
@@ -551,8 +564,49 @@ private fun SettingsValueRow(label: String, value: String) {
     }
 }
 
-private fun formatSyncTime(epochMs: Long?): String? = epochMs?.let {
-    DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(it))
+/**
+ * "Today, 14:45" / "Yesterday, 14:45" / a localised medium date ("12 Nov 2026"). The relative day
+ * names are resources so translators keep the comma and the word order; the clock format comes from
+ * the locale, not from a hardcoded pattern. `null` = never synced.
+ *
+ * `java.time` is available at minSdk 24: core library desugaring is enabled in `app/build.gradle.kts`.
+ */
+@Composable
+private fun formatSyncTime(epochMs: Long?): String? {
+    if (epochMs == null) return null
+    val locale = Locale.getDefault()
+    val zone = ZoneId.systemDefault()
+    val syncedAt = Instant.ofEpochMilli(epochMs).atZone(zone)
+    val clock = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(locale)
+    val date = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale)
+    val time = clock.format(syncedAt)
+    val today = LocalDate.now(zone)
+    return when (syncedAt.toLocalDate()) {
+        today -> stringResource(R.string.ui_settings_last_sync_today, time)
+        today.minusDays(1) -> stringResource(R.string.ui_settings_last_sync_yesterday, time)
+        // Also the future case: a backwards clock must not print "Today" for another date.
+        else -> date.format(syncedAt)
+    }
+}
+
+private const val MINUTE_MS = 60_000L
+
+/** One week — past this the relative hint stops adding information over the exact date. */
+private const val SYNC_HINT_WINDOW_MS = 7 * 24 * 60 * MINUTE_MS
+
+/**
+ * Cheap one-shot "3 hours ago" hint. Deliberately computed at composition instead of from a ticking
+ * timer: a stale hint is harmless next to the exact time, a woken-up screen every minute is not.
+ * Suppressed beyond a week, where it would only repeat the date already shown as the value.
+ */
+@Composable
+private fun formatSyncAge(epochMs: Long?): String? {
+    if (epochMs == null) return null
+    val now = System.currentTimeMillis()
+    val age = now - epochMs
+    if (age < 0L || age > SYNC_HINT_WINDOW_MS) return null
+    if (age < MINUTE_MS) return stringResource(R.string.ui_settings_sync_just_now)
+    return DateUtils.getRelativeTimeSpanString(epochMs, now, MINUTE_MS).toString()
 }
 
 private fun formatBytes(bytes: Long): String = when {
@@ -580,10 +634,43 @@ private fun SettingsHindiPreview() {
             state = SettingsUiState(
                 catalogueSize = 9_404,
                 catalogueBytes = 128_000_000L,
+                // Old timestamp on purpose: exercises the absolute-date branch of "Last sync".
                 lastSyncEpoch = 1_700_000_000_000L,
                 hindiAvailable = true,
                 hindiCount = 412,
                 hindiResultCount = 412,
+            ),
+            themeMode = ThemeMode.DARK,
+            onThemeModeChange = {},
+            onAutoplayChange = {},
+            onDefaultAudioChange = {},
+            onSyncNow = {},
+            onSyncHindi = {},
+            onOpenDrawer = {},
+            onOpenChangelog = {},
+        )
+    }
+}
+
+/** The other "Last sync" branch: a sync a few hours old shows "Today, HH:mm" + a relative hint. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Preview(
+    name = "Settings · last sync today",
+    showBackground = true,
+    backgroundColor = 0xFF0D1113,
+    widthDp = 390,
+    heightDp = 320,
+)
+@Composable
+private fun SettingsLastSyncTodayPreview() {
+    AnimoTheme {
+        SettingsScreenContent(
+            state = SettingsUiState(
+                catalogueSize = 9_404,
+                catalogueBytes = 128_000_000L,
+                lastSyncEpoch = System.currentTimeMillis() - 3 * 60 * 60 * 1_000L,
+                hindiAvailable = true,
+                hindiCount = 2_975,
             ),
             themeMode = ThemeMode.DARK,
             onThemeModeChange = {},

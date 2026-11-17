@@ -157,12 +157,28 @@ class SettingsViewModel(
         viewModelScope.launch {
             refreshCatalogueStats()
             refreshHindiCount()
-            var wasSyncing = false
-            repository.sync.collect { progress ->
-                val syncing = progress.state == SyncState.RUNNING || progress.state == SyncState.THROTTLED
-                if (wasSyncing && !syncing) refreshCatalogueStats()
-                wasSyncing = syncing
+            observeSyncCompletion()
+        }
+    }
+
+    /**
+     * Persists "Last sync" from [AnimeRepository.sync] transitions instead of from the button below
+     * it: a catalogue refresh can be started from Home or by the WorkManager job, and this screen
+     * still has to show when it last finished.
+     *
+     * Only RUNNING/THROTTLED -> IDLE is a finished sync. The repository flow starts at IDLE, so a
+     * straight IDLE -> IDLE collect means nothing ran; RUNNING -> ERROR means the job died and the
+     * previous timestamp stays; and the syncer emits IDLE only after rows were upserted.
+     */
+    private suspend fun observeSyncCompletion() {
+        var wasSyncing = false
+        repository.sync.collect { progress ->
+            val syncing = progress.state == SyncState.RUNNING || progress.state == SyncState.THROTTLED
+            if (wasSyncing && !syncing) {
+                refreshCatalogueStats()
+                if (progress.state == SyncState.IDLE) recordSyncFinished()
             }
+            wasSyncing = syncing
         }
     }
 
@@ -176,7 +192,9 @@ class SettingsViewModel(
             if (failure != null) {
                 syncMessage.value = failure.message ?: failure::class.simpleName
             } else {
-                preferences.recordSync(System.currentTimeMillis())
+                // The result here is authoritative for this run, so it does not depend on the
+                // StateFlow collector above seeing both transitions under conflation.
+                recordSyncFinished()
             }
             isSyncing.value = false
             refreshCatalogueStats()
@@ -202,6 +220,7 @@ class SettingsViewModel(
                 hindi.value = hindi.value.copy(done = done, total = total)
             }
             val failure = result.exceptionOrNull()
+            val written = result.getOrNull() ?: 0
             val count = runCatching { catalog.catalogCount() }.getOrDefault(hindi.value.count)
             hindi.value = if (failure != null) {
                 hindi.value.copy(
@@ -213,12 +232,17 @@ class SettingsViewModel(
                 hindi.value.copy(
                     syncing = false,
                     count = count,
-                    resultCount = result.getOrNull() ?: 0,
+                    resultCount = written,
                     message = null,
                 )
             }
             // Hindi rows are ordinary catalogue rows, so the main "Total titles" moved too.
-            if (failure == null) refreshCatalogueStats()
+            if (failure == null) {
+                refreshCatalogueStats()
+                // Hindi has its own providers and never touches `repository.sync`, so it dates the
+                // row itself. A zero-row success means both providers were already in Room.
+                if (written > 0) recordSyncFinished()
+            }
         }
     }
 
@@ -239,6 +263,14 @@ class SettingsViewModel(
     private suspend fun refreshCatalogueStats() {
         catalogueSize.value = runCatching { repository.catalogSize() }.getOrDefault(catalogueSize.value)
         catalogueBytes.value = runCatching { preferences.catalogueBytes() }.getOrDefault(catalogueBytes.value)
+    }
+
+    /**
+     * Single write point for "Last sync", so every completed sync path dates the row the same way.
+     * A DataStore failure must not kill the collector that watches the next sync, hence `runCatching`.
+     */
+    private suspend fun recordSyncFinished() {
+        runCatching { preferences.recordSync(System.currentTimeMillis()) }
     }
 
     private suspend fun refreshHindiCount() {

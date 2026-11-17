@@ -34,6 +34,7 @@ class SettingsPreferences(private val context: Context) {
         }
         .distinctUntilChanged()
 
+    /** Wall-clock time of the last *finished* sync; `null` = this install has never completed one. */
     val lastSyncEpoch: Flow<Long?> = store.data
         .map { prefs -> prefs[LastSyncEpochKey] }
         .distinctUntilChanged()
@@ -54,6 +55,10 @@ class SettingsPreferences(private val context: Context) {
         store.edit { prefs -> prefs[DefaultAudioKey] = audio.name }
     }
 
+    /**
+     * Stamps "Last sync". Called from every completed sync path (catalogue, Home-triggered, Hindi),
+     * so callers must only pass a time for a run that actually finished — not for a no-op or error.
+     */
     suspend fun recordSync(epochMs: Long) {
         store.edit { prefs -> prefs[LastSyncEpochKey] = epochMs }
     }
