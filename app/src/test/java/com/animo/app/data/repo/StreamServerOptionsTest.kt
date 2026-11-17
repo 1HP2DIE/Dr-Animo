@@ -91,6 +91,7 @@ class StreamServerOptionsTest {
         assertEquals(1, options.size)
         assertEquals(StreamServer.PRIMARY, options[0].server)
         assertEquals(listOf("sub", "dub"), options[0].languages.map { it.id })
+        assertEquals("English (DUB)", options[0].languages[1].label)
         assertTrue(options[0].reachable)
     }
 
@@ -182,14 +183,15 @@ class StreamServerOptionsTest {
     }
 
     @Test
-    fun `a dubbed language is translated when the fallback is used`() = runBlocking {
+    fun `the catalogue dub is english and is translated as such on the fallback`() = runBlocking {
         val primary = FakeResolver(Result.failure(ResolveException.NotFound("down")))
         val alternative = FakeAlternative(Result.success(stream))
 
         repository(primary, alternative)
             .resolve(1, episode, AudioTrack.DUB, StreamServer.PRIMARY, "dub")
 
-        assertEquals("hi", alternative.lastLanguage)
+        // The primary's dub track is English; Hindi dubs are separate catalogue rows.
+        assertEquals("en", alternative.lastLanguage)
     }
 
     @Test

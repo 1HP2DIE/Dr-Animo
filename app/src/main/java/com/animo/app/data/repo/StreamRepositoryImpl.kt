@@ -116,12 +116,14 @@ class StreamRepositoryImpl(
                     add(ServerLanguage(id = "sub", label = "Original (SUB)", audio = AudioTrack.SUB))
                 }
                 if (!episode.dubUrl.isNullOrBlank()) {
+                    // The catalogue's dub track is the English dub; Hindi dubs are their own
+                    // catalogue rows and reach the player through the Hindi repository.
                     add(
                         ServerLanguage(
                             id = "dub",
-                            label = "Hindi (DUB)",
+                            label = "English (DUB)",
                             audio = AudioTrack.DUB,
-                            languageCode = "hi",
+                            languageCode = "en",
                         ),
                     )
                 }
@@ -196,7 +198,7 @@ class StreamRepositoryImpl(
         // The primary server names its languages "sub"/"dub"; the alternative speaks ISO codes.
         val altLanguage = when (languageId) {
             null, "sub" -> null
-            "dub" -> "hi"
+            "dub" -> "en"
             else -> languageId
         }
         return source.resolve(anilistId, episode, audio, altLanguage)

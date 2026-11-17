@@ -130,7 +130,7 @@ class HindiStreamRepositoryImpl(
         ServerOption(
             server = StreamServer.PRIMARY,
             languages = listOf(
-                ServerLanguage(id = "hi", label = "Hindi", audio = AudioTrack.DUB, languageCode = "hi"),
+                ServerLanguage(id = "hi", label = "Hindi (DUB)", audio = AudioTrack.DUB, languageCode = "hi"),
             ),
             probed = true,
             reachable = true,
