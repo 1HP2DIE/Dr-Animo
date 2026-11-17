@@ -16,8 +16,8 @@ android {
         applicationId = "com.animo.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.2.0"
 
         // Single source of truth for endpoints (BuildConfig, never a literal at call sites).
         buildConfigField("String", "API_BASE_URL", "\"https://anikotoapi.site\"")

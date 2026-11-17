@@ -28,6 +28,19 @@ object Changelog {
 
     val releases: List<Release> = listOf(
         Release(
+            version = "1.2.0",
+            date = "17 Nov 2026",
+            headline = "Hindi dub is here: 2,900+ titles, playing inside the app.",
+            changes = listOf(
+                Change(ChangeKind.NEW, "Hindi dub catalogue — 2,900+ series and movies, synced to your device"),
+                Change(ChangeKind.NEW, "\"Hindi dub only\" filter, and a Hindi shortcut in the side drawer"),
+                Change(ChangeKind.NEW, "Hindi titles play in the same player, with the same resume and history"),
+                Change(ChangeKind.IMPROVED, "Sync Hindi from Settings shows progress page by page"),
+                Change(ChangeKind.IMPROVED, "Episode lists for Hindi titles open instantly instead of resolving the whole season first"),
+                Change(ChangeKind.FIXED, "Hindi streams that used to fail to load on some networks now play"),
+            ),
+        ),
+        Release(
             version = "1.1.0",
             date = "17 Nov 2026",
             headline = "A full navigation overhaul: browse, search and filter in one place.",
