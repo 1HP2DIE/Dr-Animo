@@ -1,0 +1,88 @@
+{
+  "source": "rareanimes.foo",
+  "displayName": "Rare Toons India",
+  "role": "hindi",
+  "baseUrl": "https://www.rareanimes.foo",
+  "mirror": "https://www.rareanimes.fans",
+  "verifiedAt": "2026-11-17",
+  "stack": {
+    "cms": "wordpress",
+    "theme": "herald v2.6.2.1",
+    "framework": "Redux 4.5.18",
+    "pageBuilder": "Elementor",
+    "forms": "Contact Form 7",
+    "cdn": "cloudflare (cf-edge-cache: cache,platform=wordpress)"
+  },
+  "robots": {
+    "url": "https://www.rareanimes.foo/robots.txt",
+    "disallow": ["/wp-admin/"],
+    "allow": ["/wp-admin/admin-ajax.php"],
+    "sitemap": "https://www.rareanimes.foo/sitemap.xml",
+    "note": "/wp-json/ is not disallowed"
+  },
+  "endpoints": {
+    "restPosts": "/wp-json/wp/v2/posts?per_page=100&page={n}&_embed=wp:featuredmedia&_fields=id,slug,link,date,title,categories,featured_media,content,_links,_embedded",
+    "restCategories": "/wp-json/wp/v2/categories?per_page=100",
+    "sitemap": "/sitemap.xml",
+    "search": "/?s={q}",
+    "seriesIndex": "/all-anime-cartoon-series-list/",
+    "moviesIndex": "/all-anime-cartoon-movies-list/",
+    "category": "/category/{slug}/",
+    "categoryPage": "/category/{slug}/page/{n}/"
+  },
+  "counts": {
+    "posts": 1942,
+    "restPages": 20,
+    "perPageMax": 100,
+    "sitemapUrls": 273,
+    "seriesIndexTitles": 1540,
+    "moviesIndexTitles": 1040
+  },
+  "urlTemplates": {
+    "title": "/{slug}/",
+    "note": "flat permalink; no /anime/ or /series/ prefix; episodes are NOT separate pages"
+  },
+  "languageTaxonomy": {
+    "type": "wordpress-category",
+    "hindiDub": { "slug": "hindi-dub", "id": 180, "posts": 1693 },
+    "hindiSub": { "slug": "hindi-sub", "id": 297, "posts": 34 },
+    "otherCounts": { "tamil": 316, "telugu": 311, "urdu": 15, "bengali": 9, "malayalam": 5 },
+    "hindiTotal": 1715,
+    "nonHindiTotal": 227,
+    "hindiShare": 0.883,
+    "proof": "?categories=180,297 -> 1715; ?categories_exclude=180,297 -> 227; sum = 1942",
+    "perPostTruth": "content contains '🔊Language: Hindi – Original | Multiaudio: Track 1 – Tamil, ...'",
+    "tagsUnusable": "8783 tags; hindi=16, hindi-dubbed=13"
+  },
+  "typeTaxonomy": {
+    "movies": { "slug": "movies", "posts": 613 },
+    "animes": { "slug": "animes", "posts": 1154 },
+    "rule": "category-movies => movie; category-animes => anime vs cartoon"
+  },
+  "postFields": {
+    "rest": ["id", "slug", "link", "date", "title", "categories", "tags", "featured_media", "content"],
+    "inContent": ["📰 Full Name", "🍂 Season", "⌛ RunTime", "🎞 Episodes", "🌐 Network", "📅 Year", "🔊 Language", "🎭 Genre", "🌟 Rating", "🎬 Quality"],
+    "externalIds": { "tmdb": false, "mal": false, "imdb": false }
+  },
+  "episodes": {
+    "separatePages": false,
+    "inlinedInContent": true,
+    "pattern": "<p>Episode 01 (373) – Team 7 Assemble!</p> then coloured <span> rows per language/quality",
+    "hosts": ["hubcloud.ist", "yournewdomain.com", "pixeldrain.com", "mega.nz", "argon.razorshell.space/downlead/<id>"]
+  },
+  "pagination": { "rest": "page param, 20 pages", "html": "339 archive pages (avoid)", "feed": "6 items (useless)" },
+  "cache": { "sitemap": "HIT", "home_category_search": "MISS/EXPIRED", "wpJson": "BYPASS", "jsRequiredForListing": false },
+  "ingestion": {
+    "nightlyRequests": 21,
+    "steps": ["GET /wp-json/wp/v2/categories?per_page=100", "GET /wp-json/wp/v2/posts?per_page=100&page=1..20"],
+    "diffBy": ["id", "date"],
+    "cadenceSeconds": 3,
+    "neverTouch": ["/wp-admin/", "download hosts", "codedew.com"]
+  },
+  "sampleTitles": [
+    { "id": 78626, "note": "newest sample" },
+    { "id": 78651 }, { "id": 79113 }, { "id": 76974 }, { "id": 79891 },
+    { "id": 43859 }, { "id": 73249 }, { "id": 78660 }, { "id": 74908 }, { "id": 78060 }
+  ],
+  "unverified": ["?paged= on search", "/home/page/N/", "admin-ajax", "exact ids for tamil/telugu/urdu/bengali/malayalam", "content pagination for 100+ episode seasons"]
+}

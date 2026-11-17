@@ -1,0 +1,73 @@
+{
+  "source": "rareanimes.foo",
+  "role": "hindi",
+  "baseUrl": "https://www.rareanimes.foo",
+  "verifiedAt": "2026-11-17",
+  "playerHostedHere": false,
+  "note": "episode links point to codedew.com link-protector; the player lives on argon.razorshell.space; CDN is juicy.codes (*.groovy.monster) — identical stack to toono.app",
+  "samples": [
+    {
+      "title": "Naruto S01E01 [RareToonsIndia]",
+      "language": "Hindi",
+      "episodePage": "https://www.rareanimes.foo/naruto-season-1-hindi-dubbed-episodes-download-hd/",
+      "zipLink": "https://codedew.com/zipper/?url=<opaque>",
+      "embed": "https://argon.razorshell.space/embed/Y8ShO82j6h0CkI4",
+      "masterUrl": "https://wfbrcpgcgcwjrqh.groovy.monster/stream/<448-char blob>.m3u8",
+      "variants": ["360P SD", "720P HD", "1080P FHD"],
+      "segments": { "count": "many", "status": 206, "contentType": "video/mp4 (MPEG-TS)", "rangeSupported": true }
+    }
+  ],
+  "chain": [
+    { "id": 1, "method": "GET", "url": "https://www.rareanimes.foo/<season-slug>/", "expect": 200, "extract": "episode rows -> codedew.com/zipper/?url=<opaque>" },
+    { "id": 2, "method": "GET", "url": "https://codedew.com/zipper/?url=<opaque>", "expect": 200, "note": "interstitial Step 1 of 3, 5s countdown, then data-href", "next": "/multiquality/?url=<opaque>" },
+    { "id": 3, "method": "GET", "url": "https://codedew.com/multiquality/?url=<opaque>", "expect": 200, "extract": "iframe #playerIframe src" },
+    { "id": 4, "method": "GET", "url": "https://argon.razorshell.space/embed/<videoId>", "expect": 200, "extract": "_juicycodes(\"..\"+\"..\") + juicyData{token,video,routes} + player.js?cb=" },
+    { "id": 5, "method": "DECODE", "detail": "concat quoted args, run player.js in stubbed sandbox, read jwplayer().getPlaylist()[0].sources[0].file", "reference": "/home/grandpa/me/code/mixed/toon.app/site/server.js:77 decodePlaylist()" },
+    { "id": 6, "method": "GET", "url": "{master}.m3u8", "expect": 200, "variants": 3 },
+    { "id": 7, "method": "GET", "url": "{variant}.m3u8", "expect": 200 },
+    { "id": 8, "method": "GET", "url": "{segment}", "expect": 206, "contentType": "video/mp4 (real MPEG-TS)" }
+  ],
+  "headers": {
+    "page": { "Referer": "https://www.rareanimes.foo/", "User-Agent": "Chrome-class UA" },
+    "embed": { "Referer": "https://www.rareanimes.foo/", "User-Agent": "Chrome-class UA" },
+    "cdn": {
+      "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "Accept-Language": "en-US,en;q=0.6",
+      "Referer": "https://argon.razorshell.space/",
+      "Accept": "*/*"
+    }
+  },
+  "cdnGate": {
+    "type": "header-allowlist + time-limited URL blob",
+    "bare": 403,
+    "refererOnly": 403,
+    "uaPlusAcceptLanguagePlusReferer": 200,
+    "segment": 206,
+    "segmentWithoutReferer": 403,
+    "staleUrlWithFullHeaders": 403,
+    "tlsImpersonationRequired": false,
+    "cookiesRequired": false,
+    "originRequired": false,
+    "serverBanner": "JUICY NGINX / JUICY CODES / help@juicy.codes",
+    "errorText": "Forbidden | RareAnimesIndia — 403 - Forbidden — Invalid signature."
+  },
+  "ttl": {
+    "measured": { "t+0": 200, "t+61s": 200, "t+182s": 200, "20_days": 403 },
+    "policy": "resolve immediately before playback; cache <= 10 min; re-resolve once on 403/410; never persist"
+  },
+  "android": {
+    "okhttp": true,
+    "extraWork": ["5s interstitial on codedew (client-side only)", "_juicycodes decoder (shared with toono.app)"],
+    "dataSourceHeaders": ["User-Agent", "Accept-Language", "Referer", "Accept"]
+  },
+  "servers": [{ "host": "wfbrcpgcgcwjrqh.groovy.monster", "playlist": true, "segments": true }],
+  "tracks": { "subtitles": false, "thumbnails": "sprite .vtt" },
+  "fragility": [
+    "blob TTL shortened",
+    "_juicycodes format change",
+    "CDN host rename",
+    "interstitial step count change",
+    "UA allowlist tightened"
+  ],
+  "unverified": ["exact TTL ceiling", "english/original sample", "mirror tabs per episode", "subtitle tracks"]
+}

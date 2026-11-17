@@ -1,0 +1,275 @@
+{
+  "target": "https://www.rareanimes.foo/",
+  "observed_at": "2026-11-17T05:51:00Z/2026-11-17T05:56:00Z",
+  "agent": "crawl-agent-3",
+  "method": "rendered Chrome (CDP) + 22 deliberate top-level fetches, single-threaded, ~2.5-3s gaps",
+  "downloadFlow": [
+    {
+      "step": 0,
+      "surface": "https://www.rareanimes.foo/naruto-shippuden-season-18-episodes-hindi-dubbed-download-hd/",
+      "post_id": 79113,
+      "what": "Static WordPress post. Episode rows contain 5 outbound buttons per language, all <a target=_blank rel='noopener noreferrer'> pointing at codedew.com/zipper/?url=<opaque>.",
+      "buttons": ["WatchMultiQuality", "HubCloud", "WatchNow", "DLBeta", "Mega"],
+      "needs_js": false
+    },
+    {
+      "step": 1,
+      "surface": "https://codedew.com/zipper/?url=<opaque-base64>",
+      "title": "Step 1 of 3 — Scanning Link Safety...",
+      "what": "Ad interstitial. Faux 'SECURITY SCAN 1/3'. Button javascript:void(0) disabled by client JS for 5 seconds ('var timeLeft = 5;'), then becomes 'Continue to Link Generation →'. data-href = same URL + '&ad_done=1'.",
+      "ads": ["https://ek.hastatesimnel.com/rB5o9p5Xbe3hWxsq/135799", "https://llvpn.com/tag.min.js"],
+      "needs_js": true,
+      "timer_seconds": 5
+    },
+    {
+      "step": 2,
+      "surface": "https://codedew.com/zipper/?url=<opaque>&ad_done=1",
+      "title": "Step 2 of 3 — Generating Secure Link...",
+      "what": "Second 5s timer. The server-rendered HTML already contains the plaintext final destination in data-href, i.e. decryption is server-side. No client-side decoder, no atob.",
+      "example_data_href": "https://hubcloud.ist/drive/rd61sq1chfygjde",
+      "needs_js": true,
+      "timer_seconds": 5
+    },
+    {
+      "step": 3,
+      "surface": "https://hubcloud.ist|hubcloud.mov/drive/<12-char-id>",
+      "title": "Naruto Shippuden S18E01 373 [RareAnimes].mkv",
+      "what": "Third-party file-host landing page. Shows filename, size, mime type, share date, and a 'Generate Direct Download Link' button.",
+      "file": {
+        "name": "Naruto Shippuden S18E01 373 [RareAnimes].mkv",
+        "size": "208 MB",
+        "type": "video/matroska",
+        "share_date": "25-Oct-2026 16:05:56",
+        "quality_token_in_filename": false
+      },
+      "needs_js": true
+    },
+    {
+      "step": 4,
+      "surface": "https://gamerxyt.com/hubcloud.php?host=hubcloud&id=<id>&token=<base64>",
+      "what": "Direct-link generator. Returns text/html (x-turbo-charged-by: LiteSpeed, cache-control: no-store, cf-cache-status: MISS) which JS-redirects to a CDN file. Not a 302, not the file itself.",
+      "needs_js": true,
+      "direct_okhttp": false
+    }
+  ],
+  "alternateFlows": {
+    "WatchMultiQuality": {
+      "url": "https://codedew.com/multiquality/?url=<16-char-id>",
+      "what": "Own Netflix-style player: quality tabs 1080p FHD / 720p HD / 360p SD, season list, watchlist, 'Loading Episode...'",
+      "resources": [
+        "https://codedew.com/multiquality/assets/js/player.js",
+        "https://codedew.com/multiquality/?url=<id>&ajax=1&preload=1 (episode payload)",
+        "https://argon.razorshell.space/embed/<id> (iframe = actual stream embed)",
+        "https://codedew.com/multiquality/?beacon=1&fid=<id>&sid=<session>&is_view=1",
+        "https://vinnyvower.cfd/cuid/?f=https%3A%2F%2Fcodedew.com (fingerprint/ad fetch)"
+      ],
+      "json_ld": "TVEpisode (episodeNumber, partOfSeason.seasonNumber, description, image)"
+    },
+    "WatchNow": { "final_target": "not verified", "expected": "codedew.com/watchnow/?url=<8-char-id>" },
+    "DLBeta": { "url": "https://codedew.com/watchbeta/?url=aRyaLyMT", "what": "streaming page, not a file host" },
+    "Mega": { "url": "https://mega.nz/file/IBIzma5K#<key-redacted>", "what": "mirror download; needs Mega client-side AES; key lives in the URL fragment" }
+  },
+  "fileHosts": [
+    { "host": "codedew.com", "role": "token gate + player", "paths": ["/zipper/", "/multiquality/", "/watchbeta/"], "cloudflare": true },
+    { "host": "hubcloud.ist", "role": "download host (seen in step-2 data-href)", "cloudflare": true },
+    { "host": "hubcloud.mov", "role": "download host (seen when browsed)", "cloudflare": true },
+    { "host": "hubcloud.fans", "role": "download host / account portal", "cloudflare": "not verified" },
+    { "host": "gamerxyt.com", "role": "direct-link generator for hubcloud files (token)", "cloudflare": true, "server_stack": "LiteSpeed", "cache": "no-store" },
+    { "host": "mega.nz", "role": "mirror download", "note": "client-side decryption key in fragment" },
+    { "host": "argon.razorshell.space", "role": "stream embed iframe", "path": "/embed/<id>" },
+    { "host": "wsrv.nl", "role": "image proxy in front of image.tmdb.org", "note": "posters are TMDB originals" },
+    { "host": "rareanimes.mov", "role": "secondary domain for brand assets", "path": "/wp-content/uploads/2023/11/Rare-Animes-India.png" }
+  ],
+  "linkStorage": {
+    "in_post_html": true,
+    "format": "<a href=\"https://codedew.com/zipper/?url=<opaque-base64>\" target=\"_blank\" rel=\"noopener noreferrer\">HubCloud</a>",
+    "trdownload_param": false,
+    "base64_js_decoder": false,
+    "ajax_link_api": false,
+    "server_side_decryption": true,
+    "granularity": "per-episode",
+    "batch_zip_observed": false
+  },
+  "qualityLanguageTagging": {
+    "language": {
+      "machine_readable": true,
+      "mechanism": "coloured <span> immediately before the links",
+      "map": { "Hindi": "#99cc00", "Tamil": "#ff00ff", "Telugu": "#00ccff", "Bengali": "#ff0000" }
+    },
+    "quality": {
+      "per_file_available": false,
+      "declared_in_prose": "🎬Quality: (360p, 480p, 720p HD, 1080p HD)",
+      "player_tabs": ["1080p FHD", "720p HD", "360p SD"],
+      "filename_has_quality": false,
+      "conclusion": "Cannot distinguish 480p Hindi from 1080p English before download; only language + a multi-quality player."
+    },
+    "episode_numbering": {
+      "in_post_body": "Episode 01 (373) – Team 7 Assemble!",
+      "json_ld_on_rareanimes": ["WebSite", "WebPage"],
+      "json_ld_on_player": "TVEpisode"
+    }
+  },
+  "blockers": [
+    {
+      "type": "js_timer_gate",
+      "where": "codedew.com/zipper step 1 and step 2",
+      "detail": "button disabled for 5s via setInterval; navigation via window.location.href",
+      "bypass_recommended": false
+    },
+    {
+      "type": "server_side_token",
+      "where": "codedew.com/zipper?url=",
+      "detail": "opaque base64 that decodes to binary, not a URL; plaintext only exists in step-2 HTML after ad_done=1"
+    },
+    {
+      "type": "domain_rotation",
+      "where": "hubcloud.ist / hubcloud.mov / hubcloud.fans",
+      "detail": "same content, different TLD per resolution; hard-coded hosts break"
+    },
+    {
+      "type": "expiring_tokens",
+      "where": "gamerxyt.com/hubcloud.php?...&token=",
+      "detail": "base64 token bound to drive id; no-store; likely time-limited (not measured)"
+    },
+    {
+      "type": "cloudflare_bot_management",
+      "where": "all hosts",
+      "detail": "codedew injects /cdn-cgi/challenge-platform/scripts/jsd/main.js and window.__CF$cv$params; no challenge was served to this crawler during observation"
+    },
+    {
+      "type": "html_redirector",
+      "where": "gamerxyt.com direct link",
+      "detail": "returns text/html, requires JS to reach the CDN file; not a 3xx"
+    },
+    {
+      "type": "ads",
+      "where": "rareanimes + codedew",
+      "hosts": ["zb.impallatwist.com", "ek.hastatesimnel.com", "llvpn.com", "vinnyvower.cfd"],
+      "detail": "pop-under / fingerprint traffic; do not render in a WebView for downloads"
+    }
+  ],
+  "siteStack": {
+    "cms": "WordPress",
+    "theme": "Herald 2.6.2.1 (Meks)",
+    "options_framework": "Redux 4.5.18",
+    "plugins": ["search-in-place 1.5.8", "gs-logo-slider 3.9.2", "announcer 6.5", "contact-form-7 6.2.5", "meks-easy-social-share 1.3"],
+    "jquery": "3.7.1",
+    "cdn_waf": "Cloudflare (+ Rocket Loader on codedew)",
+    "edge_cache": { "cf-cache-status": "HIT", "age": 2166, "cdn-cache-control": "public, max-age=0, s-maxage=6040, must-revalidate" },
+    "analytics": "Cloudflare Insights beacon only (no GA/GTM in inspected scripts)",
+    "search": "WP ?s= plus search-in-place AJAX (POST /wp-admin/admin-ajax.php)",
+    "membership_gating": "none observed",
+    "content_model": "human-posted blog, 1942 posts, ~2/day",
+    "post_count": 1942,
+    "sitemap_loc_count": 273,
+    "archive_pages": 231,
+    "rest_api": { "enabled": true, "x_robots_tag": "noindex", "cache": "private, no-store", "cf_cache_status": "BYPASS" }
+  },
+  "legalPosture": {
+    "robots_txt": "User-agent: *\\nDisallow: /wp-admin/\\nAllow: /wp-admin/admin-ajax.php\\n\\nSitemap: https://www.rareanimes.foo/sitemap.xml",
+    "robots_verdict": "permissive except /wp-admin/",
+    "tos_verdict": "forbids republish, reproduce/duplicate/copy, redistribute content; generic template citing Netherlands law",
+    "dmca_verdict": "boilerplate piracy disclaimer: 'do not store any copyright-protected content', 'merely indexes', 'DELETE IT within 24 hours', contact alonepakamon@proton.me",
+    "classification": "piracy-adjacent index of unlicensed Hindi/Tamil/Telugu anime dubs, ad-monetised",
+    "risk_split": {
+      "reading_catalog": "low",
+      "resolving_download_links": "medium-high (ad-gate circumvention, ToS)",
+      "mirroring_files": "high (copyright infringement)",
+      "shipping_player_of_those_files": "highest"
+    }
+  },
+  "safeCrawl": {
+    "requestBudget": {
+      "max_per_night": 250,
+      "normal_night": 18,
+      "weekly_peak": 247,
+      "cadence": "1 request per 3.0s with jitter 3.0-5.5s",
+      "concurrency": 1,
+      "window": "02:00-05:00 IST"
+    },
+    "enumeration": {
+      "nightly": ["/category/animes/page/1/", "/category/animes/page/2/", "/sitemap.xml"],
+      "weekly": "/category/animes/page/1..231/",
+      "never": "1942 detail pages in one night"
+    },
+    "conditionalRequests": {
+      "headers": ["If-None-Match", "If-Modified-Since"],
+      "why": "304 costs no origin render and no body; unchanged catalog becomes tiny 304s instead of full renders",
+      "fallback_signal": "sitemap <lastmod> and REST 'modified'"
+    },
+    "caching": {
+      "store": ["raw_html", "extracted_record", "etag", "last_modified", "fetched_at"],
+      "key": "wp_post_id",
+      "rule": "never re-fetch a page whose modified <= fetched_at"
+    },
+    "identifiers": {
+      "primary": "post_id (from ?p=79113, class post-79113, REST id)",
+      "secondary": "slug (treat slug change on same id as rename, not new title)",
+      "episode_key": "(post_id, language, absolute_episode_number)"
+    },
+    "avoidEndpoints": [
+      "/?s=",
+      "/wp-admin/admin-ajax.php",
+      "/wp-json/wp/v2/* (routine use; noindex + no-store + origin cost)",
+      "codedew.com/zipper|multiquality|watchbeta",
+      "hubcloud.*",
+      "gamerxyt.com",
+      "mega.nz",
+      "argon.razorshell.space",
+      "/wp-content/uploads/* (images)"
+    ],
+    "errorHandling": {
+      "statuses": [403, 429, 503],
+      "backoff": ["30s", "2min", "10min"],
+      "max_attempts_per_url": 3,
+      "on_exhaust": "abort the whole run, persist state, alert human, 24h cooldown",
+      "forbidden": "retry loops / parallel retries"
+    },
+    "userAgent": {
+      "recommended": "AnimoCatalog/0.1 (+https://<domain>/bot; contact@<domain>)",
+      "tradeoff": "honest UA may be scored lower and challenged sooner; correct response is to stop, not spoof",
+      "forbidden": "UA randomisation or browser-UA spoofing"
+    },
+    "killSwitch": {
+      "triggers": [
+        "HTTP 403/429/503",
+        "header cf-mitigated: challenge",
+        "body contains 'Just a moment...'",
+        "body contains 'Attention Required!'",
+        "body contains '__cf_chl' or 'cf-challenge'",
+        "body contains 'challenge-platform/scripts/jsd'",
+        "cf page shape: server cloudflare + text/html + no wp-content in body"
+      ],
+      "action": "stop immediately, log URL, exit without retry, 24h cooldown"
+    },
+    "monitoring": ["status", "bytes", "cf-cache-status", "age", "duration"]
+  },
+  "doNotDo": [
+    "No parallel hammering (concurrency > 1, xargs -P, worker pools, retry storms)",
+    "No scraping of download/shortener/stream endpoints (codedew, hubcloud, gamerxyt, mega, argon)",
+    "No bypassing paywalls, ad gates, 5s timers, or Cloudflare challenges",
+    "No downloading, mirroring, rehosting or proxying the .mkv files",
+    "No bulk use of wp-json (noindex + no-store) and no touching /wp-admin/",
+    "No UA spoofing or cookie replay to look human",
+    "No copying their prose, episode descriptions or hosted posters into the app",
+    "No account creation, comments or contact-form submissions",
+    "No rendering the ad-gated download chain in an in-app WebView"
+  ],
+  "verdict": {
+    "recommendation": "metadata-only",
+    "summary": "Ingest catalog metadata (title, season, episode/absolute number, language tags, declared quality set, TMDB poster id, post id/slug for attribution) and resolve nothing at scrape time; deep-link playback to the source in a Custom Tab. Do not mirror files and do not automate the download chain. This keeps nightly cost at ~18 edge-cached requests (~247 weekly), stays inside robots.txt, and leaves the distribution act with the operator.",
+    "tradeoffs": {
+      "pros": ["cheap and cache-friendly", "robots-compliant", "no ad-gate circumvention", "no file-hosting liability", "resilient to TLD rotation and token expiry"],
+      "cons": ["worse UX (extra taps, visible ads, no offline downloads)", "catalog drift of hours", "quality is a declared set, not per-file", "does not by itself make the app lawful — catalogue still routes users to unlicensed dubs"]
+    },
+    "hard_line": "Mirroring the 208 MB .mkv files is technically trivial and legally the line between a metadata complaint and a criminal copyright case. Do not."
+  },
+  "unverified": [
+    "Cloudflare rate threshold and challenge page (zero 403/429 observed at ~0.4 req/s)",
+    "WatchNow final host",
+    "existence of batch/zip posts",
+    "final CDN host behind gamerxyt redirector",
+    "whether wp-json is intentionally open",
+    "WordPress core version"
+  ]
+}
