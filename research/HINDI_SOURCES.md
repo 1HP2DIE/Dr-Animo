@@ -85,6 +85,21 @@ Accept: */*
 No cookies, no auth, no TLS/JA3 impersonation needed → **OkHttp `OkHttpDataSource` with
 `setDefaultRequestProperties` is sufficient** (same pattern as the megaplay source).
 
+**Re-measured 2026-11-17 on device — the gate is `Accept-Language`, not `Referer`:**
+
+| headers on a fresh master | result |
+|---|---|
+| none | 403 |
+| UA only | 403 |
+| UA + `Accept-Language` | **200** `application/vnd.apple.mpegurl` |
+| UA + `Referer` | 403 |
+| `Referer` only | 403 |
+
+A player that sends only `Referer` + `User-Agent` gets 403 on every Hindi stream, which is exactly
+what the first device run did. `Media3Factory.headers()` now sends
+`Accept-Language: en-US,en;q=0.6` on every playlist and segment request for both CDN families
+(megaplay ignores it, and is unaffected).
+
 ⚠️ **Master URLs are time-limited.** A URL resolved 20 days ago returns 403 while a fresh one is 200.
 Always resolve at play time; cache ≤15 min (see `research/RESOLVER_SPEC.md` §5).
 
