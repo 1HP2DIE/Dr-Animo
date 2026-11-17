@@ -43,6 +43,7 @@ import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.ui.unit.dp
 import com.animo.app.ui.common.formatClock
 import kotlin.math.roundToInt
@@ -132,7 +133,13 @@ fun PlayerSeekBar(
                         dragFraction = null
                         if (released != null) onSeek((released * safeDuration).toLong())
                     },
-                    onDragCancel = { dragFraction = null },
+                    // A cancelled drag lands where the finger was, like a release: leaving the
+                    // caller's scrub position set would freeze the clock label and the chrome.
+                    onDragCancel = {
+                        val released = dragFraction
+                        dragFraction = null
+                        if (released != null) onSeek((released * safeDuration).toLong())
+                    },
                     onHorizontalDrag = { change, _ ->
                         change.consume()
                         val current = (change.position.x / size.width.toFloat()).coerceIn(0f, 1f)
@@ -207,6 +214,9 @@ fun PlayerSeekBar(
             Column(
                 modifier = Modifier
                     .align(Alignment.TopStart)
+                    // The bar is 30dp tall; without this the bubble inherits that height and the
+                    // preview frame is squashed into a strip with the time cut off.
+                    .wrapContentSize(align = Alignment.TopStart, unbounded = true)
                     .offset { IntOffset(x.roundToInt(), -(bubbleHeightPx + with(density) { 2.dp.roundToPx() })) }
                     .onSizeChanged {
                         bubbleWidthPx = it.width

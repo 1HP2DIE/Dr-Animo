@@ -166,10 +166,32 @@ class MirrorStreamSource(
             .header("Referer", referer)
             .header("Range", "bytes=0-0")
             .build()
-        noRedirects.newCall(request).execute().use { response ->
-            response.header("Location")?.takeIf { response.isRedirect }?.let { return it }
-            if (response.isSuccessful) return url
-            throw IOException("download HTTP ${response.code}")
+        val signed = noRedirects.newCall(request).execute().use { response ->
+            response.header("Location")?.takeIf { response.isRedirect }
+                ?: if (response.isSuccessful) url else throw IOException("download HTTP ${response.code}")
+        }
+        ensureServable(signed, referer)
+        return signed
+    }
+
+    /**
+     * One byte from the signed file before Media3 gets it. Measured 2026-11-18: the progress stream
+     * can say `ready` while the prepared copy has already expired, and then every signed URL for
+     * that file answers 404 for minutes. Failing here turns that into "not on this server right
+     * now" (so automatic order moves on) instead of a player error after the user waited.
+     */
+    private fun ensureServable(url: String, referer: String) {
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", userAgent)
+            .header("Referer", referer)
+            .header("Range", "bytes=0-0")
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (response.code == 404 || response.code == 410) {
+                throw ResolveException.NotFound("the file host has not got this episode ready")
+            }
+            if (!response.isSuccessful) throw IOException("file HTTP ${response.code}")
         }
     }
 

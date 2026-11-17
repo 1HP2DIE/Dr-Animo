@@ -37,6 +37,7 @@
     <string name="ui_player_menu_servers_checking">Looking for available servers…</string>
     <string name="ui_player_menu_server_unavailable">Server %1$d has nothing for this episode.</string>
     <string name="ui_player_menu_server_playing">Playing</string>
+    <string name="ui_player_server_fell_back">Server %1$d is not available right now · playing Server %2$d</string>
     <string name="ui_player_menu_section_audio_track">Audio track in this stream</string>
 
     <!-- Speed -->

@@ -38,6 +38,7 @@ import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.AspectRatio
 import androidx.compose.material.icons.rounded.FitScreen
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.ZoomOutMap
@@ -75,6 +76,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.animo.app.R
 import com.animo.app.domain.model.AudioTrack
+import com.animo.app.domain.model.StreamServer
 import com.animo.app.domain.model.PlayableStream
 import com.animo.app.di.ServiceLocator
 import com.animo.app.player.PlayerController
@@ -352,12 +354,16 @@ private fun PlayerStage(
                             url = track.url,
                             headers = mapOf("Referer" to stream.referer, "User-Agent" to stream.userAgent),
                         )
-                    }.getOrNull()
+                    }.onFailure { com.animo.app.AppLog.w("stream subtitle download failed: ${track.url}", it) }
+                        .getOrNull()
                     val parsed = file?.let {
                         withContext(Dispatchers.Default) {
-                            runCatching { SubtitleParser.parse(it.name, it.content) }.getOrDefault(emptyList())
+                            runCatching { SubtitleParser.parse(it.name, it.content) }
+                                .onFailure { e -> com.animo.app.AppLog.w("stream subtitle parse failed: ${it.name}", e) }
+                                .getOrDefault(emptyList())
                         }
                     }.orEmpty()
+                    com.animo.app.AppLog.d("stream subtitle ${track.label}: file=${file?.name} len=${file?.content?.length} cues=${parsed.size}")
                     subtitleBusy = null
                     parsed
                 }
@@ -376,6 +382,18 @@ private fun PlayerStage(
     }
 
     // A new stream: put back what the viewer had (same label), or the source's sensible default.
+    // The pick failed and another server answered: say so, or the switch looks like it was ignored.
+    LaunchedEffect(surfaceState.stream) {
+        val picked = model.server ?: return@LaunchedEffect
+        val playing = surfaceState.stream?.server ?: return@LaunchedEffect
+        if (picked != playing) {
+            flashMessage(
+                context.getString(R.string.ui_player_server_fell_back, picked.number, playing.number),
+                Icons.Rounded.Info,
+            )
+        }
+    }
+
     LaunchedEffect(surfaceState.stream) {
         val subs = surfaceState.stream?.subtitles.orEmpty()
         if (subs.isEmpty() || subtitlesOffByViewer || streamTrackId != null || fileActive) return@LaunchedEffect
@@ -608,8 +626,11 @@ private fun PlayerStage(
         }
     }
 
-    LaunchedEffect(controlsVisible, surfaceState.isPlaying, settingsTab, episodesVisible) {
-        if (controlsVisible && surfaceState.isPlaying && settingsTab == null && !episodesVisible) {
+    // A finger on the seek bar holds the chrome: hiding it mid-drag would drop the scrub and its
+    // preview. Letting go restarts the countdown.
+    val scrubbing = scrubPositionMs != null
+    LaunchedEffect(controlsVisible, surfaceState.isPlaying, settingsTab, episodesVisible, scrubbing) {
+        if (controlsVisible && surfaceState.isPlaying && settingsTab == null && !episodesVisible && !scrubbing) {
             delay(CONTROLS_AUTO_HIDE_MS)
             controlsVisible = false
         }
@@ -908,7 +929,7 @@ private fun PlayerStage(
                             languages = option.languages.map { LanguageRow(it.id, it.label) },
                         )
                     },
-                    activeServer = model.server?.number,
+                    activeServer = surfaceState.stream?.server?.number ?: model.server?.number,
                     activeLanguageId = model.displayedLanguageId,
                 ),
                 sleepMinutesLeft = sleepMinutes,
@@ -1172,7 +1193,7 @@ private fun PlayerControlsOverlay(
                 }
                 if (model.servers.isNotEmpty()) {
                     PlayerChip(
-                        label = serverChipLabel(model),
+                        label = serverChipLabel(model, surfaceState.stream?.server),
                         onClick = { onOpenSettings(PlayerMenuTab.AUDIO) },
                     )
                     Spacer(Modifier.width(6.dp))
@@ -1260,8 +1281,8 @@ private fun isDubbedAudio(model: PlayerUiModel): Boolean =
     model.languageId?.let { it != "sub" && it != "ja" } ?: (model.audio == AudioTrack.DUB)
 
 /** `Server 2 · Hindi`, falling back to the audio label when the probe has not answered yet. */
-private fun serverChipLabel(model: PlayerUiModel): String {
-    val number = model.server?.number ?: 1
+private fun serverChipLabel(model: PlayerUiModel, playing: StreamServer?): String {
+    val number = playing?.number ?: model.server?.number ?: 1
     val language = model.servers
         .firstOrNull { it.server.number == number }
         ?.languages

@@ -98,6 +98,11 @@ data class PlayableStream(
     val alternates: List<StreamAlternate> = emptyList(),
     /** Audio language to select inside a multi-audio file (`jpn`, `eng`…); `null` = file default. */
     val preferredAudioLanguage: String? = null,
+    /**
+     * The server that actually produced this stream. It differs from the viewer's pick when that
+     * server failed and the next one in order answered, and the menu must show the truth.
+     */
+    val server: StreamServer? = null,
 )
 
 enum class StreamContainer { HLS, PROGRESSIVE }

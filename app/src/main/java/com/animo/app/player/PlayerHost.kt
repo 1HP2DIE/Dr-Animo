@@ -136,6 +136,14 @@ fun PlayerHost(
 
             override fun onPlayerError(error: PlaybackException) {
                 val code = error.httpStatusCode()
+                val failed = generateSequence<Throwable>(error) { it.cause }
+                    .filterIsInstance<androidx.media3.datasource.HttpDataSource.HttpDataSourceException>()
+                    .firstOrNull()?.dataSpec
+                // Host and path only: the query carries signed tokens.
+                com.animo.app.AppLog.w(
+                    "playback error ${error.errorCodeName} http=$code " +
+                        "at ${failed?.uri?.host}${failed?.uri?.path} range=${failed?.position}+${failed?.length}",
+                )
                 if (code == 403 || code == 410) {
                     // RESOLVER_SPEC §5: any 403/410 invalidates the cached manifest.
                     ResolveCache.shared.invalidateByMasterUrl(source.masterUrl)

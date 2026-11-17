@@ -20,7 +20,7 @@ object SubtitleParser {
 
     private val BR_TAG = Regex("""<\s*br\s*/?\s*>""", RegexOption.IGNORE_CASE)
     private val HTML_TAG = Regex("<[^>]*>")
-    private val ASS_OVERRIDE = Regex("""\{[^}]*}""")
+    private val ASS_OVERRIDE = Regex("""\{[^}]*\}""")
     private val ALIGN_SETTING = Regex("""align\s*:\s*(start|left|center|middle|end|right)""", RegexOption.IGNORE_CASE)
     private val ASS_ALIGN = Regex("""\\an([1-9])""")
 

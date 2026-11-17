@@ -129,7 +129,7 @@ class StreamRepositoryImpl(
                     }
                 }
                 if (attempt.isSuccess) {
-                    val stream = attempt.getOrThrow()
+                    val stream = attempt.getOrThrow().copy(server = candidate)
                     store(key, Entry(stream, clock()))
                     AppLog.d("resolved ep${episode.id} $audio via $candidate/${languageId ?: "-"}")
                     return@withLock Result.success(stream)
