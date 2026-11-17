@@ -68,4 +68,9 @@ data class AnimeEntity(
     val nextAirAt: Long?,
     val nextAirEp: Int?,
     val detailFetchedAt: Long?,
+    /**
+     * Provider page for rows that do not come from the original API (Hindi dub). Empty means "this
+     * row is self-contained". Hindi rows are identified by a negative [id] — see `Anime.isHindi`.
+     */
+    val originUrl: String = "",
 )

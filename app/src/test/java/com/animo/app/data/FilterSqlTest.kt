@@ -201,6 +201,30 @@ class FilterSqlTest {
         assertFalse(build(filters = Filters(hasDub = false)).sql.contains("a.isDub"))
     }
 
+    // ---------------------------------------------------------------- hindi
+
+    @Test
+    fun `hindiOnly filters on the negative id space`() {
+        val query = build(filters = Filters(hindiOnly = true))
+
+        assertTrue(query.sql.contains("AND a.id < 0"))
+        assertEquals(listOf<Any?>(40, 0), query.args)
+    }
+
+    @Test
+    fun `hindiOnly composes with the other filters`() {
+        val query = build(
+            match = "naruto*",
+            filters = Filters(genres = setOf("Action"), hindiOnly = true, hasDub = true),
+            limit = 20,
+        )
+
+        assertTrue(query.sql.indexOf("anime_fts MATCH") < query.sql.indexOf("a.genres"))
+        assertTrue(query.sql.indexOf("a.genres") < query.sql.indexOf("a.isDub"))
+        assertTrue(query.sql.indexOf("a.isDub") < query.sql.indexOf("a.id < 0"))
+        assertEquals(listOf<Any?>("naruto*", "action", 20, 0), query.args)
+    }
+
     // ---------------------------------------------------------------- paging
 
     @Test

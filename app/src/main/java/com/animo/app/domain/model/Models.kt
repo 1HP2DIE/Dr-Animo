@@ -28,9 +28,26 @@ data class Anime(
     val updatedAtEpoch: Long = 0L,
     val nextAirAt: Long? = null,
     val nextAirEp: Int? = null,
+    /**
+     * Provider page this row came from, for titles that are not in the original API (Hindi dub).
+     * Blank for original-catalogue rows — everything they need is in the row itself.
+     */
+    val originUrl: String = "",
 ) {
     val hasSub: Boolean get() = subCount != null || episodeCount > 0
     val hasDub: Boolean get() = (dubCount ?: 0) > 0
+
+    /**
+     * Hindi-dub rows live in a **negative id space** so a single `anime` table (and therefore one
+     * grid, one search, one set of filters) can hold both catalogues without a join or a flag that
+     * could drift. The ranges are:
+     *
+     *   -1 … -999,999,999           toono.app
+     *   -1,000,000,000 … -1,999,999,999  rareanimes.foo
+     *
+     * The original API's `s_id` tops out around 2.1e9, so the positive space can never collide.
+     */
+    val isHindi: Boolean get() = id < 0
 }
 
 data class Episode(
@@ -76,6 +93,8 @@ data class Filters(
     val letter: Char? = null,
     /** Only titles that actually have dub episodes. */
     val hasDub: Boolean = false,
+    /** Only titles from a Hindi-dub provider (negative id space). */
+    val hindiOnly: Boolean = false,
     val sort: SortOrder = SortOrder.RECENT,
 )
 

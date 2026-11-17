@@ -37,6 +37,7 @@ fun AnimeEntity.toDomain(): Anime = Anime(
     updatedAtEpoch = updatedAtEpoch,
     nextAirAt = nextAirAt,
     nextAirEp = nextAirEp,
+    originUrl = originUrl,
 )
 
 fun EpisodeEntity.toDomain(): Episode = Episode(

@@ -28,6 +28,20 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
 }
 
 /**
+ * v2 → v3: adds `anime.originUrl`, the provider page behind a Hindi-dub row.
+ *
+ * Deliberately the *only* new column. Hindi rows are recognised by a negative primary key (see
+ * `Anime.isHindi`) rather than an `isHindi` flag, so there is no second source of truth to keep in
+ * step: the id range already tells the sync, the resolver and the "Hindi only" filter the same
+ * story. Existing rows get `''`, which is exactly the "original catalogue" value.
+ */
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `anime` ADD COLUMN `originUrl` TEXT NOT NULL DEFAULT ''")
+    }
+}
+
+/**
  * Reads `id, title` first and writes afterwards: executing the `UPDATE` while the cursor is still
  * open on `anime` would reset it. Each write also fires Room's external-content FTS trigger, which
  * re-inserts the indexed columns for that rowid — harmless, and bounded by the catalogue size

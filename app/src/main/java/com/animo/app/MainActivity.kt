@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
 import com.animo.app.di.ServiceLocator
 import com.animo.app.domain.repo.AnimeRepository
+import com.animo.app.domain.repo.HindiCatalog
 import com.animo.app.domain.repo.StreamRepository
 import com.animo.app.ui.AnimoNavHost
 import com.animo.app.ui.AppContainer
@@ -31,6 +32,7 @@ class MainActivity : ComponentActivity() {
     private val container: AppContainer = object : AppContainer {
         override val animeRepository: AnimeRepository get() = ServiceLocator.animeRepository
         override val streamRepository: StreamRepository get() = ServiceLocator.streamRepository
+        override val hindiCatalog: HindiCatalog? get() = ServiceLocator.hindiCatalog
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

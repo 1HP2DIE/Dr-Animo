@@ -1,6 +1,10 @@
 package com.animo.app
 
 import android.app.Application
+import com.animo.app.data.hindi.HindiCatalogImpl
+import com.animo.app.data.hindi.HindiStreamRepositoryImpl
+import com.animo.app.data.hindi.RareAnimesProvider
+import com.animo.app.data.hindi.ToonoProvider
 import com.animo.app.data.sync.SyncScheduler
 import com.animo.app.di.ServiceLocator
 import com.animo.app.player.MegaplayStreamResolver
@@ -24,6 +28,29 @@ class AnimoApp : Application() {
         // Deterministic resolver wiring (skips the reflective lookup in ServiceLocator).
         ServiceLocator.registerStreamResolver(
             MegaplayStreamResolver(client = ServiceLocator.httpClient),
+        )
+
+        // Hindi sources: two providers, one catalogue, one resolver. Registered rather than built by
+        // the container so every Hindi path degrades to a readable failure if it is missing.
+        val hindiHttp = ServiceLocator.httpClient
+        val toono = ToonoProvider(hindiHttp)
+        val rareAnimes = RareAnimesProvider(hindiHttp)
+        ServiceLocator.registerHindiCatalog(
+            HindiCatalogImpl(
+                animeDao = ServiceLocator.animeDao,
+                episodeDao = ServiceLocator.episodeDao,
+                toono = toono,
+                rareAnimes = rareAnimes,
+                log = AppLog::d,
+            ),
+        )
+        ServiceLocator.registerHindiStreamRepository(
+            HindiStreamRepositoryImpl(
+                http = hindiHttp,
+                toono = toono,
+                rareAnimes = rareAnimes,
+                log = AppLog::d,
+            ),
         )
 
         SyncScheduler.ensureScheduled(this)

@@ -18,7 +18,9 @@ import com.animo.app.data.sync.EpisodeBackfill
 import com.animo.app.data.sync.SeriesFetcher
 import com.animo.app.domain.model.AudioTrack
 import com.animo.app.domain.model.PlayableStream
+import com.animo.app.data.repo.RoutingStreamRepository
 import com.animo.app.domain.repo.AnimeRepository
+import com.animo.app.domain.repo.HindiCatalog
 import com.animo.app.domain.repo.StreamRepository
 import com.animo.app.player.ResolveException
 import com.animo.app.player.StreamResolver
@@ -51,6 +53,16 @@ object ServiceLocator {
     private var applicationContext: Context? = null
 
     private val explicitResolver = AtomicReference<StreamResolver?>(null)
+
+    /**
+     * The Hindi layer (catalogue + resolver) is registered by the app once it is constructed, because
+     * it owns two OkHttp-backed providers and a JS-free decoder that the rest of the graph never
+     * needs. `null` is a supported state: every Hindi path then fails with a message instead of a
+     * `NoClassDefFoundError`.
+     */
+    private val hindiCatalogRef = AtomicReference<HindiCatalog?>(null)
+
+    private val hindiStreamRef = AtomicReference<StreamRepository?>(null)
 
     /**
      * Idempotent. Safe to call from `Application.onCreate` and from a `CoroutineWorker`.
@@ -107,11 +119,28 @@ object ServiceLocator {
             progressDao = progressDao,
             catalogSyncer = catalogSyncer,
             episodeBackfill = episodeBackfill,
+            hindiCatalog = { hindiCatalogRef.get() },
         )
     }
 
     val streamRepository: StreamRepository by lazy {
-        StreamRepositoryImpl(resolverProvider = { streamResolver })
+        RoutingStreamRepository(
+            original = StreamRepositoryImpl(resolverProvider = { streamResolver }),
+            hindi = { hindiStreamRef.get() },
+        )
+    }
+
+    /** Read by the UI to show Hindi counts and to trigger a Hindi sync; `null` until registered. */
+    val hindiCatalog: HindiCatalog? get() = hindiCatalogRef.get()
+
+    fun registerHindiCatalog(catalog: HindiCatalog) {
+        hindiCatalogRef.set(catalog)
+        AppLog.i("hindi catalogue registered: ${catalog.javaClass.simpleName}")
+    }
+
+    fun registerHindiStreamRepository(repository: StreamRepository) {
+        hindiStreamRef.set(repository)
+        AppLog.i("hindi stream repository registered: ${repository.javaClass.simpleName}")
     }
 
     // ---------------------------------------------------------------- providers

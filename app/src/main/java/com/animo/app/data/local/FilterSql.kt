@@ -80,6 +80,8 @@ object FilterSql {
             }
         }
         if (filters.hasDub) sql.append(AND_DUB)
+        // Hindi rows live in the negative id space; the primary key index covers this as a range scan.
+        if (filters.hindiOnly) sql.append(AND_HINDI)
 
         sql.append("\nORDER BY ").append(orderBy(filters.sort))
         sql.append("\nLIMIT ? OFFSET ?")
@@ -126,4 +128,7 @@ object FilterSql {
 
     /** `isDub` is an episode **count**, and NULL on 73.7% of rows — presence, not truthiness. */
     private const val AND_DUB = "\n  AND (a.isDub IS NOT NULL AND a.isDub > 0)"
+
+    /** Hindi-dub providers write negative ids, so this needs no extra column. */
+    private const val AND_HINDI = "\n  AND a.id < 0"
 }

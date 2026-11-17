@@ -2,6 +2,7 @@ package com.animo.app.ui
 
 import androidx.compose.runtime.staticCompositionLocalOf
 import com.animo.app.domain.repo.AnimeRepository
+import com.animo.app.domain.repo.HindiCatalog
 import com.animo.app.domain.repo.StreamRepository
 
 /**
@@ -38,6 +39,12 @@ val <T> UiState<T>.contentOrNull: T?
 interface AppContainer {
     val animeRepository: AnimeRepository
     val streamRepository: StreamRepository
+
+    /**
+     * Hindi-dub catalogue, or `null` in builds/previews where it is not registered. Screens must
+     * treat `null` as "hide the Hindi affordances", never as an error.
+     */
+    val hindiCatalog: HindiCatalog? get() = null
 }
 
 val LocalAppContainer = staticCompositionLocalOf<AppContainer> {

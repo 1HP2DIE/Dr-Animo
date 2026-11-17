@@ -37,6 +37,9 @@ object Media3Factory {
         "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 " +
             "(KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
 
+    /** Verified gate for the argon/juicy CDNs behind the Hindi sources (see [headers]). */
+    const val ACCEPT_LANGUAGE: String = "en-US,en;q=0.6"
+
     private const val RETRY_COUNT = 5
     private const val CONNECT_TIMEOUT_S = 15L
     private const val READ_TIMEOUT_S = 20L
@@ -57,12 +60,21 @@ object Media3Factory {
 
     /**
      * Headers applied to the multivariant playlist, the media playlist AND every segment.
-     * RESOLVER_SPEC §3: `Referer` is the only gate; `Origin`/`Accept` keep Cloudflare happy.
+     *
+     * Measured on both CDN families (2026-11-17):
+     *  - megaplay: `Referer` is the gate (RESOLVER_SPEC §3); `Origin`/`Accept` keep Cloudflare happy.
+     *  - argon/juicy (the Hindi providers): the gate is **`Accept-Language`**, not Referer. Measured
+     *    matrix on a fresh master: UA only 403 · UA+Accept-Language **200** · UA+Referer 403 ·
+     *    Referer only 403. A browser is not needed — only this header was missing.
+     *
+     * Sending Accept-Language to megaplay as well is harmless (it is not in any allowlist check),
+     * so one header map keeps both families working instead of splitting the player contract.
      */
     fun headers(referer: String): Map<String, String> = mapOf(
         "Referer" to referer,
         "Origin" to referer.trimEnd('/'),
         "Accept" to "*/*",
+        "Accept-Language" to ACCEPT_LANGUAGE,
     )
 
     fun dataSourceFactory(

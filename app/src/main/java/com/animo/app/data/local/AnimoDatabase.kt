@@ -29,7 +29,7 @@ import kotlinx.coroutines.withContext
         ProgressEntity::class,
         AnimeFtsEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class AnimoDatabase : RoomDatabase() {
@@ -57,7 +57,7 @@ abstract class AnimoDatabase : RoomDatabase() {
         fun build(context: Context): AnimoDatabase =
             Room.databaseBuilder(context.applicationContext, AnimoDatabase::class.java, DB_NAME)
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
     }
 }

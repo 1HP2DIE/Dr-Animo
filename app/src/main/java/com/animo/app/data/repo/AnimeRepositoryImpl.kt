@@ -8,6 +8,7 @@ import com.animo.app.data.local.FtsQuery
 import com.animo.app.data.local.dao.AnimeDao
 import com.animo.app.data.local.dao.EpisodeDao
 import com.animo.app.data.local.dao.ProgressDao
+import com.animo.app.data.local.entity.EpisodeEntity
 import com.animo.app.data.local.entity.ProgressEntity
 import com.animo.app.data.local.filterFacetsOf
 import com.animo.app.data.local.toDomain
@@ -20,6 +21,7 @@ import com.animo.app.domain.model.Filters
 import com.animo.app.domain.model.SyncProgress
 import com.animo.app.domain.model.SyncState
 import com.animo.app.domain.repo.AnimeRepository
+import com.animo.app.domain.repo.HindiCatalog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,6 +44,11 @@ class AnimeRepositoryImpl(
     private val progressDao: ProgressDao,
     private val catalogSyncer: CatalogSyncer,
     private val episodeBackfill: EpisodeBackfill,
+    /**
+     * Read lazily, not captured: the Hindi layer is registered after the container is built, and this
+     * repository is a process-wide singleton that must see that registration.
+     */
+    private val hindiCatalog: () -> HindiCatalog? = { null },
 ) : AnimeRepository {
 
     private val _sync = MutableStateFlow(SyncProgress(0, 0, SyncState.IDLE))
@@ -99,8 +106,46 @@ class AnimeRepositoryImpl(
     override suspend fun refreshCatalog(force: Boolean): Result<Unit> =
         catalogSyncer.sync(force) { progress -> _sync.value = progress }
 
-    override suspend fun ensureEpisodes(animeId: Int): Result<Unit> =
-        episodeBackfill.ensure(animeId)
+    override suspend fun ensureEpisodes(animeId: Int): Result<Unit> = when {
+        // Hindi rows resolve their episode list from the provider page, not from the API.
+        animeId < 0 -> ensureHindiEpisodes(animeId)
+        else -> episodeBackfill.ensure(animeId)
+    }
+
+    /**
+     * There is no episode endpoint for a Hindi provider, so the list is parsed from the title page and
+     * cached the same way. A re-open is free once rows exist, which matters because the resolve chain
+     * (page -> embed -> decrypt) is the expensive part and must not be repeated just to draw a list.
+     */
+    private suspend fun ensureHindiEpisodes(animeId: Int): Result<Unit> {
+        val catalog = hindiCatalog()
+            ?: return Result.failure(IllegalStateException("Hindi catalogue is not available"))
+        if (episodeDao.countForAnime(animeId) > 0) return Result.success(Unit)
+
+        val row = animeDao.findById(animeId)
+            ?: return Result.failure(IllegalStateException("no Hindi title with id $animeId"))
+
+        return catalog.episodes(animeId, row.originUrl).map { episodes ->
+            episodeDao.upsertAll(
+                episodes.map { episode ->
+                    EpisodeEntity(
+                        episodeId = episode.id,
+                        animeId = animeId,
+                        number = episode.number,
+                        title = episode.title,
+                        jpTitle = "",
+                        embedId = episode.embedId,
+                        subUrl = episode.subUrl,
+                        dubUrl = episode.dubUrl,
+                        updatedAt = "",
+                        updatedAtEpoch = episode.updatedAtEpoch,
+                    )
+                },
+            )
+            val fetchedAt = System.currentTimeMillis()
+            animeDao.updateDetailMeta(animeId, episodes.size, fetchedAt)
+        }
+    }
 
     override suspend fun saveProgress(
         animeId: Int,

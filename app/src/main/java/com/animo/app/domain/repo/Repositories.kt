@@ -20,6 +20,24 @@ interface AnimeRepository {
     suspend fun progressFor(episodeId: Long): Long
 }
 
+/**
+ * The Hindi-dub catalogue. Kept out of [AnimeRepository] on purpose: it has its own providers, its
+ * own rate budget and its own failure modes, and the UI must still work when every Hindi provider is
+ * down.
+ *
+ * Rows are written into the same `anime` table with a **negative id** (see `Anime.isHindi`), so
+ * browse, search, facets, history and the player all treat them as ordinary titles.
+ */
+interface HindiCatalog {
+    /** Pulls both providers into Room. Returns the number of titles written. */
+    suspend fun sync(force: Boolean = false, onProgress: (done: Int, total: Int) -> Unit = { _, _ -> }): Result<Int>
+
+    /** Episodes for one Hindi title, read from the provider page (there is no episode API). */
+    suspend fun episodes(animeId: Int, originUrl: String): Result<List<Episode>>
+
+    suspend fun catalogCount(): Int
+}
+
 interface StreamRepository {
     suspend fun resolve(animeId: Int, episode: Episode, audio: AudioTrack): Result<PlayableStream>
     suspend fun invalidate(episodeId: Long)
