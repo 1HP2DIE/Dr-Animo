@@ -58,7 +58,7 @@ fun SearchField(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(AnimoPalette.surface)
+            .background(colors.surfaceContainer)
             .padding(start = 12.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

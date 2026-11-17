@@ -491,7 +491,7 @@ private fun PlayerErrorCard(
         modifier = modifier
             .widthIn(max = 320.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(AnimoPalette.surface)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
             .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -558,7 +558,7 @@ private fun PlayerQualitySheet(
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
-                .background(AnimoPalette.surface)
+                .background(MaterialTheme.colorScheme.surfaceContainer)
                 .clickable(
                     interactionSource = sheetInteraction,
                     indication = null,

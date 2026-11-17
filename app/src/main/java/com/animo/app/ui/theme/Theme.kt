@@ -7,9 +7,17 @@ import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+
+/**
+ * Whether the active scheme is the dark one. Needed by artwork placeholders: the poster fill and its
+ * initials are chosen per theme, while everything drawn *on* a real poster stays theme-independent.
+ */
+internal val LocalIsDarkTheme = staticCompositionLocalOf { true }
 
 internal val AnimoShapes = Shapes(
     extraSmall = RoundedCornerShape(6.dp),
@@ -43,8 +51,15 @@ object AnimoPalette {
     val onHero: Color get() = TextPrimary
     val onHeroSecondary: Color get() = TextSecondary
 
+    /** Artwork copy — theme-independent by design (see [OnPoster]). */
+    val onPoster: Color get() = OnPoster
+    val onPosterSecondary: Color get() = OnPosterSecondary
+    val posterBadgeBg: Color get() = PosterBadgeBg
+    val posterBadgeFg: Color get() = PosterBadgeFg
+
     val posterPlaceholder: Brush get() = PosterPlaceholderBrush
     val posterScrim: Brush get() = PosterTitleScrim
+    val backdropTitleScrim: Brush get() = BackdropTitleScrim
     val backdropScrim: Brush get() = BackdropScrim
     val heroScrim: Brush get() = HeroScrim
     val playerTopScrim: Brush get() = PlayerTopScrim
@@ -93,14 +108,17 @@ private val AnimoDarkScheme = darkColorScheme(
 private val AnimoLightScheme = lightColorScheme(
     primary = LightAccent,
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFB8EFE8),
-    onPrimaryContainer = Color(0xFF04211D),
-    secondary = Color(0xFF3C4C4A),
+    primaryContainer = LightAccentContainer,
+    onPrimaryContainer = LightOnAccentContainer,
+    inversePrimary = LightAccentContainer,
+    secondary = Color(0xFF41514E),
     onSecondary = Color(0xFFFFFFFF),
     secondaryContainer = LightSurfaceHigh,
     onSecondaryContainer = LightTextPrimary,
-    tertiary = Color(0xFF7A5B18),
+    tertiary = Color(0xFF8A5A00),
     onTertiary = Color(0xFFFFFFFF),
+    tertiaryContainer = Color(0xFFFFE2B0),
+    onTertiaryContainer = Color(0xFF2A1800),
     background = LightBackground,
     onBackground = LightTextPrimary,
     surface = LightSurface,
@@ -108,9 +126,9 @@ private val AnimoLightScheme = lightColorScheme(
     surfaceVariant = LightSurfaceHigh,
     onSurfaceVariant = LightTextSecondary,
     surfaceTint = LightAccent,
-    surfaceBright = Color(0xFFFBFCFB),
+    surfaceBright = LightSurface,
     surfaceDim = LightSurfaceHighest,
-    surfaceContainerLowest = Color(0xFFFBFCFB),
+    surfaceContainerLowest = LightSurface,
     surfaceContainerLow = LightSurfaceLow,
     surfaceContainer = LightSurfaceContainer,
     surfaceContainerHigh = LightSurfaceHigh,
@@ -122,7 +140,7 @@ private val AnimoLightScheme = lightColorScheme(
     errorContainer = Color(0xFFF7DAD7),
     onErrorContainer = Color(0xFF410E0B),
     outline = LightOutline,
-    outlineVariant = Color(0xFFDCE4E3),
+    outlineVariant = Color(0xFFEAE6DE),
     scrim = Color(0xFF000000),
 )
 
@@ -131,12 +149,14 @@ fun AnimoTheme(
     darkTheme: Boolean = true,
     content: @Composable () -> Unit,
 ) {
-    MaterialTheme(
-        colorScheme = if (darkTheme) AnimoDarkScheme else AnimoLightScheme,
-        typography = AnimoTypography,
-        shapes = AnimoShapes,
-        content = content,
-    )
+    CompositionLocalProvider(LocalIsDarkTheme provides darkTheme) {
+        MaterialTheme(
+            colorScheme = if (darkTheme) AnimoDarkScheme else AnimoLightScheme,
+            typography = AnimoTypography,
+            shapes = AnimoShapes,
+            content = content,
+        )
+    }
 }
 
 /**

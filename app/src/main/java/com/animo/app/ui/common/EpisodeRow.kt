@@ -55,7 +55,7 @@ fun EpisodeCard(
             .fillMaxWidth()
             .heightIn(min = 96.dp)
             .clip(shape)
-            .background(if (isCurrent) colors.primary.copy(alpha = 0.10f) else AnimoPalette.surface)
+            .background(if (isCurrent) colors.primary.copy(alpha = 0.10f) else colors.surfaceContainer)
             .border(
                 width = 1.dp,
                 color = if (isCurrent) colors.primary.copy(alpha = 0.45f) else colors.outline.copy(alpha = 0.55f),
@@ -110,7 +110,7 @@ fun EpisodeRow(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(AnimoPalette.surface)
+            .background(colors.surfaceContainer)
             .border(1.dp, colors.outline.copy(alpha = 0.55f), shape)
             .clickable(enabled = episode.isPlayable(), onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),

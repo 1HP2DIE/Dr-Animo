@@ -56,6 +56,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -85,6 +86,7 @@ import com.animo.app.ui.common.initials
 import com.animo.app.ui.common.isPlayable
 import com.animo.app.ui.common.pickAudio
 import com.animo.app.ui.theme.AnimoPalette
+import com.animo.app.ui.theme.LocalIsDarkTheme
 import kotlinx.coroutines.launch
 
 private val FullSpan: LazyGridItemSpanScope.() -> GridItemSpan = { GridItemSpan(maxLineSpan) }
@@ -214,7 +216,9 @@ private fun DetailContent(
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 104.dp),
             state = gridState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 36.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -396,7 +400,18 @@ private fun DetailHero(anime: Anime) {
                     .width(94.dp)
                     .aspectRatio(2f / 3f)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(AnimoPalette.posterPlaceholder)
+                    .background(
+                        if (LocalIsDarkTheme.current) {
+                            AnimoPalette.posterPlaceholder
+                        } else {
+                            Brush.linearGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    MaterialTheme.colorScheme.surfaceContainerHighest,
+                                ),
+                            )
+                        },
+                    )
                     .border(
                         1.dp,
                         MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f),
@@ -407,7 +422,11 @@ private fun DetailHero(anime: Anime) {
                     text = anime.initials(),
                     modifier = Modifier.align(Alignment.Center),
                     style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    color = if (LocalIsDarkTheme.current) {
+                        AnimoPalette.onPosterSecondary.copy(alpha = 0.5f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    },
                 )
                 if (anime.poster.isNotBlank()) {
                     AsyncImage(
@@ -427,7 +446,7 @@ private fun DetailHero(anime: Anime) {
                 Text(
                     text = anime.title,
                     style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = AnimoPalette.onPoster,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -435,7 +454,7 @@ private fun DetailHero(anime: Anime) {
                     Text(
                         text = anime.native,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = AnimoPalette.onPosterSecondary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -444,7 +463,7 @@ private fun DetailHero(anime: Anime) {
                     Text(
                         text = anime.alternative,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        color = AnimoPalette.onPosterSecondary.copy(alpha = 0.8f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )

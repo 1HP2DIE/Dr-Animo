@@ -98,7 +98,7 @@ fun FilterSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = AnimoPalette.surface,
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
     ) {
         FilterSheetBody(
             filters = filters,
@@ -570,7 +570,7 @@ private val PreviewFacets = FilterFacets(
 @Composable
 private fun FilterSheetPreview() {
     AnimoTheme {
-        Box(Modifier.fillMaxHeight().background(AnimoPalette.surface)) {
+        Box(Modifier.fillMaxHeight().background(MaterialTheme.colorScheme.surfaceContainer)) {
             FilterSheetBody(
                 filters = Filters(
                     genres = setOf("Action", "Fantasy"),
@@ -598,7 +598,7 @@ private fun FilterSheetPreview() {
 @Composable
 private fun FilterSheetEmptyPreview() {
     AnimoTheme {
-        Box(Modifier.fillMaxHeight().background(AnimoPalette.surface)) {
+        Box(Modifier.fillMaxHeight().background(MaterialTheme.colorScheme.surfaceContainer)) {
             FilterSheetBody(
                 filters = Filters(),
                 facets = FilterFacets(),

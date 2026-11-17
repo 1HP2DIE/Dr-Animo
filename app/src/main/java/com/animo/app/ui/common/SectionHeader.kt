@@ -12,17 +12,22 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 
+/**
+ * Shelf heading. One accent tick + a 18 sp title is the whole hierarchy: the tick is the only
+ * ornamental element on the page, so it has to do the sectioning work on its own.
+ */
 @Composable
 fun SectionHeader(
     title: String,
@@ -35,23 +40,23 @@ fun SectionHeader(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(top = 4.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (showAccentDot) {
             Box(
                 Modifier
                     .width(3.dp)
-                    .height(16.dp)
+                    .height(18.dp)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.primary),
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(10.dp))
         }
         Column(Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             if (subtitle != null) {
@@ -59,6 +64,7 @@ fun SectionHeader(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 1.dp),
                 )
             }
         }
@@ -66,10 +72,10 @@ fun SectionHeader(
             Row(
                 modifier = Modifier
                     .clip(MaterialTheme.shapes.small)
-                    .clickable(onClick = onAction)
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                    .clickable(role = Role.Button, onClick = onAction)
+                    .padding(start = 8.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                horizontalArrangement = Arrangement.spacedBy(1.dp),
             ) {
                 Text(
                     text = actionLabel,

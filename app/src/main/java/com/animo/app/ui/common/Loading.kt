@@ -92,7 +92,7 @@ fun PosterGridSkeleton(
                     .fillMaxWidth()
                     .aspectRatio(2f / 3f)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(AnimoPalette.surfaceHigh.copy(alpha = tileAlpha)),
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = tileAlpha)),
             )
         }
     }
