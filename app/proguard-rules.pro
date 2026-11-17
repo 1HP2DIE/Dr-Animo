@@ -39,9 +39,42 @@
 # --- WorkManager instantiates the worker by class name ---
 -keep class com.animo.app.data.sync.SyncWorker { <init>(...); }
 
-# --- The stream resolver is instantiated reflectively from ServiceLocator ---
--keep class com.animo.app.player.MegaplayStreamResolver { <init>(...); }
+# ============================================================================
+# Hardening
+#
+# A release build must not hand a reader a map of the app: no stable package or class names,
+# no log echoes of request URLs, no source file names, no line numbers. Debug builds are
+# untouched, so day-to-day stack traces stay useful.
+# ============================================================================
 
-# --- Keep line numbers for readable crash reports, hide the original file names ---
--keepattributes SourceFile,LineNumberTable
+# One renamed package for everything; access may be widened so the optimizer is free to inline.
+-repackageclasses 'o'
+-allowaccessmodification
+
+# Skip the generic "com.animo.app.ui.player.Something" style names.
+-obfuscationdictionary obfuscation-dictionary.txt
+-classobfuscationdictionary obfuscation-dictionary.txt
+-packageobfuscationdictionary obfuscation-dictionary.txt
+
+# Rewrite class-name string constants that point at obfuscated classes.
+-adaptclassstrings
+
+# Log calls (and therefore the URLs they interpolate) are compiled out of release builds.
+-assumenosideeffects class android.util.Log {
+    public static *** v(...);
+    public static *** d(...);
+    public static *** i(...);
+    public static *** w(...);
+    public static *** e(...);
+}
+
+# Our logger wraps android.util.Log; stripping it too lets R8 delete the message strings.
+-assumenosideeffects class com.animo.app.AppLog {
+    public *** d(...);
+    public *** i(...);
+    public *** w(...);
+    public *** e(...);
+}
+
+# No original file names or line numbers in a release stack trace.
 -renamesourcefileattribute SourceFile
