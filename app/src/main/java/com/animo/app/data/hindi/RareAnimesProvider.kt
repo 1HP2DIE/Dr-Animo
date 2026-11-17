@@ -150,6 +150,10 @@ class RareAnimesProvider(
             append("&page=").append(safePage)
             if (categories != null) append("&categories=").append(categories)
             append("&_fields=").append(LIST_FIELDS)
+            // The listing used to carry no artwork, so 78% of the Hindi catalogue (2,333 of 2,973
+            // rows) rendered as a blank tile on Home and Browse. `_embedded` only appears when both
+            // `_links` and `_embedded` are listed and the embed is requested explicitly.
+            append("&_embed=wp:featuredmedia")
         }
 
         val response = fetch(url, accept = ACCEPT_JSON)
@@ -479,7 +483,7 @@ class RareAnimesProvider(
                 link = obj.text("link").orEmpty(),
                 date = obj.text("date").orEmpty(),
                 categories = obj.intArray("categories"),
-                poster = "",
+                poster = RareAnimesParser.poster(obj).orEmpty(),
                 synopsis = RareAnimesParser.plainText(obj.nestedText("excerpt", "rendered").orEmpty()),
             )
         }
@@ -529,7 +533,8 @@ class RareAnimesProvider(
         const val CATEGORY_HINDI_SUB = 297
         const val HINDI_CATEGORIES_CSV = "180,297"
 
-        const val LIST_FIELDS = "id,slug,title,link,date,categories,featured_media,excerpt"
+        const val LIST_FIELDS =
+            "id,slug,title,link,date,categories,featured_media,excerpt,_links,_embedded"
 
         /**
          * `_embedded` is dropped when `_fields` omits `_links`, and the poster lives in `_embedded`,
