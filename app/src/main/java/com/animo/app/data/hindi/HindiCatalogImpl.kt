@@ -544,14 +544,13 @@ class HindiCatalogImpl(
 
         if (page.episodeUrls.isEmpty()) {
             log("toono: $originUrl has no episode rows — treating it as a movie")
-            val embedId = embedIdOrBlank(originUrl)
             return listOf(
                 Episode(
                     id = HindiIds.episodeId(animeId, 1),
                     animeId = animeId,
                     number = 1,
                     title = Normalize.cleanText(page.title),
-                    embedId = embedId,
+                    embedId = "",
                     subUrl = originUrl,
                     dubUrl = null,
                     updatedAtEpoch = now,
@@ -574,7 +573,10 @@ class HindiCatalogImpl(
                 animeId = animeId,
                 number = number,
                 title = "",
-                embedId = embedIdOrBlank(url),
+                // Deliberately NOT resolved here: the resolver walks this page at play time anyway,
+                // and pre-walking meant one embed request per episode — One Piece (1000+ rows) took
+                // minutes before the list even appeared.
+                embedId = "",
                 subUrl = url,
                 dubUrl = null,
                 updatedAtEpoch = now,
@@ -659,16 +661,6 @@ class HindiCatalogImpl(
         } ?: players.firstOrNull { it.url.contains(MULTIQUALITY_PATH, ignoreCase = true) }
             ?: players.first()
     }
-
-    private suspend fun embedIdOrBlank(episodeUrl: String): String =
-        try {
-            toono.embedId(episodeUrl)
-        } catch (cancellation: CancellationException) {
-            throw cancellation
-        } catch (error: Throwable) {
-            log("toono: embed id unavailable for $episodeUrl — ${error.message}")
-            ""
-        }
 
     /**
      * `…/episode/<slug>/` → the in-season number from `-1x3`, then a trailing `-3`, else `null` so
