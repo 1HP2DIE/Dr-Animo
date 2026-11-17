@@ -16,8 +16,11 @@ import kotlinx.coroutines.withContext
 
 /**
  * Room is the single source of truth for every list the UI renders (ARCHITECTURE.md: "cache or
- * crash"). The DB file is a rebuildable cache of the API — losing it costs a 3-minute sync, nothing
- * more, so there is no migration history to maintain at version 1.
+ * crash"). The DB file is a rebuildable cache of the API, but it is **not** disposable once it is on
+ * a phone: v2 added `anime.titleNorm` while installs already held 600+ synced series, so the schema
+ * change ships with [MIGRATION_1_2] instead of a destructive fallback. There is still no
+ * `fallbackToDestructiveMigration` — a missing migration must fail loudly in development, never
+ * silently wipe a user's continue-watching state.
  */
 @Database(
     entities = [
@@ -26,7 +29,7 @@ import kotlinx.coroutines.withContext
         ProgressEntity::class,
         AnimeFtsEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class AnimoDatabase : RoomDatabase() {
@@ -54,6 +57,7 @@ abstract class AnimoDatabase : RoomDatabase() {
         fun build(context: Context): AnimoDatabase =
             Room.databaseBuilder(context.applicationContext, AnimoDatabase::class.java, DB_NAME)
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
+                .addMigrations(MIGRATION_1_2)
                 .build()
     }
 }

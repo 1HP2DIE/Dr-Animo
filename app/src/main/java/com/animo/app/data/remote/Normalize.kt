@@ -153,15 +153,75 @@ object Normalize {
     fun joinCsv(values: List<String>): String =
         values.map { cleanText(it) }.filter { it.isNotEmpty() }.joinToString(SEPARATOR)
 
+    /**
+     * Splits on a bare comma rather than on `", "`: the API joins with `", "` but titles seen live
+     * also carry `"Comedy,SCI-FI"` (no space), and splitting on `", "` would fuse that into one genre
+     * — which then shows up in the filter sheet as a value nobody can match.
+     */
     fun splitCsv(raw: String): List<String> =
         if (raw.isBlank()) emptyList()
-        else raw.split(SEPARATOR).map { it.trim() }.filter { it.isNotEmpty() }
+        else raw.split(',').map { it.trim() }.filter { it.isNotEmpty() }
 
     private const val SEPARATOR = ", "
+
+    // ---------------------------------------------------------------- browse keys
+
+    /**
+     * Key for the A–Z index and the title sorts (`anime.titleNorm`): leading punctuation is stripped
+     * so `「Komi-san」` files under **k**, not under a bracket — the brackets are decoration in every
+     * observed title, the word after them is what a user scans for. Articles are deliberately kept
+     * ("The …" sorts under T) because this is a browse index, not a library catalog.
+     *
+     * Lowercased with `Locale.ROOT` semantics (Kotlin's no-arg `lowercase()`), so a Turkish device
+     * locale cannot turn "I" into "ı" and break the LIKE prefix match.
+     */
+    fun titleSortKey(raw: String): String =
+        cleanText(raw)
+            .replace(LEADING_PUNCTUATION, "")
+            .replace(WHITESPACE_RUN, " ")
+            .trim()
+            .lowercase()
+
+    /** Folds a browse letter to the form stored in `titleNorm`; `null` when it is not a letter/digit. */
+    fun normalizeLetter(raw: Char?): Char? =
+        raw?.lowercaseChar()?.takeIf { it.isLetterOrDigit() }
+
+    private val LEADING_PUNCTUATION = Regex("^[^\\p{L}\\p{N}]+")
+    private val WHITESPACE_RUN = Regex("\\s+")
 
     /** `slug` is unique in the API but defensive: a blank slug would break the unique index. */
     fun slugOrFallback(slug: String, id: Int): String =
         slug.trim().ifEmpty { "anime-$id" }
+
+    // ---------------------------------------------------------------- type
+
+    /**
+     * The `type` column is a free-text mess: live values include `TV`, `TV_SHORT`, `Movie`, `ONA`,
+     * `OVA`, `Special`, `TV Special`, `Music`, `PV`, `CM` — plus a one-off `conspiracy`. Only the
+     * known shapes become a filter chip; everything else is dropped so the sheet never offers a
+     * value that means nothing to a user.
+     *
+     * Matching is done on `REPLACE(type,'_',' ')` lowercased (see `FilterSql`), so a canonical label
+     * written back out as a lowercase, space-separated string matches every stored spelling.
+     */
+    fun normalizeType(raw: String): String? =
+        when (cleanText(raw).lowercase().replace('_', ' ').replace(Regex("\\s+"), " ")) {
+            "tv" -> "TV"
+            "tv short" -> "TV Short"
+            "tv special" -> "TV Special"
+            "movie" -> "Movie"
+            "ova" -> "OVA"
+            "ona" -> "ONA"
+            "special" -> "Special"
+            "music" -> "Music"
+            "pv" -> "PV"
+            "cm" -> "CM"
+            else -> null
+        }
+
+    /** Inverse of [normalizeType] for the SQL side: the value that `LOWER(REPLACE(type,'_',' '))` yields. */
+    fun typeMatchKey(canonical: String): String? =
+        normalizeType(canonical)?.lowercase()
 
     /** Short diagnostic form used in log lines only — never logged with a payload attached. */
     fun truncate(raw: String, max: Int = 160): String =

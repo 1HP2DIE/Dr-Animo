@@ -3,12 +3,19 @@ package com.animo.app.data.local.entity
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.animo.app.data.remote.Normalize
 
 /**
  * Catalog row — column names and nullability mirror the DDL in research/DATA_CONTRACT.md §5
  * byte-for-byte so the schema can be diffed against the contract.
  *
  * `isDub` / `isSub` are episode **counts**, absent on 73.7% / 5.7% of rows, hence nullable.
+ *
+ * [titleNorm] is the one column the API knows nothing about: it is the browse/sort key for the A–Z
+ * filter and the title sorts. It is a **defaulted** constructor parameter derived from [title], so
+ * every construction site (catalog page, detail refresh, any future mapper) gets the correct value
+ * without a call site to remember. Nothing copies an entity with a different title, and the
+ * v1→v2 migration backfills it in Kotlin with the same function.
  */
 @Entity(
     tableName = "anime",
@@ -20,11 +27,13 @@ import androidx.room.PrimaryKey
         Index(value = ["statusNorm"]),
         Index(value = ["type"]),
         Index(value = ["score"]),
+        Index(value = ["titleNorm"]),
     ],
 )
 data class AnimeEntity(
     @PrimaryKey val id: Int,
     val title: String,
+    val titleNorm: String = Normalize.titleSortKey(title),
     val alternative: String,
     val titles: String,
     val native: String,

@@ -1,25 +1,31 @@
 package com.animo.app.data.repo
 
 import androidx.room.withTransaction
+import androidx.sqlite.db.SimpleSQLiteQuery
 import com.animo.app.data.local.AnimoDatabase
+import com.animo.app.data.local.FilterSql
 import com.animo.app.data.local.FtsQuery
 import com.animo.app.data.local.dao.AnimeDao
 import com.animo.app.data.local.dao.EpisodeDao
 import com.animo.app.data.local.dao.ProgressDao
 import com.animo.app.data.local.entity.ProgressEntity
+import com.animo.app.data.local.filterFacetsOf
 import com.animo.app.data.local.toDomain
-import com.animo.app.data.remote.Normalize
 import com.animo.app.data.sync.CatalogSyncer
 import com.animo.app.data.sync.EpisodeBackfill
 import com.animo.app.domain.model.Anime
 import com.animo.app.domain.model.Episode
+import com.animo.app.domain.model.FilterFacets
 import com.animo.app.domain.model.Filters
 import com.animo.app.domain.model.SyncProgress
 import com.animo.app.domain.model.SyncState
 import com.animo.app.domain.repo.AnimeRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 
 /**
@@ -53,21 +59,29 @@ class AnimeRepositoryImpl(
         limit: Int,
         offset: Int,
     ): Flow<List<Anime>> {
-        val match = FtsQuery.build(query)
-        val genre = filters.genre?.trim()?.takeIf { it.isNotEmpty() }
-        val year = filters.year
-        val type = filters.type?.trim()?.takeIf { it.isNotEmpty() }
-        val status = filters.status?.trim()?.takeIf { it.isNotEmpty() }
-            ?.let(Normalize::normalizeStatus)
-            ?.takeIf { it.isNotEmpty() }
-
-        val rows = if (match != null) {
-            animeDao.observeSearch(match, genre, year, type, status, limit, offset)
-        } else {
-            animeDao.observeFiltered(genre, year, type, status, limit, offset)
-        }
-        return rows.map { list -> list.map { it.toDomain() } }
+        // `null` means "nothing searchable in the box" and the statement then has no FTS clause at
+        // all — an empty search lists the whole (filtered) catalogue instead of matching nothing.
+        val statement = FilterSql.build(
+            match = FtsQuery.build(query),
+            filters = filters,
+            limit = limit,
+            offset = offset,
+        )
+        return animeDao
+            .observeFiltered(SimpleSQLiteQuery(statement.sql, statement.args.toTypedArray()))
+            .map { rows -> rows.map { it.toDomain() } }
     }
+
+    /**
+     * Built from the catalogue, never the network, so the filter sheet is populated on a cold,
+     * offline start and can never offer a value that returns an empty screen. Recomputed per
+     * emission (no cached copy that could outlive a sync) off the main thread.
+     */
+    override fun observeFacets(): Flow<FilterFacets> =
+        animeDao.observeFacetRows()
+            .map(::filterFacetsOf)
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
 
     override fun observeAnime(id: Int): Flow<Anime?> =
         animeDao.observeById(id).map { row -> row?.toDomain() }

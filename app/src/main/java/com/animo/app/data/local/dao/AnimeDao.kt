@@ -2,7 +2,10 @@ package com.animo.app.data.local.dao
 
 import androidx.room.Dao
 import androidx.room.Query
+import androidx.room.RawQuery
 import androidx.room.Upsert
+import androidx.sqlite.db.SupportSQLiteQuery
+import com.animo.app.data.local.FacetRow
 import com.animo.app.data.local.entity.AnimeEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -33,56 +36,23 @@ interface AnimeDao {
     suspend fun findById(id: Int): AnimeEntity?
 
     /**
-     * FTS4 query. `anime_fts.rowid` is the content-table rowid, i.e. `anime.id`, because the index is
-     * declared with `content='anime'` (see [com.animo.app.data.local.entity.AnimeFtsEntity]).
-     * [match] is pre-sanitised by [com.animo.app.data.local.FtsQuery] — never interpolate user text.
+     * The one browse/search entry point. The statement is built by
+     * [com.animo.app.data.local.FilterSql] because a multi-genre filter needs a variable number of
+     * `LIKE` predicates (AND semantics), which a `@Query` cannot express; every value is still a
+     * bound argument, never interpolated. `observedEntities` keeps the returned flow live: any
+     * write to `anime` re-runs the statement.
      */
-    @Query(
-        """
-        SELECT a.* FROM anime AS a
-        INNER JOIN anime_fts ON anime_fts.rowid = a.id
-        WHERE anime_fts MATCH :match
-          AND (:genre IS NULL OR a.genres LIKE '%' || :genre || '%')
-          AND (:year IS NULL OR a.year = :year)
-          AND (:type IS NULL OR a.type = :type)
-          AND (:status IS NULL OR a.statusNorm = :status)
-        ORDER BY a.updatedAtEpoch DESC, a.id DESC
-        LIMIT :limit OFFSET :offset
-        """,
-    )
-    fun observeSearch(
-        match: String,
-        genre: String?,
-        year: Int?,
-        type: String?,
-        status: String?,
-        limit: Int,
-        offset: Int,
-    ): Flow<List<AnimeEntity>>
-
-    /** Filter-only browse (blank query) — same ordering as [observeSearch] so paging stays stable. */
-    @Query(
-        """
-        SELECT * FROM anime
-        WHERE (:genre IS NULL OR genres LIKE '%' || :genre || '%')
-          AND (:year IS NULL OR year = :year)
-          AND (:type IS NULL OR type = :type)
-          AND (:status IS NULL OR statusNorm = :status)
-        ORDER BY updatedAtEpoch DESC, id DESC
-        LIMIT :limit OFFSET :offset
-        """,
-    )
-    fun observeFiltered(
-        genre: String?,
-        year: Int?,
-        type: String?,
-        status: String?,
-        limit: Int,
-        offset: Int,
-    ): Flow<List<AnimeEntity>>
+    @RawQuery(observedEntities = [AnimeEntity::class])
+    fun observeFiltered(query: SupportSQLiteQuery): Flow<List<AnimeEntity>>
 
     /**
-     * Continue watching: one row per series, ordered by its most recently touched episode. Grouping
+     * Facet source. Deliberately one projection for all five facets — the filter sheet needs
+     * genres, years, types, statuses and letters, and they all live on the same row.
+     */
+    @Query("SELECT genres, year, type, statusNorm, titleNorm FROM anime")
+    fun observeFacetRows(): Flow<List<FacetRow>>
+
+    /** Continue watching: one row per series, ordered by its most recently touched episode. Grouping
      * on `a.id` collapses multiple in-progress episodes of the same series into a single card.
      */
     @Query(
