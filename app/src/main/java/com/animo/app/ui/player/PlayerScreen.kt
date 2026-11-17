@@ -194,6 +194,12 @@ private fun PlayerStage(
         SettingsPreferences(context).autoplayNext
     }.collectAsState(initial = true)
 
+    // The same rows the detail grid reads, so the drawer never disagrees with the season list.
+    val repository = LocalAppContainer.current.animeRepository
+    val episodeProgress by remember(repository, model.anime.id) {
+        repository.observeEpisodeProgress(model.anime.id)
+    }.collectAsState(initial = emptyMap())
+
     var speed by remember { mutableStateOf(surfaceState.speed) }
     LaunchedEffect(speed) { surfaceState.setSpeed(speed) }
 
@@ -359,7 +365,7 @@ private fun PlayerStage(
             visible = episodesVisible,
             episodes = model.episodes,
             currentEpisodeId = model.episode.id,
-            progress = emptyMap(),
+            progress = episodeProgress.mapNotNull { (id, entry) -> entry.fraction?.let { id to it } }.toMap(),
             onSelect = { episode ->
                 episodesVisible = false
                 viewModel.selectEpisode(episode)
