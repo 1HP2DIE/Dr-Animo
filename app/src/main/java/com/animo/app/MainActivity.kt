@@ -1,5 +1,6 @@
 package com.animo.app
 
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -12,6 +13,7 @@ import com.animo.app.domain.repo.StreamRepository
 import com.animo.app.ui.AnimoNavHost
 import com.animo.app.ui.AppContainer
 import com.animo.app.ui.LocalAppContainer
+import com.animo.app.ui.player.PipState
 import com.animo.app.ui.theme.AnimoTheme
 
 /**
@@ -33,6 +35,19 @@ class MainActivity : ComponentActivity() {
         override val animeRepository: AnimeRepository get() = ServiceLocator.animeRepository
         override val streamRepository: StreamRepository get() = ServiceLocator.streamRepository
         override val hindiCatalog: HindiCatalog? get() = ServiceLocator.hindiCatalog
+    }
+
+    /**
+     * PiP is entered from the player chrome. Publishing the flag here is what lets the Compose
+     * overlay hide itself: inside the small window our seek bar and buttons are unusable, and the
+     * system provides its own.
+     */
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration,
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        PipState.inPip.value = isInPictureInPictureMode
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

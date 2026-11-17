@@ -66,7 +66,7 @@ private const val BITS_PER_MEGABIT = 1_000_000.0
 private const val MEGABITS_FORMAT = "%.1f"
 
 /** The four panes of the sheet. One visible at a time keeps a phone-sized sheet short. */
-private enum class PlayerMenuTab(@StringRes val labelRes: Int) {
+enum class PlayerMenuTab(@StringRes val labelRes: Int) {
     QUALITY(R.string.ui_player_menu_tab_quality),
     AUDIO(R.string.ui_player_menu_tab_audio),
     SPEED(R.string.ui_player_menu_tab_speed),
@@ -95,8 +95,10 @@ fun PlayerSettingsSheet(
     onSelectText: (String) -> Unit,
     onSelectSpeed: (Float) -> Unit,
     onSelectSleep: (Int?) -> Unit,
+    /** Which pane opens first — the CC / speed / quality buttons in the chrome each land on one. */
+    initialTab: PlayerMenuTab = PlayerMenuTab.QUALITY,
 ) {
-    var tabIndex by rememberSaveable { mutableStateOf(PlayerMenuTab.QUALITY.ordinal) }
+    var tabIndex by rememberSaveable { mutableStateOf(initialTab.ordinal) }
     val scrimInteraction = remember { MutableInteractionSource() }
 
     Box(

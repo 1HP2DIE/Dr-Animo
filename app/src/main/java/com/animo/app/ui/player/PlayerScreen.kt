@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +26,10 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.List
 import androidx.compose.material.icons.rounded.Forward10
 import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.HighQuality
+import androidx.compose.material.icons.rounded.PictureInPictureAlt
+import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.Subtitles
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Replay10
@@ -58,6 +63,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -162,7 +168,7 @@ private fun PlayerStage(
     }
     val scope = rememberCoroutineScope()
     var controlsVisible by remember { mutableStateOf(true) }
-    var settingsVisible by remember { mutableStateOf(false) }
+    var settingsTab by remember { mutableStateOf<PlayerMenuTab?>(null) }
     var episodesVisible by remember { mutableStateOf(false) }
     var scrubPositionMs by remember { mutableStateOf<Long?>(null) }
 
@@ -190,6 +196,9 @@ private fun PlayerStage(
     // "Autoplay next" was a Settings switch nothing read. Reading it here is the only place it can
     // take effect, because this is where a playback actually ends.
     val context = androidx.compose.ui.platform.LocalContext.current
+    val inPip = rememberInPictureInPicture()
+    val enterPip = rememberPipAction()
+
     val autoplayNext by remember(context) {
         SettingsPreferences(context).autoplayNext
     }.collectAsState(initial = true)
@@ -255,8 +264,8 @@ private fun PlayerStage(
         }
     }
 
-    LaunchedEffect(controlsVisible, surfaceState.isPlaying, settingsVisible, episodesVisible) {
-        if (controlsVisible && surfaceState.isPlaying && !settingsVisible && !episodesVisible) {
+    LaunchedEffect(controlsVisible, surfaceState.isPlaying, settingsTab, episodesVisible) {
+        if (controlsVisible && surfaceState.isPlaying && settingsTab == null && !episodesVisible) {
             delay(CONTROLS_AUTO_HIDE_MS)
             controlsVisible = false
         }
@@ -264,7 +273,7 @@ private fun PlayerStage(
 
     BackHandler {
         when {
-            settingsVisible -> settingsVisible = false
+            settingsTab != null -> settingsTab = null
             episodesVisible -> episodesVisible = false
             controlsVisible -> controlsVisible = false
             else -> onBack()
@@ -305,7 +314,7 @@ private fun PlayerStage(
                 },
         )
 
-        if (!controlsVisible && surfaceState.isBuffering && model.errorMessage == null) {
+        if (!inPip && !controlsVisible && surfaceState.isBuffering && model.errorMessage == null) {
             CircularProgressIndicator(
                 modifier = Modifier
                     .align(Alignment.Center)
@@ -321,7 +330,7 @@ private fun PlayerStage(
             label = "player-controls-alpha",
         )
 
-        if (controlsVisible || controlsAlpha > 0.01f) {
+        if (!inPip && (controlsVisible || controlsAlpha > 0.01f)) {
             PlayerControlsOverlay(
                 model = model,
                 surfaceState = surfaceState,
@@ -332,8 +341,8 @@ private fun PlayerStage(
                     scrubPositionMs = null
                 },
                 onBack = onBack,
-                onOpenSettings = {
-                    settingsVisible = true
+                onOpenSettings = { tab ->
+                    settingsTab = tab
                     controlsVisible = true
                 },
                 onOpenEpisodes = {
@@ -344,6 +353,7 @@ private fun PlayerStage(
                 onToggleAudio = viewModel::toggleAudio,
                 onNext = viewModel::next,
                 onPrevious = viewModel::previous,
+                onEnterPip = enterPip,
                 modifier = Modifier
                     .matchParentSize()
                     .graphicsLayer { alpha = controlsAlpha },
@@ -362,7 +372,7 @@ private fun PlayerStage(
         }
 
         EpisodeDrawer(
-            visible = episodesVisible,
+            visible = episodesVisible && !inPip,
             episodes = model.episodes,
             currentEpisodeId = model.episode.id,
             progress = episodeProgress.mapNotNull { (id, entry) -> entry.fraction?.let { id to it } }.toMap(),
@@ -373,7 +383,7 @@ private fun PlayerStage(
             onDismiss = { episodesVisible = false },
         )
 
-        if (settingsVisible) {
+        if (settingsTab != null && !inPip) {
             PlayerSettingsSheet(
                 tuning = PlayerTuning(
                     qualities = qualities.map { QualityRow(it.id, it.label, it.height, it.bitrate) },
@@ -387,7 +397,8 @@ private fun PlayerStage(
                     hasAudioTracks = audios.size > 1,
                 ),
                 sleepMinutesLeft = sleepMinutes,
-                onDismiss = { settingsVisible = false },
+                initialTab = settingsTab ?: PlayerMenuTab.QUALITY,
+                onDismiss = { settingsTab = null },
                 onSelectQuality = controller::selectQuality,
                 onSelectAudio = controller::selectAudioTrack,
                 onSelectText = controller::selectTextTrack,
@@ -412,12 +423,13 @@ private fun PlayerControlsOverlay(
     onScrub: (Long) -> Unit,
     onSeek: (Long) -> Unit,
     onBack: () -> Unit,
-    onOpenSettings: () -> Unit,
+    onOpenSettings: (PlayerMenuTab) -> Unit,
     onOpenEpisodes: () -> Unit,
     sleepActive: Boolean,
     onToggleAudio: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
+    onEnterPip: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val position = scrubPositionMs ?: surfaceState.positionMs
@@ -427,17 +439,19 @@ private fun PlayerControlsOverlay(
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(132.dp)
+                .height(112.dp)
                 .background(AnimoPalette.playerTopScrim),
         )
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(210.dp)
+                .height(272.dp)
                 .align(Alignment.BottomCenter)
                 .background(AnimoPalette.playerBottomScrim),
         )
 
+        // Top: identity only. Every control lives at the bottom, where a thumb actually reaches in
+        // landscape — the old centred cluster covered the video and was unreachable one-handed.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -477,76 +491,11 @@ private fun PlayerControlsOverlay(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (model.canSwitchAudio) {
-                AudioSwitchChip(audio = model.audio, onClick = onToggleAudio)
-            }
             IconButton(onClick = onOpenEpisodes) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.List,
                     contentDescription = stringResource(R.string.ui_player_episodes),
                     tint = PlayerForeground,
-                )
-            }
-            IconButton(onClick = onOpenSettings) {
-                Icon(
-                    imageVector = Icons.Rounded.Tune,
-                    contentDescription = stringResource(R.string.ui_player_settings),
-                    tint = PlayerForeground,
-                )
-            }
-        }
-
-        Row(
-            modifier = Modifier
-                .align(Alignment.Center)
-                .padding(horizontal = 24.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(30.dp),
-        ) {
-            IconButton(
-                onClick = { surfaceState.skipBy(-SKIP_MS) },
-                modifier = Modifier.size(48.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Replay10,
-                    contentDescription = null,
-                    tint = PlayerForeground,
-                    modifier = Modifier.size(28.dp),
-                )
-            }
-
-            IconButton(
-                onClick = { surfaceState.togglePlayPause() },
-                modifier = Modifier
-                    .size(66.dp)
-                    .clip(CircleShape)
-                    .background(PlayerControlScrim),
-            ) {
-                if (surfaceState.isBuffering) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(26.dp),
-                        color = PlayerForeground,
-                        strokeWidth = 2.dp,
-                    )
-                } else {
-                    Icon(
-                        imageVector = if (surfaceState.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                        contentDescription = null,
-                        tint = PlayerForeground,
-                        modifier = Modifier.size(34.dp),
-                    )
-                }
-            }
-
-            IconButton(
-                onClick = { surfaceState.skipBy(SKIP_MS) },
-                modifier = Modifier.size(48.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Forward10,
-                    contentDescription = null,
-                    tint = PlayerForeground,
-                    modifier = Modifier.size(28.dp),
                 )
             }
         }
@@ -556,8 +505,71 @@ private fun PlayerControlsOverlay(
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(18.dp),
+            ) {
+                if (model.hasPrevious) {
+                    PlayerGlyph(
+                        icon = Icons.Rounded.SkipPrevious,
+                        description = stringResource(R.string.ui_player_previous),
+                        onClick = onPrevious,
+                    )
+                }
+                PlayerGlyph(
+                    icon = Icons.Rounded.Replay10,
+                    description = null,
+                    onClick = { surfaceState.skipBy(-SKIP_MS) },
+                    size = 30.dp,
+                )
+                IconButton(
+                    onClick = { surfaceState.togglePlayPause() },
+                    modifier = Modifier
+                        .size(58.dp)
+                        .clip(CircleShape)
+                        .background(PlayerControlScrim),
+                ) {
+                    if (surfaceState.isBuffering) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = PlayerForeground,
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(
+                            imageVector = if (surfaceState.isPlaying) {
+                                Icons.Rounded.Pause
+                            } else {
+                                Icons.Rounded.PlayArrow
+                            },
+                            contentDescription = stringResource(
+                                if (surfaceState.isPlaying) R.string.ui_player_pause else R.string.ui_player_play,
+                            ),
+                            tint = PlayerForeground,
+                            modifier = Modifier.size(30.dp),
+                        )
+                    }
+                }
+                PlayerGlyph(
+                    icon = Icons.Rounded.Forward10,
+                    description = null,
+                    onClick = { surfaceState.skipBy(SKIP_MS) },
+                    size = 30.dp,
+                )
+                if (model.hasNext) {
+                    PlayerGlyph(
+                        icon = Icons.Rounded.SkipNext,
+                        description = stringResource(R.string.ui_player_next),
+                        onClick = onNext,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+
             PlayerSeekBar(
                 positionMs = position,
                 bufferedMs = surfaceState.bufferedMs,
@@ -565,8 +577,11 @@ private fun PlayerControlsOverlay(
                 onScrub = onScrub,
                 onSeek = onSeek,
             )
+
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -575,34 +590,63 @@ private fun PlayerControlsOverlay(
                     color = PlayerForeground.copy(alpha = 0.78f),
                 )
                 Spacer(Modifier.weight(1f))
-                if (model.hasPrevious) {
-                    IconButton(
-                        onClick = onPrevious,
-                        modifier = Modifier.size(40.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.SkipPrevious,
-                            contentDescription = stringResource(R.string.ui_player_previous),
-                            tint = PlayerForeground,
-                            modifier = Modifier.size(22.dp),
-                        )
-                    }
+                if (model.canSwitchAudio) {
+                    AudioSwitchChip(audio = model.audio, onClick = onToggleAudio)
+                    Spacer(Modifier.width(6.dp))
                 }
-                if (model.hasNext) {
-                    IconButton(
-                        onClick = onNext,
-                        modifier = Modifier.size(40.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.SkipNext,
-                            contentDescription = stringResource(R.string.ui_player_next),
-                            tint = PlayerForeground,
-                            modifier = Modifier.size(22.dp),
-                        )
-                    }
-                }
+                // Subtitles open on the track pane; quality/speed/sleep open their own pane. One
+                // sheet, four entry points — no separate dialogs to keep in sync.
+                PlayerGlyph(
+                    icon = Icons.Rounded.Subtitles,
+                    description = stringResource(R.string.ui_player_cc),
+                    onClick = { onOpenSettings(PlayerMenuTab.AUDIO) },
+                )
+                PlayerGlyph(
+                    icon = Icons.Rounded.HighQuality,
+                    description = stringResource(R.string.ui_player_quality),
+                    onClick = { onOpenSettings(PlayerMenuTab.QUALITY) },
+                )
+                PlayerGlyph(
+                    icon = Icons.Rounded.Speed,
+                    description = stringResource(R.string.ui_player_speed),
+                    onClick = { onOpenSettings(PlayerMenuTab.SPEED) },
+                )
+                PlayerGlyph(
+                    icon = Icons.Rounded.Bedtime,
+                    description = stringResource(R.string.ui_player_sleep),
+                    onClick = { onOpenSettings(PlayerMenuTab.SLEEP) },
+                    tint = if (sleepActive) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        PlayerForeground
+                    },
+                )
+                PlayerGlyph(
+                    icon = Icons.Rounded.PictureInPictureAlt,
+                    description = stringResource(R.string.ui_player_pip),
+                    onClick = onEnterPip,
+                )
             }
         }
+    }
+}
+
+/** Compact icon button used by the bottom bar; 44dp keeps a real touch target in landscape. */
+@Composable
+private fun PlayerGlyph(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String?,
+    onClick: () -> Unit,
+    size: Dp = 22.dp,
+    tint: Color = PlayerForeground,
+) {
+    IconButton(onClick = onClick, modifier = Modifier.size(44.dp)) {
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            tint = tint,
+            modifier = Modifier.size(size),
+        )
     }
 }
 

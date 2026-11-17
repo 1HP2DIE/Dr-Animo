@@ -3,10 +3,15 @@ package com.animo.app.ui.player
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.app.PictureInPictureParams
 import android.content.pm.ActivityInfo
+import android.os.Build
+import android.util.Rational
 import android.view.WindowManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.WindowCompat
@@ -51,7 +56,46 @@ internal fun ImmersiveVideoEffect(enabled: Boolean) {
     }
 }
 
-private tailrec fun Context.findActivity(): Activity? = when (this) {
+/**
+ * Picture-in-picture, at the video's own aspect ratio.
+ *
+ * Only meaningful from API 26; on anything older the button does nothing rather than crashing, and
+ * the manifest flag is simply ignored.
+ */
+@Composable
+internal fun rememberPipAction(aspectWidth: Int = 16, aspectHeight: Int = 9): () -> Unit {
+    val context = LocalContext.current
+    return remember(context, aspectWidth, aspectHeight) {
+        {
+            val activity = context.findActivity()
+            if (activity != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                runCatching {
+                    activity.enterPictureInPictureMode(
+                        PictureInPictureParams.Builder()
+                            .setAspectRatio(Rational(aspectWidth, aspectHeight))
+                            .build(),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * True while the activity is drawn in the system's PiP window.
+ *
+ * Fed by `MainActivity.onPictureInPictureModeChanged` rather than by a listener on the Activity
+ * object: the listener overloads changed across API levels, while the callback has existed since
+ * API 26 and runs on the main thread exactly once per transition.
+ */
+internal object PipState {
+    val inPip = mutableStateOf(false)
+}
+
+@Composable
+internal fun rememberInPictureInPicture(): Boolean = PipState.inPip.value
+
+internal tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.findActivity()
     else -> null
