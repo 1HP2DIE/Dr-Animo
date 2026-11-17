@@ -1,0 +1,701 @@
+{
+  "generated_at": "2026-11-17T04:20:55Z",
+  "source": {
+    "base": "https://anikotoapi.site",
+    "endpoints": [
+      "/recent-anime",
+      "/series/{id}"
+    ],
+    "domains": [
+      "anikototv.to",
+      "anikoto.cz"
+    ]
+  },
+  "rate_limit": {
+    "limit": 60,
+    "window_s": 120,
+    "sustained_rps": 0.5,
+    "safe_gap_s": 2.0,
+    "observed_429": false
+  },
+  "catalog": {
+    "total": 9404,
+    "per_page_max": 100,
+    "total_pages": 95,
+    "sampled_rows": 300
+  },
+  "anime_fields": {
+    "aired": {
+      "present_pct": 100.0,
+      "missing_pct": 0.0,
+      "types": {
+        "string": 300
+      },
+      "empty_string_pct": 0.0,
+      "distinct": 251,
+      "numeric": {
+        "min": 1984.0,
+        "max": 2026.0,
+        "avg": 2004.4286
+      }
+    },
+    "alternative": {
+      "present_pct": 100.0,
+      "missing_pct": 0.0,
+      "types": {
+        "string": 300
+      },
+      "empty_string_pct": 29.7,
+      "distinct": 212,
+      "numeric": null
+    },
+    "ani_id": {
+      "present_pct": 100.0,
+      "missing_pct": 0.0,
+      "types": {
+        "string": 300
+      },
+      "empty_string_pct": 0.0,
+      "distinct": 300,
+      "numeric": {
+        "min": 21.0,
+        "max": 217026.0,
+        "avg": 102067.98
+      }
+    },
+    "background_image": {
+      "present_pct": 100.0,
+      "missing_pct": 0.0,
+      "types": {
+        "string": 300
+      },
+      "empty_string_pct": 58.7,
+      "distinct": 125,
+      "numeric": null
+    },
+    "description": {
+      "present_pct": 100.0,
+      "missing_pct": 0.0,
+      "types": {
+        "string": 300
+      },
+      "empty_string_pct": 0.0,
+      "distinct": 299,
+      "numeric": null
+    },
+    "duration": {
+      "present_pct": 99.3,
+      "missing_pct": 0.7,
+      "types": {
+        "string": 298,
+        "missing": 2
+      },
+      "empty_string_pct": 24.7,
+      "distinct": 114,
+      "numeric": {
+        "min": 3.0,
+        "max": 25.0,
+        "avg": 20.5
+      }
+    },
+    "episodes": {
+      "present_pct": 100.0,
+      "missing_pct": 0.0,
+      "types": {
+        "string": 300
+      },
+      "empty_string_pct": 9.7,
+      "distinct": 35,
+      "numeric": {
+        "min": 1.0,
+        "max": 263.0,
+        "avg": 11.9668
+      }
+    },
+    "id": {
+      "present_pct": 100.0,
+      "missing_pct": 0.0,
+      "types": {
+        "int": 300
+      },
+      "empty_string_pct": 0.0,
+      "distinct": 300,
+      "numeric": {
+        "min": 859.0,
+        "max": 9584.0,
+        "avg": 9074.7833
+      }
+    },
+    "is_dub": {
+      "present_pct": 26.3,
+      "missing_pct": 73.7,
+      "types": {
+        "int": 79,
+        "missing": 221
+      },
+      "empty_string_pct": 0.0,
+      "distinct": 21,
+      "numeric": {
+        "min": 1.0,
+        "max": 1159.0,
+        "avg": 27.2025
+      }
+    },
+    "is_sub": {
+      "present_pct": 94.3,
+      "missing_pct": 5.7,
+      "types": {
+        "int": 283,
+        "missing": 17
+      },
+      "empty_string_pct": 0.0,
+      "distinct": 37,
+      "numeric": {
+        "min": 1.0,
+        "max": 1220.0,
+        "avg": 19.364
+      }
+    },
+    "mal_id": {
+      "present_pct": 99.0,
+      "missing_pct": 1.0,
+      "types": {
+        "string": 297,
+        "missing": 3
+      },
+      "empty_string_pct": 0.3,
+      "distinct": 297,
+      "numeric": {
+        "min": 21.0,
+        "max": 65009.0,
+        "avg": 34810.9662
+      }
+    },
+    "native": {
+      "present_pct": 100.0,
+      "missing_pct": 0.0,
+      "types": {
+        "string": 300
+      },
+      "empty_string_pct": 0.0,
+      "distinct": 299,
+      "numeric": null
+    },
+    "next_air_ep": {
+      "present_pct": 32.7,
+      "missing_pct": 67.3,
+      "types": {
+        "int": 98,
+        "missing": 202
+      },
+      "empty_string_pct": 0.0,
+      "distinct": 23,
+      "numeric": {
+        "min": 3.0,
+        "max": 1221.0,
+        "avg": 39.3367
+      }
+    },
+    "next_air_schedule_time": {
+      "present_pct": 33.0,
+      "missing_pct": 67.0,
+      "types": {
+        "int": 99,
+        "missing": 201
+      },
+      "empty_string_pct": 0.0,
+      "distinct": 85,
+      "numeric": {
+        "min": 1743287400.0,
+        "max": 1798985760.0,
+        "avg": 1793436567.2727
+      }
+    },
+    "poster": {
+      "present_pct": 100.0,
+      "missing_pct": 0.0,
+      "types": {
+        "string": 300
+      },
+      "empty_string_pct": 0.0,
+      "distinct": 300,
+      "numeric": null
+    },
+    "rating": {
+      "present_pct": 100.0,
+      "missing_pct": 0.0,
+      "types": {
+        "string": 300
+      },
+      "empty_string_pct": 12.3,
+      "distinct": 8,
+      "numeric": null
+    },
+    "s_id": {
+      "present_pct": 100.0,
+      "missing_pct": 0.0,
+      "types": {
+        "int": 300
+      },
+      "empty_string_pct": 0.0,
+      "distinct": 300,
+      "numeric": {
+        "min": 100.0,
+        "max": 2147483640.0,
+        "avg": 7662821.2467
+      }
+    },
+    "score": {
+      "present_pct": 96.3,
+      "missing_pct": 3.7,
+      "types": {
+        "string": 289,
+        "missing": 11
+      },
+      "empty_string_pct": 0.0,
+      "distinct": 180,
+      "numeric": {
+        "min": 4.02,
+        "max": 9.03,
+        "avg": 6.7089
+      }
+    },
+    "season": {
+      "present_pct": 100.0,
+      "missing_pct": 0.0,
+      "types": {
+        "string": 300
+      },
+      "empty_string_pct": 0.0,
+      "distinct": 11,
+      "numeric": null
+    },
+    "slug": {
+      "present_pct": 100.0,
+      "missing_pct": 0.0,
+      "types": {
+        "string": 300
+      },
+      "empty_string_pct": 0.0,
+      "distinct": 300,
+      "numeric": null
+    },
+    "source": {
+      "present_pct": 99.3,
+      "missing_pct": 0.7,
+      "types": {
+        "string": 298,
+        "missing": 2
+      },
+      "empty_string_pct": 0.7,
+      "distinct": 16,
+      "numeric": null
+    },
+    "status": {
+      "present_pct": 100.0,
+      "missing_pct": 0.0,
+      "types": {
+        "string": 300
+      },
+      "empty_string_pct": 0.0,
+      "distinct": 3,
+      "numeric": null
+    },
+    "terms_by_type": {
+      "present_pct": 100.0,
+      "missing_pct": 0.0,
+      "types": {
+        "object": 300
+      },
+      "empty_string_pct": 0.0,
+      "distinct": 289,
+      "numeric": null
+    },
+    "title": {
+      "present_pct": 100.0,
+      "missing_pct": 0.0,
+      "types": {
+        "string": 300
+      },
+      "empty_string_pct": 0.0,
+      "distinct": 300,
+      "numeric": null
+    },
+    "titles": {
+      "present_pct": 100.0,
+      "missing_pct": 0.0,
+      "types": {
+        "string": 300
+      },
+      "empty_string_pct": 21.3,
+      "distinct": 237,
+      "numeric": null
+    },
+    "updated_at": {
+      "present_pct": 100.0,
+      "missing_pct": 0.0,
+      "types": {
+        "string": 300
+      },
+      "empty_string_pct": 0.0,
+      "distinct": 300,
+      "numeric": null
+    },
+    "year": {
+      "present_pct": 100.0,
+      "missing_pct": 0.0,
+      "types": {
+        "int": 300
+      },
+      "empty_string_pct": 0.0,
+      "distinct": 51,
+      "numeric": {
+        "min": 1960.0,
+        "max": 2026.0,
+        "avg": 2013.19
+      }
+    }
+  },
+  "terms_by_type": {
+    "type": {
+      "rows_present": 300,
+      "distinct": 10,
+      "top": [
+        [
+          "TV",
+          123
+        ],
+        [
+          "OVA",
+          61
+        ],
+        [
+          "Movie",
+          41
+        ],
+        [
+          "ONA",
+          40
+        ],
+        [
+          "Special",
+          20
+        ],
+        [
+          "TV Special",
+          9
+        ],
+        [
+          "Music",
+          2
+        ],
+        [
+          "CM",
+          2
+        ],
+        [
+          "PV",
+          1
+        ],
+        [
+          "TV_SHORT",
+          1
+        ]
+      ]
+    },
+    "genre": {
+      "rows_present": 297,
+      "distinct": 43,
+      "top": [
+        [
+          "Comedy",
+          103
+        ],
+        [
+          "Action",
+          102
+        ],
+        [
+          "Fantasy",
+          92
+        ],
+        [
+          "Adventure",
+          82
+        ],
+        [
+          "Sci-Fi",
+          57
+        ],
+        [
+          "Romance",
+          48
+        ],
+        [
+          "Drama",
+          39
+        ],
+        [
+          "Supernatural",
+          27
+        ],
+        [
+          "Mystery",
+          18
+        ],
+        [
+          "Ecchi",
+          16
+        ],
+        [
+          "Slice of Life",
+          15
+        ],
+        [
+          "Sports",
+          14
+        ],
+        [
+          "Suspense",
+          6
+        ],
+        [
+          "Mecha",
+          5
+        ],
+        [
+          "Boys Love",
+          5
+        ]
+      ]
+    },
+    "studios": {
+      "rows_present": 282,
+      "distinct": 147,
+      "top": [
+        [
+          "Sunrise",
+          19
+        ],
+        [
+          "Toei Animation",
+          19
+        ],
+        [
+          "Madhouse",
+          9
+        ],
+        [
+          "OLM",
+          9
+        ],
+        [
+          "J.C.Staff",
+          7
+        ],
+        [
+          "ufotable",
+          6
+        ],
+        [
+          "TMS Entertainment",
+          6
+        ],
+        [
+          "Shaft",
+          6
+        ],
+        [
+          "Production I.G",
+          5
+        ],
+        [
+          "Shin-Ei Animation",
+          5
+        ],
+        [
+          "Kinema Citrus",
+          5
+        ],
+        [
+          "Studio Pierrot",
+          4
+        ],
+        [
+          "Studio Deen",
+          4
+        ],
+        [
+          "Bandai Namco Pictures",
+          4
+        ],
+        [
+          "Actas",
+          4
+        ]
+      ]
+    },
+    "producers": {
+      "rows_present": 171,
+      "distinct": 182,
+      "top": [
+        [
+          "Kadokawa",
+          11
+        ],
+        [
+          "Aniplex",
+          10
+        ],
+        [
+          "Pony Canyon",
+          9
+        ],
+        [
+          "Studio Mausu",
+          7
+        ],
+        [
+          "Bandai Visual",
+          6
+        ],
+        [
+          "Lantis",
+          6
+        ],
+        [
+          "TV Asahi",
+          6
+        ],
+        [
+          "TV Tokyo",
+          6
+        ],
+        [
+          "Shochiku",
+          5
+        ],
+        [
+          "bilibili",
+          5
+        ],
+        [
+          "Bit grooove promotion",
+          5
+        ],
+        [
+          "Fuji TV",
+          5
+        ],
+        [
+          "Tencent Video",
+          4
+        ],
+        [
+          "Bandai",
+          4
+        ],
+        [
+          "Nagoya Broadcasting Network",
+          4
+        ]
+      ]
+    }
+  },
+  "episodes": {
+    "series_sampled": 40,
+    "episodes_total": 3425,
+    "with_sub": 3425,
+    "with_dub": 1670,
+    "dub_coverage_pct": 48.8,
+    "hsub_seen": false,
+    "episode_keys": [
+      "embed_url",
+      "episode_embed_id",
+      "id",
+      "jp_title",
+      "number",
+      "title",
+      "updated_at"
+    ],
+    "embed_keys": [
+      "dub",
+      "sub"
+    ],
+    "hosts": [
+      "megaplay.buzz"
+    ],
+    "zero_episode_series": [
+      9374,
+      9412,
+      9469,
+      9485,
+      9525,
+      9568,
+      9570
+    ],
+    "declared_exact": [
+      7072,
+      7959,
+      859,
+      8738,
+      8801,
+      8935,
+      8972,
+      8989,
+      9455,
+      9474,
+      9518,
+      9583
+    ],
+    "declared_short": [
+      8630,
+      8854,
+      8903,
+      9027,
+      9048,
+      9063,
+      9073,
+      9076,
+      9080,
+      9086,
+      9100,
+      9110,
+      9127,
+      9374,
+      9412,
+      9469,
+      9485,
+      9525,
+      9568,
+      9570,
+      9581,
+      9584
+    ],
+    "declared_over": [
+      976
+    ],
+    "declared_absent": [
+      1458,
+      1642,
+      6485,
+      7619,
+      9050
+    ],
+    "duplicate_numbers": [
+      976
+    ],
+    "gaps": [
+      7619,
+      976
+    ],
+    "not_ascending": []
+  },
+  "sync": {
+    "catalog_requests": 95,
+    "catalog_payload_bytes_est": 11766605,
+    "catalog_seconds_at_0_5rps": 190,
+    "backfill_requests": 9404,
+    "backfill_seconds_at_0_5rps": 18808
+  }
+}
