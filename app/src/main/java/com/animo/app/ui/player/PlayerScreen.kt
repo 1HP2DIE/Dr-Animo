@@ -72,6 +72,7 @@ import com.animo.app.ui.common.ErrorState
 import com.animo.app.ui.common.displayTitle
 import com.animo.app.ui.common.formatClock
 import com.animo.app.ui.common.labelRes
+import com.animo.app.ui.settings.SettingsPreferences
 import com.animo.app.ui.theme.AnimoPalette
 import kotlinx.coroutines.delay
 
@@ -186,6 +187,13 @@ private fun PlayerStage(
     val texts by controller.texts.collectAsState()
     val selectedTextId by controller.selectedTextId.collectAsState()
 
+    // "Autoplay next" was a Settings switch nothing read. Reading it here is the only place it can
+    // take effect, because this is where a playback actually ends.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val autoplayNext by remember(context) {
+        SettingsPreferences(context).autoplayNext
+    }.collectAsState(initial = true)
+
     var speed by remember { mutableStateOf(surfaceState.speed) }
     LaunchedEffect(speed) { surfaceState.setSpeed(speed) }
 
@@ -267,6 +275,9 @@ private fun PlayerStage(
                 startPositionMs = model.startPositionMs,
                 modifier = Modifier.fillMaxSize(),
                 controller = controller,
+                onEnded = {
+                    if (autoplayNext) viewModel.next()
+                },
             )
         }
 

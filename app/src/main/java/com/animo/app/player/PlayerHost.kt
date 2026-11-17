@@ -56,6 +56,8 @@ fun PlayerHost(
     reResolve: (suspend () -> PlayableStream?)? = null,
     /** Integration hook for the UI overlay: receives the live player, and `null` on dispose. */
     onPlayerAvailable: ((Player?) -> Unit)? = null,
+    /** Fired once when playback reaches the end, so the caller can honour "autoplay next". */
+    onEnded: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -81,6 +83,7 @@ fun PlayerHost(
     val latestOnProgress by rememberUpdatedState(onProgress)
     val latestOnError by rememberUpdatedState(onError)
     val latestReResolve by rememberUpdatedState(reResolve)
+    val latestOnEnded by rememberUpdatedState(onEnded)
 
     val player = remember(source) {
         Media3Factory.buildPlayer(
@@ -99,6 +102,7 @@ fun PlayerHost(
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_READY) latestOnError(null)
+                if (playbackState == Player.STATE_ENDED) latestOnEnded?.invoke()
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {

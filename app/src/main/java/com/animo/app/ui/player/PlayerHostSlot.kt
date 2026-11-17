@@ -47,6 +47,7 @@ internal fun PlayerHostSlot(
     startPositionMs: Long,
     modifier: Modifier = Modifier,
     controller: com.animo.app.player.PlayerController? = null,
+    onEnded: (() -> Unit)? = null,
 ) {
     var stream by remember { mutableStateOf<PlayableStream?>(null) }
     var failure by remember { mutableStateOf<Throwable?>(null) }
@@ -148,5 +149,6 @@ internal fun PlayerHostSlot(
         modifier = modifier,
         reResolve = { masterUrlProvider().getOrNull() },
         onPlayerAvailable = { livePlayer -> player = livePlayer },
+        onEnded = onEnded,
     )
 }
