@@ -51,24 +51,38 @@ class AltStreamSource(
 
     private val cache = ConcurrentHashMap<String, Cached>()
 
-    override suspend fun languages(anilistId: String, episode: Episode): List<AltStreamAudio> =
-        withContext(dispatcher) {
-            load(anilistId, episode, audioCode = null)?.payload?.audioTracks.orEmpty()
-        }
+    override suspend fun languages(
+        anilistId: String,
+        episode: Episode,
+        seasonHint: Int?,
+        year: Int?,
+    ): List<AltStreamAudio> = withContext(dispatcher) {
+        val loaded = load(anilistId, episode, seasonHint ?: 1, audioCode = null) ?: return@withContext emptyList()
+        if (!seasonPlausible(loaded.payload, seasonHint, year)) return@withContext emptyList()
+        loaded.payload.audioTracks
+    }
 
     override suspend fun resolve(
         anilistId: String,
         episode: Episode,
         audio: AudioTrack,
         languageId: String?,
+        seasonHint: Int?,
+        year: Int?,
     ): Result<PlayableStream> = withContext(dispatcher) {
         val audioCode = languageId?.takeIf { it.isNotBlank() }
             ?: AltStreamProtocol.preferredAudio(audio)
 
-        val loaded = load(anilistId, episode, audioCode)
+        val loaded = load(anilistId, episode, seasonHint ?: 1, audioCode)
             ?: return@withContext Result.failure(
                 ResolveException.NotFound("no playable source for this episode"),
             )
+
+        if (!seasonPlausible(loaded.payload, seasonHint, year)) {
+            return@withContext Result.failure(
+                ResolveException.NotFound("this server only has an earlier season"),
+            )
+        }
 
         val source = AltStreamProtocol.pick(loaded.payload)
             ?: return@withContext Result.failure(
@@ -85,18 +99,23 @@ class AltStreamSource(
      * `defaultAudio` into the proxy paths, so a cached probe (no audio) must not be reused for a
      * specific language.
      */
-    private fun load(anilistId: String, episode: Episode, audioCode: String?): Cached? {
+    private fun load(
+        anilistId: String,
+        episode: Episode,
+        season: Int,
+        audioCode: String?,
+    ): Cached? {
         val id = anilistId.trim()
         if (id.isBlank()) return null
 
-        val key = "$id:${episode.number}:${audioCode ?: "-"}"
+        val key = "$id:$season:${episode.number}:${audioCode ?: "-"}"
         cache[key]?.takeIf { now() - it.atMs < CACHE_TTL_MS }?.let { return it }
 
         val available = shards().map { it.trim().trimEnd('/') }.filter { it.isNotEmpty() }
         if (available.isEmpty()) return null
 
         val start = AltStreamProtocol.shardIndex(
-            AltStreamProtocol.seed("anime", id, SEASON, episode.number),
+            AltStreamProtocol.seed("anime", id, season, episode.number),
             available.size,
         )
 
@@ -106,7 +125,7 @@ class AltStreamSource(
                 shard = shard,
                 type = "anime",
                 id = id,
-                season = SEASON,
+                season = season,
                 episode = episode.number,
                 audio = audioCode,
                 timestampMs = now(),
@@ -120,6 +139,19 @@ class AltStreamSource(
             return cached
         }
         return null
+    }
+
+    /**
+     * Guards against the server answering with an earlier season.
+     *
+     * Its metadata resolves to the *base* show (same title/year for every season), so the only
+     * signal is the year: if our title is from a later year and we had no season to ask for, the
+     * season-1 asset is almost certainly the wrong video. Refusing is better than playing it.
+     */
+    private fun seasonPlausible(payload: AltStreamPayload, seasonHint: Int?, year: Int?): Boolean {
+        if (seasonHint != null || year == null) return true
+        val metaYear = payload.diagnostics?.targetMeta?.year?.toIntOrNull() ?: return true
+        return year <= metaYear + 1
     }
 
     private fun stream(shard: String, source: AltStreamEntry, audio: AudioTrack): PlayableStream =
@@ -154,9 +186,6 @@ class AltStreamSource(
     }
 
     private companion object {
-        /** Anime is always season 1 in this server's index; the episode number carries the rest. */
-        const val SEASON = 1
-
         /** A quota-limited account answers 429 on every shard, so there is no point trying all 100. */
         const val MAX_SHARD_ATTEMPTS = 3
 

@@ -34,6 +34,9 @@ class StreamRepositoryImpl(
     private val alternative: AlternativeStreamSource? = null,
     /** AniList id for the catalogue row, read lazily so this layer never touches Room directly. */
     private val anilistIdOf: suspend (animeId: Int) -> String? = { null },
+    /** Titles and year of the row, used to pick the right season on the alternative server. */
+    private val animeTitlesOf: suspend (animeId: Int) -> List<String> = { emptyList() },
+    private val animeYearOf: suspend (animeId: Int) -> Int? = { null },
 ) : StreamRepository {
 
     private data class Key(
@@ -91,7 +94,19 @@ class StreamRepositoryImpl(
             var last: Result<PlayableStream>? = null
             for (candidate in order) {
                 val attempt = when (candidate) {
-                    StreamServer.PRIMARY -> resolvePrimary(episode, audio)
+                    StreamServer.PRIMARY -> {
+                        // The primary only has the original and the English dub. Falling back to it
+                        // for a language it does not carry (Hindi, Tamil, …) would silently switch
+                        // the audio, which is worse than saying the episode is unavailable there.
+                        val primaryAudio = primaryAudioFor(languageId)
+                        if (primaryAudio == null) {
+                            Result.failure(
+                                ResolveException.NotFound("that language is not on this server"),
+                            )
+                        } else {
+                            resolvePrimary(episode, primaryAudio)
+                        }
+                    }
                     StreamServer.ALTERNATIVE -> resolveAlternative(animeId, episode, audio, languageId)
                 }
                 if (attempt.isSuccess) {
@@ -139,7 +154,9 @@ class StreamRepositoryImpl(
                 ServerOption(StreamServer.ALTERNATIVE, probed = true, reachable = false),
             )
 
-        val tracks = runCatching { alternative.languages(anilistId, episode) }.getOrDefault(emptyList())
+        val tracks = runCatching {
+            alternative.languages(anilistId, episode, seasonHintOf(animeId), yearOf(animeId))
+        }.getOrDefault(emptyList())
         return listOf(
             primary,
             ServerOption(
@@ -163,6 +180,22 @@ class StreamRepositoryImpl(
             ),
         )
     }
+
+    /**
+     * Which primary track can satisfy a requested language: the original track speaks for `sub`/`ja`,
+     * the English dub for `dub`/`en`. Anything else has no equivalent on that server.
+     */
+    private fun primaryAudioFor(languageId: String?): AudioTrack? = when (languageId) {
+        null, "sub", "ja" -> AudioTrack.SUB
+        "dub", "en" -> AudioTrack.DUB
+        else -> null
+    }
+
+    private suspend fun seasonHintOf(animeId: Int): Int? =
+        runCatching { com.animo.app.player.AltStreamProtocol.seasonFromTitle(animeTitlesOf(animeId)) }
+            .getOrNull()
+
+    private suspend fun yearOf(animeId: Int): Int? = runCatching { animeYearOf(animeId) }.getOrNull()
 
     private suspend fun resolvePrimary(
         episode: Episode,
@@ -201,7 +234,14 @@ class StreamRepositoryImpl(
             "dub" -> "en"
             else -> languageId
         }
-        return source.resolve(anilistId, episode, audio, altLanguage)
+        return source.resolve(
+            anilistId = anilistId,
+            episode = episode,
+            audio = audio,
+            languageId = altLanguage,
+            seasonHint = seasonHintOf(animeId),
+            year = yearOf(animeId),
+        )
             .onFailure { error ->
                 AppLog.w("alternative source failed for ep${episode.id}: ${error.message}")
             }

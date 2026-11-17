@@ -50,6 +50,24 @@ class AltStreamLiveTest {
     )
 
     @Test
+    fun `the season parameter selects a different asset`() = runBlocking {
+        val source = AltStreamSource(client)
+
+        // Dr. STONE: the catalogue row is "3rd Season Part 2" (AniList 162670).
+        val season1 = withTimeout(180_000) {
+            source.resolve("162670", episode(1), AudioTrack.SUB, "ja", seasonHint = 1, year = 2023)
+        }.getOrThrow()
+        val season3 = withTimeout(180_000) {
+            source.resolve("162670", episode(1), AudioTrack.SUB, "ja", seasonHint = 3, year = 2023)
+        }.getOrThrow()
+
+        assertTrue(
+            "season 1 and season 3 resolved to the same asset — the season was ignored",
+            season1.masterUrl != season3.masterUrl,
+        )
+    }
+
+    @Test
     fun `one piece episode one resolves to a proxied playlist`() = runBlocking {
         val source = AltStreamSource(client)
         val stream = withTimeout(180_000) {

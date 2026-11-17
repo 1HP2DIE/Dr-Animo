@@ -45,6 +45,29 @@ object AltStreamProtocol {
         append("&_t=").append(timestampMs)
     }
 
+    /**
+     * The season a catalogue title names, if it names one.
+     *
+     * The alternative server indexes one TMDB show and takes a **season number**; without it every
+     * season request lands on season 1 (verified: season 1/2/3/4 of Dr. STONE return different
+     * assets). Catalogue titles say it in several ways, so all of them are read here.
+     */
+    fun seasonFromTitle(titles: List<String>): Int? {
+        for (title in titles) {
+            SEASON_WORD.find(title)?.groupValues?.get(1)?.toIntOrNull()?.let { return it }
+            ORDINAL_SEASON.find(title)?.groupValues?.get(1)?.toIntOrNull()?.let { return it }
+            ROMAN_SEASON.find(title)?.let { match ->
+                ROMAN[match.groupValues[1].lowercase()]?.let { return it }
+            }
+        }
+        return null
+    }
+
+    private val SEASON_WORD = Regex("""(?i)\bseason\s*0*(\d{1,2})\b""")
+    private val ORDINAL_SEASON = Regex("""(?i)\b0*(\d{1,2})(?:st|nd|rd|th)\s+season\b""")
+    private val ROMAN_SEASON = Regex("""(?i)\bseason\s+(i{1,3}|iv|v)\b""")
+    private val ROMAN = mapOf("i" to 1, "ii" to 2, "iii" to 3, "iv" to 4, "v" to 5)
+
     /** The user's SUB/DUB switch, in this source's language vocabulary. */
     fun preferredAudio(audio: AudioTrack): String = when (audio) {
         // Anime ships Japanese-first; this source treats "ja" as the original.

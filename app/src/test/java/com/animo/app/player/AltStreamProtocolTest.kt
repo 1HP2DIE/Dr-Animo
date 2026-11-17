@@ -124,6 +124,16 @@ class AltStreamProtocolTest {
     }
 
     @Test
+    fun `the season is read from every title spelling`() {
+        assertEquals(3, AltStreamProtocol.seasonFromTitle(listOf("Dr. Stone 3rd Season Part 2")))
+        assertEquals(2, AltStreamProtocol.seasonFromTitle(listOf("Some Show Season 2")))
+        assertEquals(4, AltStreamProtocol.seasonFromTitle(listOf("Show: Season 4")))
+        assertEquals(3, AltStreamProtocol.seasonFromTitle(listOf("Show Season III")))
+        assertNull(AltStreamProtocol.seasonFromTitle(listOf("Dr. Stone: New World")))
+        assertNull(AltStreamProtocol.seasonFromTitle(emptyList()))
+    }
+
+    @Test
     fun `sub prefers the original, dub prefers hindi`() {
         assertEquals("ja", AltStreamProtocol.preferredAudio(AudioTrack.SUB))
         assertEquals("hi", AltStreamProtocol.preferredAudio(AudioTrack.DUB))

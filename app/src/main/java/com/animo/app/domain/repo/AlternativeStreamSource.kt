@@ -26,9 +26,17 @@ interface AlternativeStreamSource {
         audio: AudioTrack,
         /** A server language id (`hi`, `en`, `ja`, …); null means "server default". */
         languageId: String? = null,
+        /** Season from the catalogue title, `null` when the title does not name one. */
+        seasonHint: Int? = null,
+        /** Catalogue year, used to notice that a season-1 answer is really an older season. */
+        year: Int? = null,
     ): Result<PlayableStream>
 
     /** The languages this server carries for the episode, best-effort. */
-    suspend fun languages(anilistId: String, episode: Episode): List<com.animo.app.player.AltStreamAudio> =
-        emptyList()
+    suspend fun languages(
+        anilistId: String,
+        episode: Episode,
+        seasonHint: Int? = null,
+        year: Int? = null,
+    ): List<com.animo.app.player.AltStreamAudio> = emptyList()
 }

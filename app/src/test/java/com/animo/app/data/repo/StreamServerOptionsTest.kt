@@ -64,13 +64,23 @@ class StreamServerOptionsTest {
             episode: Episode,
             audio: AudioTrack,
             languageId: String?,
+            seasonHint: Int?,
+            year: Int?,
         ): Result<PlayableStream> {
             calls++
             lastLanguage = languageId
+            lastSeason = seasonHint
             return result
         }
 
-        override suspend fun languages(anilistId: String, episode: Episode): List<AltStreamAudio> = tracks
+        var lastSeason: Int? = null
+
+        override suspend fun languages(
+            anilistId: String,
+            episode: Episode,
+            seasonHint: Int?,
+            year: Int?,
+        ): List<AltStreamAudio> = tracks
     }
 
     private fun repository(
@@ -204,6 +214,48 @@ class StreamServerOptionsTest {
 
         assertEquals(0, primary.calls)
         assertEquals("ja", alternative.lastLanguage)
+    }
+
+    @Test
+    fun `a language the fallback does not carry is not silently swapped`() = runBlocking {
+        val primary = FakeResolver(Result.success(stream))
+        val alternative = FakeAlternative(Result.failure(ResolveException.NotFound("down")))
+
+        // Hindi lives on the multi-language server; the primary only has original + English.
+        val result = repository(primary, alternative)
+            .resolve(1, episode, AudioTrack.DUB, StreamServer.ALTERNATIVE, "hi")
+
+        assertTrue(result.isFailure)
+        assertEquals(0, primary.calls)
+    }
+
+    @Test
+    fun `english falls back to the primary dub`() = runBlocking {
+        val primary = FakeResolver(Result.success(stream))
+        val alternative = FakeAlternative(Result.failure(ResolveException.NotFound("down")))
+
+        val result = repository(primary, alternative)
+            .resolve(1, episode, AudioTrack.SUB, StreamServer.ALTERNATIVE, "en")
+
+        assertTrue(result.isSuccess)
+        assertEquals(1, primary.calls)
+        assertEquals(AudioTrack.DUB, primary.lastAudio)
+    }
+
+    @Test
+    fun `the season is read from the title before the server is asked`() = runBlocking {
+        val alternative = FakeAlternative(Result.success(stream))
+        val repo = StreamRepositoryImpl(
+            resolverProvider = { FakeResolver(Result.success(stream)) },
+            alternative = alternative,
+            anilistIdOf = { "162670" },
+            animeTitlesOf = { listOf("Dr. Stone 3rd Season Part 2") },
+            animeYearOf = { 2023 },
+        )
+
+        repo.resolve(1, episode, AudioTrack.SUB, StreamServer.ALTERNATIVE, "ja")
+
+        assertEquals(3, alternative.lastSeason)
     }
 
     @Test

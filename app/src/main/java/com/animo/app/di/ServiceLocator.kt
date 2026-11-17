@@ -132,6 +132,10 @@ object ServiceLocator {
                 // tracks. The AniList id comes from the catalogue row, read on demand.
                 alternative = AltStreamSource(httpClient),
                 anilistIdOf = { id -> animeDao.findById(id)?.aniId?.takeIf { it.isNotBlank() } },
+                animeTitlesOf = { id ->
+                    animeDao.findById(id)?.let { row -> listOf(row.title, row.alternative) }.orEmpty()
+                },
+                animeYearOf = { id -> animeDao.findById(id)?.year },
             ),
             hindi = { hindiStreamRef.get() },
         )
