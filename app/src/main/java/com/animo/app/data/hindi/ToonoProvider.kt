@@ -464,7 +464,13 @@ class ToonoProvider(private val http: OkHttpClient) {
         val CARD_TITLE = Regex("<h2 class=\"entry-title\">(.*?)</h2>", RegexOption.DOT_MATCHES_ALL)
         val CARD_LINK = Regex("href=\"https://toono\\.app/((?:series|movies)/[^\"/]+)/\"")
         val CARD_SLUG = Regex("href=\"https://toono\\.app/(?:series|movies)/([^\"/]+)/\"")
-        val CARD_POSTER = Regex("<img src=\"([^\"]+)\"")
+/**
+ * The movie card template emits `<img class="trs" src="…">` while the series card emits
+ * `<img src="…">`, so requiring `src` to be the first attribute silently dropped every movie cover:
+ * 618 of the 633 poster-less rows in the catalogue, all of them `type=Movie`. The leading `\s` keeps
+ * the match off `data-src` / `data-lazy-src`.
+ */
+        val CARD_POSTER = Regex("<img[^>]*?\\ssrc=\"([^\"]+)\"")
         val CARD_YEAR = Regex("<span class=\"year\">(\\d{4})</span>")
         val CARD_GENRES = Regex(
             "<li class=\"rw sm\"><span>Genres</span><span>(.*?)</span></li>",
