@@ -28,6 +28,21 @@ object Changelog {
 
     val releases: List<Release> = listOf(
         Release(
+            version = "1.3.0",
+            date = "17 Nov 2026",
+            headline = "Home rebuilt around shelves, and a warmer, easier-to-read look.",
+            changes = listOf(
+                Change(ChangeKind.NEW, "Home is now shelves — continue watching, new Hindi dubs, recently updated and top rated"),
+                Change(ChangeKind.NEW, "Hindi titles have their own row, so the English catalogue is no longer buried"),
+                Change(ChangeKind.NEW, "A Hindi tag on every Hindi poster, and one tap to browse only Hindi"),
+                Change(ChangeKind.IMPROVED, "Titles now sit under the poster instead of on top of the artwork, so long names are readable"),
+                Change(ChangeKind.IMPROVED, "A warmer light theme, with text that stays readable over every poster"),
+                Change(ChangeKind.IMPROVED, "The home banner blends into the page and shows how much of the catalogue is Hindi"),
+                Change(ChangeKind.IMPROVED, "Genre shortcuts in the drawer are now the popular ones instead of odd stray names"),
+                Change(ChangeKind.FIXED, "Thousands of Hindi titles had no artwork — most of them now show their poster"),
+            ),
+        ),
+        Release(
             version = "1.2.0",
             date = "17 Nov 2026",
             headline = "Hindi dub is here: 2,900+ titles, playing inside the app.",
