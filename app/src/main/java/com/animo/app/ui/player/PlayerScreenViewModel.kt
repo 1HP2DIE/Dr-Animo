@@ -127,6 +127,16 @@ class PlayerScreenViewModel(
         current.previousEpisode?.let { open(it, current.audio, reloadToken = 0, startPositionMs = null) }
     }
 
+    /**
+     * Jump to another episode from the in-player drawer. Uses the resume position the repository
+     * stored for that episode, and keeps the current audio preference.
+     */
+    fun selectEpisode(episode: Episode) {
+        val current = current() ?: return
+        if (episode.id == current.episode.id) return
+        open(episode, current.audio, reloadToken = 0, startPositionMs = null)
+    }
+
     fun selectAudio(audio: AudioTrack) {
         val current = current() ?: return
         if (audio == current.audio) return

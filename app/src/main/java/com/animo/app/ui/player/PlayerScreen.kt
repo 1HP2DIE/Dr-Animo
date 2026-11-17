@@ -5,7 +5,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,8 +22,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.automirrored.rounded.List
 import androidx.compose.material.icons.rounded.Forward10
+import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Replay10
@@ -43,14 +43,19 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -59,6 +64,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.animo.app.R
 import com.animo.app.domain.model.AudioTrack
 import com.animo.app.domain.model.PlayableStream
+import com.animo.app.player.PlayerController
 import com.animo.app.ui.LocalAppContainer
 import com.animo.app.ui.UiState
 import com.animo.app.ui.common.LoadingState
@@ -70,6 +76,9 @@ import com.animo.app.ui.theme.AnimoPalette
 import kotlinx.coroutines.delay
 
 private const val CONTROLS_AUTO_HIDE_MS = 3_000L
+
+/** "End of episode" sleep mode pauses this close to the end instead of waiting for a state change. */
+private const val END_OF_EPISODE_GRACE_MS = 700L
 private const val SKIP_MS = 10_000L
 
 /** Near-white rather than #FFFFFF: the player chrome never uses a pure colour. */
@@ -150,10 +159,35 @@ private fun PlayerStage(
     val surfaceState = remember(model.episode.id, model.audio, model.reloadToken) {
         PlayerSurfaceState()
     }
-    val tapInteraction = remember { MutableInteractionSource() }
+    val scope = rememberCoroutineScope()
     var controlsVisible by remember { mutableStateOf(true) }
-    var qualitySheetVisible by remember { mutableStateOf(false) }
+    var settingsVisible by remember { mutableStateOf(false) }
+    var episodesVisible by remember { mutableStateOf(false) }
     var scrubPositionMs by remember { mutableStateOf<Long?>(null) }
+
+    // Sleep timer: null = off, 0 = "end of episode", else the minutes that were picked.
+    var sleepMinutes by remember { mutableStateOf<Int?>(null) }
+    var sleepRemainingMs by remember { mutableLongStateOf(0L) }
+
+    // One controller per route, not per source: PlayerHost attaches/detaches it on every rebuild,
+    // which is what keeps the chosen quality and subtitle preference across an episode change.
+    val controller = remember(viewModel) {
+        PlayerController(
+            scope = scope,
+            switchAudio = null,
+            onNext = viewModel::next,
+            onPrev = viewModel::previous,
+        )
+    }
+    val qualities by controller.qualities.collectAsState()
+    val activeQualityId by controller.activeQualityId.collectAsState()
+    val audios by controller.audios.collectAsState()
+    val selectedAudioId by controller.selectedAudioTrackId.collectAsState()
+    val texts by controller.texts.collectAsState()
+    val selectedTextId by controller.selectedTextId.collectAsState()
+
+    var speed by remember { mutableStateOf(surfaceState.speed) }
+    LaunchedEffect(speed) { surfaceState.setSpeed(speed) }
 
     val onProgress = remember(viewModel) { { position: Long, duration: Long ->
         viewModel.onProgress(position, duration)
@@ -174,8 +208,41 @@ private fun PlayerStage(
         onDispose { viewModel.flushProgress() }
     }
 
-    LaunchedEffect(controlsVisible, surfaceState.isPlaying, qualitySheetVisible) {
-        if (controlsVisible && surfaceState.isPlaying && !qualitySheetVisible) {
+    /**
+     * One effect for both sleep modes, keyed only on the choice. Re-keying on `isPlaying` would reset
+     * the countdown every time the user paused, which is exactly what a sleep timer must not do.
+     */
+    LaunchedEffect(sleepMinutes) {
+        when (val minutes = sleepMinutes) {
+            null -> Unit
+            // "End of episode": poll cheaply; the position only moves while playing anyway.
+            0 -> {
+                while (true) {
+                    delay(500L)
+                    val duration = surfaceState.durationMs
+                    if (duration > 0 &&
+                        surfaceState.positionMs >= duration - END_OF_EPISODE_GRACE_MS
+                    ) {
+                        surfaceState.pause()
+                        sleepMinutes = null
+                        break
+                    }
+                }
+            }
+            else -> {
+                sleepRemainingMs = minutes * 60_000L
+                while (sleepRemainingMs > 0L) {
+                    delay(1_000L)
+                    if (surfaceState.isPlaying) sleepRemainingMs -= 1_000L
+                }
+                surfaceState.pause()
+                sleepMinutes = null
+            }
+        }
+    }
+
+    LaunchedEffect(controlsVisible, surfaceState.isPlaying, settingsVisible, episodesVisible) {
+        if (controlsVisible && surfaceState.isPlaying && !settingsVisible && !episodesVisible) {
             delay(CONTROLS_AUTO_HIDE_MS)
             controlsVisible = false
         }
@@ -183,7 +250,8 @@ private fun PlayerStage(
 
     BackHandler {
         when {
-            qualitySheetVisible -> qualitySheetVisible = false
+            settingsVisible -> settingsVisible = false
+            episodesVisible -> episodesVisible = false
             controlsVisible -> controlsVisible = false
             else -> onBack()
         }
@@ -198,17 +266,26 @@ private fun PlayerStage(
                 state = surfaceState,
                 startPositionMs = model.startPositionMs,
                 modifier = Modifier.fillMaxSize(),
+                controller = controller,
             )
         }
 
-        // Invisible tap target under the controls: shows/hides the overlay.
+        // Invisible tap target under the controls: single tap shows/hides the overlay, double tap
+        // seeks ±10 s from the half you tapped. Double-tap is the gesture people already expect on a
+        // video, and it costs one pointer handler on this box.
         Box(
             Modifier
                 .matchParentSize()
-                .clickable(
-                    interactionSource = tapInteraction,
-                    indication = null,
-                ) { controlsVisible = !controlsVisible },
+                .pointerInput(surfaceState) {
+                    detectTapGestures(
+                        onTap = { controlsVisible = !controlsVisible },
+                        onDoubleTap = { offset ->
+                            val forward = offset.x >= size.width / 2f
+                            surfaceState.skipBy(if (forward) SKIP_MS else -SKIP_MS)
+                            controlsVisible = true
+                        },
+                    )
+                },
         )
 
         if (!controlsVisible && surfaceState.isBuffering && model.errorMessage == null) {
@@ -238,10 +315,15 @@ private fun PlayerStage(
                     scrubPositionMs = null
                 },
                 onBack = onBack,
-                onOpenQuality = {
-                    qualitySheetVisible = true
+                onOpenSettings = {
+                    settingsVisible = true
                     controlsVisible = true
                 },
+                onOpenEpisodes = {
+                    episodesVisible = true
+                    controlsVisible = true
+                },
+                sleepActive = sleepMinutes != null,
                 onToggleAudio = viewModel::toggleAudio,
                 onNext = viewModel::next,
                 onPrevious = viewModel::previous,
@@ -262,9 +344,44 @@ private fun PlayerStage(
             )
         }
 
-        if (qualitySheetVisible) {
-            PlayerQualitySheet(
-                onDismiss = { qualitySheetVisible = false },
+        EpisodeDrawer(
+            visible = episodesVisible,
+            episodes = model.episodes,
+            currentEpisodeId = model.episode.id,
+            progress = emptyMap(),
+            onSelect = { episode ->
+                episodesVisible = false
+                viewModel.selectEpisode(episode)
+            },
+            onDismiss = { episodesVisible = false },
+        )
+
+        if (settingsVisible) {
+            PlayerSettingsSheet(
+                tuning = PlayerTuning(
+                    qualities = qualities.map { QualityRow(it.id, it.label, it.height, it.bitrate) },
+                    activeQualityId = activeQualityId,
+                    audios = audios.map { TrackRow(it.id, it.label) },
+                    selectedAudioId = selectedAudioId,
+                    texts = texts.map { TrackRow(it.id, it.label) },
+                    selectedTextId = selectedTextId,
+                    speed = speed,
+                    hasQualities = qualities.size > 1,
+                    hasAudioTracks = audios.size > 1,
+                ),
+                sleepMinutesLeft = sleepMinutes,
+                onDismiss = { settingsVisible = false },
+                onSelectQuality = controller::selectQuality,
+                onSelectAudio = controller::selectAudioTrack,
+                onSelectText = controller::selectTextTrack,
+                onSelectSpeed = { value ->
+                    speed = value
+                    surfaceState.setSpeed(value)
+                },
+                onSelectSleep = { minutes ->
+                    sleepMinutes = minutes
+                    sleepRemainingMs = (minutes ?: 0) * 60_000L
+                },
             )
         }
     }
@@ -278,7 +395,9 @@ private fun PlayerControlsOverlay(
     onScrub: (Long) -> Unit,
     onSeek: (Long) -> Unit,
     onBack: () -> Unit,
-    onOpenQuality: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenEpisodes: () -> Unit,
+    sleepActive: Boolean,
     onToggleAudio: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -344,10 +463,17 @@ private fun PlayerControlsOverlay(
             if (model.canSwitchAudio) {
                 AudioSwitchChip(audio = model.audio, onClick = onToggleAudio)
             }
-            IconButton(onClick = onOpenQuality) {
+            IconButton(onClick = onOpenEpisodes) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.List,
+                    contentDescription = stringResource(R.string.ui_player_episodes),
+                    tint = PlayerForeground,
+                )
+            }
+            IconButton(onClick = onOpenSettings) {
                 Icon(
                     imageVector = Icons.Rounded.Tune,
-                    contentDescription = stringResource(R.string.ui_player_quality),
+                    contentDescription = stringResource(R.string.ui_player_settings),
                     tint = PlayerForeground,
                 )
             }
@@ -526,107 +652,6 @@ private fun PlayerErrorCard(
             TextButton(onClick = onRetry) {
                 Text(stringResource(R.string.action_retry))
             }
-        }
-    }
-}
-
-/**
- * Quality picker. `PlayableStream` (the resolver contract) exposes a single master playlist URL and
- * no rendition list, so the sheet always offers "Auto" — HLS ABR picks the variant. The list is
- * intentionally data-driven: if the resolver ever returns explicit qualities this renders them.
- */
-@Composable
-private fun PlayerQualitySheet(
-    onDismiss: () -> Unit,
-) {
-    val scrimInteraction = remember { MutableInteractionSource() }
-    val sheetInteraction = remember { MutableInteractionSource() }
-    val qualities = remember { emptyList<String>() }
-
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Color(0xB3000000))
-            .clickable(
-                interactionSource = scrimInteraction,
-                indication = null,
-                onClick = onDismiss,
-            ),
-    ) {
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainer)
-                .clickable(
-                    interactionSource = sheetInteraction,
-                    indication = null,
-                    onClick = {},
-                )
-                .navigationBarsPadding()
-                .padding(vertical = 14.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.ui_player_quality),
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            QualityRow(
-                label = stringResource(R.string.ui_player_quality_auto),
-                hint = stringResource(R.string.ui_player_quality_auto_hint),
-                selected = true,
-                onClick = onDismiss,
-            )
-            qualities.forEach { quality ->
-                QualityRow(
-                    label = quality,
-                    hint = null,
-                    selected = false,
-                    onClick = onDismiss,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun QualityRow(
-    label: String,
-    hint: String?,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            if (hint != null) {
-                Text(
-                    text = hint,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        if (selected) {
-            Icon(
-                imageVector = Icons.Rounded.Check,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp),
-            )
         }
     }
 }

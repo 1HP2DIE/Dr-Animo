@@ -46,6 +46,7 @@ internal fun PlayerHostSlot(
     state: PlayerSurfaceState,
     startPositionMs: Long,
     modifier: Modifier = Modifier,
+    controller: com.animo.app.player.PlayerController? = null,
 ) {
     var stream by remember { mutableStateOf<PlayableStream?>(null) }
     var failure by remember { mutableStateOf<Throwable?>(null) }
@@ -83,12 +84,16 @@ internal fun PlayerHostSlot(
     DisposableEffect(player) {
         val active = player
         if (active != null) {
+            // A new source builds a new ExoPlayer, so speed has to be re-applied rather than assumed.
+            active.setPlaybackSpeed(state.speed)
             state.bind(
                 togglePlayPause = { if (active.isPlaying) active.pause() else active.play() },
                 seekTo = { positionMs -> active.seekTo(positionMs.coerceAtLeast(0L)) },
                 skipBy = { deltaMs ->
                     active.seekTo((active.currentPosition + deltaMs).coerceAtLeast(0L))
                 },
+                pause = { active.pause() },
+                setSpeed = { value -> active.setPlaybackSpeed(value) },
             )
         }
         onDispose { state.unbind() }
@@ -139,7 +144,7 @@ internal fun PlayerHostSlot(
         startPositionMs = startPositionMs,
         onProgress = onProgress,
         onError = { error -> error?.let(onError) },
-        controller = null,
+        controller = controller,
         modifier = modifier,
         reResolve = { masterUrlProvider().getOrNull() },
         onPlayerAvailable = { livePlayer -> player = livePlayer },

@@ -66,6 +66,9 @@
 
     <!-- Player -->
     <string name="ui_player_quality">Quality</string>
+    <string name="ui_player_settings">Playback settings</string>
+    <string name="ui_player_episodes">Episodes</string>
+    <string name="ui_player_sleep_armed">Sleep timer armed</string>
     <string name="ui_player_quality_auto">Auto</string>
     <string name="ui_player_quality_auto_hint">Adaptive — taken from the master playlist</string>
     <string name="ui_player_error_title">Playback failed</string>

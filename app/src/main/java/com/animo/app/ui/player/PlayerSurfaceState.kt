@@ -36,16 +36,22 @@ class PlayerSurfaceState {
     private val position = mutableLongStateOf(0L)
     private val duration = mutableLongStateOf(0L)
     private val buffered = mutableLongStateOf(0L)
+    private val speedState = mutableStateOf(1f)
 
     private var togglePlayPauseCommand: (() -> Unit)? = null
     private var seekToCommand: ((Long) -> Unit)? = null
     private var skipByCommand: ((Long) -> Unit)? = null
+    private var pauseCommand: (() -> Unit)? = null
+    private var speedCommand: ((Float) -> Unit)? = null
 
     val isPlaying: Boolean get() = playing.value
     val isBuffering: Boolean get() = buffering.value
     val positionMs: Long get() = position.value
     val durationMs: Long get() = duration.value
     val bufferedMs: Long get() = buffered.value
+
+    /** Playback speed as last requested by the UI; survives a source swap because the slot re-applies it. */
+    val speed: Float get() = speedState.value
 
     fun update(
         positionMs: Long,
@@ -65,16 +71,22 @@ class PlayerSurfaceState {
         togglePlayPause: () -> Unit,
         seekTo: (Long) -> Unit,
         skipBy: (Long) -> Unit,
+        pause: () -> Unit = {},
+        setSpeed: (Float) -> Unit = {},
     ) {
         togglePlayPauseCommand = togglePlayPause
         seekToCommand = seekTo
         skipByCommand = skipBy
+        pauseCommand = pause
+        speedCommand = setSpeed
     }
 
     fun unbind() {
         togglePlayPauseCommand = null
         seekToCommand = null
         skipByCommand = null
+        pauseCommand = null
+        speedCommand = null
         buffering.value = false
     }
 
@@ -88,5 +100,15 @@ class PlayerSurfaceState {
 
     fun skipBy(deltaMs: Long) {
         skipByCommand?.invoke(deltaMs)
+    }
+
+    /** Used by the sleep timer: pause without toggling (a timer must never resume playback). */
+    fun pause() {
+        pauseCommand?.invoke()
+    }
+
+    fun setSpeed(value: Float) {
+        speedState.value = value
+        speedCommand?.invoke(value)
     }
 }

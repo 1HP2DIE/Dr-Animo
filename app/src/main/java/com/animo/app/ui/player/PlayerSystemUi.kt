@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
+import android.view.WindowManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
@@ -38,7 +39,12 @@ internal fun ImmersiveVideoEffect(enabled: Boolean) {
         val previousOrientation = activity.requestedOrientation
         activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
 
+        // A 22-minute episode is longer than the screen timeout, and waking the phone by touching
+        // the video also toggles the controls — the flag is the only correct fix.
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
         onDispose {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             activity.requestedOrientation = previousOrientation
             insetsController.show(WindowInsetsCompat.Type.systemBars())
         }
