@@ -30,6 +30,26 @@ data class FacetRow(
  * Statuses are translated to the three values [com.animo.app.domain.model.Filters.status] accepts —
  * raw API spellings never reach the UI.
  */
+/**
+ * Genre vocabulary the catalogue is allowed to offer.
+ *
+ * Measured on the real 12,377-row table: 65 distinct values, of which several are **not genres at
+ * all** — `Crunchyroll` (33 rows), `Doraemon` (12), `Ancient Magus`, `Ben 10`, `Beyblade`,
+ * `Detective Conan`, `DuckTales`, `English`, `Hindi`, `unknown`. They come from the upstream CSV
+ * being polluted with studio/franchise/language names, and they were showing up as filter chips.
+ * A closed vocabulary is the only rule that keeps them out without hardcoding each one.
+ */
+private val KnownGenres: Set<String> = setOf(
+    "action", "action & adventure", "adventure", "animation", "avant garde", "award winning",
+    "boys love", "cars", "comedy", "crime", "dementia", "demons", "drama", "ecchi", "erotica",
+    "family", "fantasy", "game", "gourmet", "girls love", "gore", "harem", "hentai", "historical",
+    "horror", "isekai", "iyashikei", "josei", "kids", "magic", "mahou shoujo", "martial arts",
+    "mecha", "military", "music", "mystery", "mythology", "parody", "police", "psychological",
+    "reincarnation", "romance", "samurai", "school", "sci-fi", "sci-fi & fantasy", "seinen",
+    "shoujo", "shoujo ai", "shounen", "shounen ai", "slice of life", "space", "sports", "strategy game",
+    "super power", "supernatural", "survival", "suspense", "thriller", "time travel", "vampire",
+)
+
 fun filterFacetsOf(rows: List<FacetRow>): FilterFacets {
     if (rows.isEmpty()) return FilterFacets()
 
@@ -41,8 +61,9 @@ fun filterFacetsOf(rows: List<FacetRow>): FilterFacets {
 
     for (row in rows) {
         for (genre in Normalize.splitCsv(row.genres)) {
-            // The catalogue literally contains a genre called "unknown" — never offer it as a chip.
-            if (genre.lowercase() == "unknown") continue
+            // Only the closed vocabulary: the raw column carries studio, franchise and language
+            // names next to real genres (see [KnownGenres]).
+            if (genre.lowercase() !in KnownGenres) continue
             genres.putIfAbsent(genre.lowercase(), genre)
         }
         row.year?.let(years::add)

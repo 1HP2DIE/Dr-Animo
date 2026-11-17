@@ -47,6 +47,16 @@ import com.animo.app.ui.theme.labelRes
 private val DrawerWidth = 316.dp
 
 /**
+ * Chips in the drawer are a shortcut, not the genre list. Fixed order, so the drawer always offers
+ * the same ten household genres instead of whatever sorts first alphabetically ("Action & Adventure,
+ * Ancient Magus, …").
+ */
+private val PopularGenres = listOf(
+    "Action", "Adventure", "Comedy", "Fantasy", "Romance",
+    "Sci-Fi", "Drama", "Slice of Life", "Supernatural", "Mystery",
+)
+
+/**
  * Modal drawer: identity header, tab mirror, secondary shortcuts, five genre jumps and the theme
  * switch. Wide enough for a genre chip row but still a sheet on phones.
  */
@@ -156,7 +166,9 @@ fun AnimoDrawerContent(
                     modifier = Modifier.padding(start = 14.dp, top = 4.dp, bottom = 8.dp),
                 )
                 GenreChips(
-                    genres = genres.take(5),
+                    genres = PopularGenres.mapNotNull { name ->
+                        genres.firstOrNull { it.equals(name, ignoreCase = true) }
+                    },
                     onGenreSelected = onGenreSelected,
                     modifier = Modifier.padding(start = 6.dp, end = 6.dp, bottom = 8.dp),
                 )
