@@ -38,7 +38,7 @@ internal object PreviewData {
         number = 12,
         title = "A Real Hero",
         embedId = "992343",
-        subUrl = "https://megaplay.buzz/stream/s-2/992343/sub",
+        subUrl = "https://example.invalid/stream/s-2/992343/sub",
         dubUrl = null,
         updatedAtEpoch = 1_760_000_000L,
     )
@@ -48,8 +48,8 @@ internal object PreviewData {
             id = 900_000L + index,
             number = index + 1,
             title = if (index % 3 == 0) "" else "Episode title ${index + 1}",
-            subUrl = "https://megaplay.buzz/stream/s-2/${900_000 + index}/sub",
-            dubUrl = if (index % 2 == 0) "https://megaplay.buzz/stream/s-2/${900_000 + index}/dub" else null,
+            subUrl = "https://example.invalid/stream/s-2/${900_000 + index}/sub",
+            dubUrl = if (index % 2 == 0) "https://example.invalid/stream/s-2/${900_000 + index}/dub" else null,
         )
     }
 }

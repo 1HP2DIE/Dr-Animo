@@ -1,5 +1,8 @@
 package com.animo.app.data.hindi
 
+import com.animo.app.provider.ProviderKey
+import com.animo.app.provider.ProviderVault
+
 import com.animo.app.domain.model.AudioTrack
 import com.animo.app.domain.model.Episode
 import com.animo.app.domain.model.PlayableStream
@@ -91,7 +94,7 @@ class HindiStreamRepositoryImpl(
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : StreamRepository {
 
-    private enum class Origin { TOONO, RAREANIMES }
+    private enum class Origin { SOURCE_A, SOURCE_B }
 
     private data class Key(val episodeId: Long, val audio: AudioTrack)
 
@@ -239,19 +242,19 @@ class HindiStreamRepositoryImpl(
         source: String,
         hops: MutableList<String>,
     ): String = when (origin) {
-        Origin.TOONO -> {
+        Origin.SOURCE_A -> {
             val videoId = toono.embedId(source)
             val embedUrl = ARGON_EMBED_PREFIX + videoId
             // The provider's own regex already constrains the id; this rejects a host change that
             // would otherwise turn into a confusing OkHttp "unexpected url" exception.
             if (embedUrl.toHttpUrlOrNull() == null) {
-                throw ResolveException.Parse("toono returned an unusable video id '$videoId'")
+                throw ResolveException.Parse("source A returned an unusable video id '$videoId'")
             }
-            hops += "toono id $videoId"
+            hops += "source A id $videoId"
             embedUrl
         }
 
-        Origin.RAREANIMES -> {
+        Origin.SOURCE_B -> {
             val embedUrl = rareAnimes.embedUrl(source)
             hops += "ra embed ${embedUrl.substringAfterLast('/')}"
             rareAnimes.resolveTrace()
@@ -373,8 +376,8 @@ class HindiStreamRepositoryImpl(
     // ------------------------------------------------------------------ helpers
 
     private fun originOf(animeId: Int): Origin? = when (animeId) {
-        in TOONO_MAX_ID until 0 -> Origin.TOONO
-        in RARE_MIN_ID..RARE_MAX_ID -> Origin.RAREANIMES
+        in TOONO_MAX_ID until 0 -> Origin.SOURCE_A
+        in RARE_MIN_ID..RARE_MAX_ID -> Origin.SOURCE_B
         else -> null
     }
 
@@ -391,11 +394,11 @@ class HindiStreamRepositoryImpl(
         const val RARE_MAX_ID = -1_000_000_000
         const val RARE_MIN_ID = -1_999_999_999
 
-        const val ARGON_BASE = "https://argon.razorshell.space"
-        const val ARGON_EMBED_PREFIX = "$ARGON_BASE/embed/"
+        val ARGON_BASE: String by lazy { ProviderVault.url(ProviderKey.DUB_CDN) }
+        val ARGON_EMBED_PREFIX: String by lazy { "$ARGON_BASE/embed/" }
 
         /** The only referer the argon player accepts for playback (verified on the decoded manifest). */
-        const val ARGON_REFERER = "$ARGON_BASE/"
+        val ARGON_REFERER: String by lazy { "$ARGON_BASE/" }
 
         /** Same UA the toono/rareanimes hops use; the embed page serves the payload to it. */
         const val USER_AGENT =

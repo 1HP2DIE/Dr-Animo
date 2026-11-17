@@ -5,6 +5,8 @@ import com.animo.app.data.remote.dto.AnimoJson
 import com.animo.app.data.remote.dto.RecentAnimeResponse
 import com.animo.app.data.remote.dto.SeriesDataDto
 import com.animo.app.data.remote.dto.SeriesResponse
+import com.animo.app.provider.ProviderKey
+import com.animo.app.provider.ProviderVault
 import java.io.IOException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -36,7 +38,7 @@ class ApiException(
 class AnikotoApi(
     private val client: OkHttpClient,
     private val json: Json = AnimoJson,
-    private val baseUrl: String = BuildConfig.API_BASE_URL,
+    private val baseUrl: String = ProviderVault.url(ProviderKey.CATALOG_API),
 ) {
 
     private val _events = MutableSharedFlow<ApiEvent>(

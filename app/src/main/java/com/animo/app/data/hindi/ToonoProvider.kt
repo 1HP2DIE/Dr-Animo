@@ -1,5 +1,8 @@
 package com.animo.app.data.hindi
 
+import com.animo.app.provider.ProviderKey
+import com.animo.app.provider.ProviderVault
+
 import com.animo.app.AppLog
 import com.animo.app.data.remote.Normalize
 import java.io.IOException
@@ -56,7 +59,7 @@ class ToonoProvider(private val http: OkHttpClient) {
      *
      * Returning an empty list means "past the last page"; it is never an error.
      */
-    suspend fun catalog(page: Int, hindiOnly: Boolean = true): List<ToonoTitle> {
+    suspend fun catalog(page: Int, hindiOnly: Boolean = true): List<DubTitleA> {
         val safePage = page.coerceAtLeast(1)
         val body = ajax(
             page = safePage,
@@ -72,7 +75,7 @@ class ToonoProvider(private val http: OkHttpClient) {
         }
 
         val titles = parseCards(html, hindiOnly)
-        AppLog.d("toono catalog page $safePage: ${titles.size} titles")
+        AppLog.d("source A catalogue page $safePage: ${titles.size} titles")
         return titles
     }
 
@@ -90,7 +93,7 @@ class ToonoProvider(private val http: OkHttpClient) {
      * cards omit. Multi-language titles are real: `doraemon-season-21` carries
      * `Hindi · Tamil · Telugu`.
      */
-    suspend fun title(slug: String): ToonoTitle {
+    suspend fun title(slug: String): DubTitleA {
         val path = canonicalPath(slug)
         val candidates = if (path != null) {
             listOf(path)
@@ -141,7 +144,7 @@ class ToonoProvider(private val http: OkHttpClient) {
         val videoId = match(EMBED_ID, embed.body)
             ?: throw ToonoException("embed: no /embed/<id> in trembed response for $pageUrl")
 
-        AppLog.d("toono embed $pageUrl -> $videoId")
+        AppLog.d("source A embed -> $videoId")
         return videoId
     }
 
@@ -219,8 +222,8 @@ class ToonoProvider(private val http: OkHttpClient) {
 
     // ------------------------------------------------------------------ parsing: listing
 
-    private fun parseCards(html: String, hindiOnly: Boolean): List<ToonoTitle> {
-        val out = ArrayList<ToonoTitle>(PAGE_SIZE)
+    private fun parseCards(html: String, hindiOnly: Boolean): List<DubTitleA> {
+        val out = ArrayList<DubTitleA>(PAGE_SIZE)
 
         var start = html.indexOf(CARD_OPEN)
         while (start >= 0) {
@@ -234,7 +237,7 @@ class ToonoProvider(private val http: OkHttpClient) {
         return out
     }
 
-    private fun parseCard(block: String, hindiOnly: Boolean): ToonoTitle? {
+    private fun parseCard(block: String, hindiOnly: Boolean): DubTitleA? {
         val title = match(CARD_TITLE, block)?.let(Normalize::cleanText) ?: return null
         val link = match(CARD_LINK, block) ?: return null
         val slug = match(CARD_SLUG, block) ?: link.substringAfterLast('/')
@@ -243,7 +246,7 @@ class ToonoProvider(private val http: OkHttpClient) {
             ?.let { GENRE_LABEL.findAll(it).map { m -> Normalize.cleanText(m.groupValues[1]) }.toList() }
             .orEmpty()
 
-        return ToonoTitle(
+        return DubTitleA(
             id = link,
             slug = slug,
             title = title,
@@ -258,7 +261,7 @@ class ToonoProvider(private val http: OkHttpClient) {
 
     // ------------------------------------------------------------------ parsing: title page
 
-    private fun parseTitlePage(id: String, html: String): ToonoTitle {
+    private fun parseTitlePage(id: String, html: String): DubTitleA {
         val slug = id.substringAfterLast('/')
 
         val headerStart = html.indexOf("<h1 class=\"entry-title\"")
@@ -293,7 +296,7 @@ class ToonoProvider(private val http: OkHttpClient) {
             ?.let { Normalize.cleanText(TAG.replace(it, " ")) }
             .orEmpty()
 
-        return ToonoTitle(
+        return DubTitleA(
             id = id,
             slug = slug,
             title = rawTitle,
@@ -379,7 +382,7 @@ class ToonoProvider(private val http: OkHttpClient) {
                 }
             } catch (error: IOException) {
                 lastError = error
-                AppLog.w("toono fetch $url failed: ${error.message}")
+                AppLog.w("source A fetch failed: ${error.message}")
                 null
             }
 
@@ -403,8 +406,8 @@ class ToonoProvider(private val http: OkHttpClient) {
 
     private fun canonicalPath(raw: String): String? {
         val tail = raw.trim()
-            .removePrefix("https://toono.app/")
-            .removePrefix("http://toono.app/")
+            .removePrefix("$BASE/")
+            .removePrefix(BASE.replaceFirst("https://", "http://") + "/")
             .trim('/')
         return when {
             tail.startsWith("$SERIES/") || tail.startsWith("$MOVIES/") -> tail
@@ -425,8 +428,8 @@ class ToonoProvider(private val http: OkHttpClient) {
     private val nonceLock = Mutex()
 
     private companion object {
-        const val BASE = "https://toono.app"
-        const val AJAX_ENDPOINT = "$BASE/wp-admin/admin-ajax.php"
+        val BASE: String by lazy { ProviderVault.url(ProviderKey.DUB_HOST_A) }
+        val AJAX_ENDPOINT: String by lazy { "$BASE/wp-admin/admin-ajax.php" }
         const val SERIES = "series"
         const val MOVIES = "movies"
 
@@ -462,8 +465,12 @@ class ToonoProvider(private val http: OkHttpClient) {
         const val CARD_OPEN = "<article class=\"post"
         const val CARD_CLOSE = "</article>"
         val CARD_TITLE = Regex("<h2 class=\"entry-title\">(.*?)</h2>", RegexOption.DOT_MATCHES_ALL)
-        val CARD_LINK = Regex("href=\"https://toono\\.app/((?:series|movies)/[^\"/]+)/\"")
-        val CARD_SLUG = Regex("href=\"https://toono\\.app/(?:series|movies)/([^\"/]+)/\"")
+        val CARD_LINK: Regex by lazy {
+            Regex("href=\"${Regex.escape(BASE)}/((?:series|movies)/[^\"/]+)/\"")
+        }
+        val CARD_SLUG: Regex by lazy {
+            Regex("href=\"${Regex.escape(BASE)}/(?:series|movies)/([^\"/]+)/\"")
+        }
 /**
  * The movie card template emits `<img class="trs" src="…">` while the series card emits
  * `<img src="…">`, so requiring `src` to be the first attribute silently dropped every movie cover:
@@ -490,12 +497,16 @@ class ToonoProvider(private val http: OkHttpClient) {
             "<span class=\"categories\">(.*?)</span>",
             RegexOption.DOT_MATCHES_ALL,
         )
-        val CATEGORY_TAG = Regex("aria-label=\"([^\"]+)\" href=\"https://toono\\.app/category/([a-z0-9-]+)/\"")
+        val CATEGORY_TAG: Regex by lazy {
+            Regex("aria-label=\"([^\"]+)\" href=\"${Regex.escape(BASE)}/category/([a-z0-9-]+)/\"")
+        }
         val SYNOPSIS = Regex("<div class=\"entry-content\">\\s*<p>(.*?)</p>", RegexOption.DOT_MATCHES_ALL)
         val TAG = Regex("<[^>]+>")
 
         val EPISODE_ROW = Regex("<li data-episode-id=\"(\\d+)\">")
-        val EPISODE_LINK = Regex("href=\"(https://toono\\.app/episode/[^\"]+)\"")
+        val EPISODE_LINK: Regex by lazy {
+            Regex("href=\"(${Regex.escape(BASE)}/episode/[^\"]+)\"")
+        }
 
         val PLAYER_FRAME = Regex(
             "<iframe[^>]*\\sid=\"main-player\"[^>]*\\ssrc=\"([^\"]+)\"",
@@ -525,7 +536,7 @@ class ToonoProvider(private val http: OkHttpClient) {
  * [synopsis] and [rating] are parsed only on [ToonoProvider.title]; the listing leaves them empty
  * because the AJAX cards do not expose a stable rating.
  */
-data class ToonoTitle(
+data class DubTitleA(
     val id: String,
     val slug: String,
     val title: String,
@@ -540,7 +551,7 @@ data class ToonoTitle(
 ) {
 
     /** The title page. For a movie this page is also the player, so it can go straight to `embedId`. */
-    val url: String get() = "https://toono.app/$id/"
+    val url: String get() = "${ProviderVault.url(ProviderKey.DUB_HOST_A)}/$id/"
 }
 
 class ToonoException(message: String, cause: Throwable? = null) : IOException(message, cause)

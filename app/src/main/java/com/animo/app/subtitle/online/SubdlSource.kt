@@ -1,5 +1,7 @@
 package com.animo.app.subtitle.online
 
+import com.animo.app.provider.ProviderKey
+import com.animo.app.provider.ProviderVault
 import com.animo.app.subtitle.SubtitleFile
 import com.animo.app.subtitle.SubtitleFiles
 import com.animo.app.subtitle.match.MatchCandidate
@@ -23,10 +25,10 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object SubdlSource : OnlineSubtitleSource {
 
-    override val id: String = "subdl"
-    override val name: String = "SubDL"
+    override val id: String = "s2"
+    override val name: String = "Source B"
 
-    private const val BASE = "https://subdl.com/"
+    private val BASE: String get() = ProviderVault.url(ProviderKey.SUBTITLE_HOST_B)
     private const val CACHE_TTL_MS = 10 * 60 * 1000L
 
     private val SHOW_LINK = Regex("""href="(/subtitle/sd\d+/[^"]+)"""")
@@ -35,7 +37,13 @@ object SubdlSource : OnlineSubtitleSource {
         """data-row\s+data-id="(\d+)"[^>]*?data-episode-from="(\d+)"[^>]*?data-episode-to="(\d+)"(.*?)</li>""",
         RegexOption.DOT_MATCHES_ALL,
     )
-    private val ZIP_LINK = Regex("""href="(https://dl\.subdl\.com/subtitle/[^"]+?\.zip)"""")
+    /** The CDN host is a vault value; only the path shape is knowledge that lives in code. */
+    private val ZIP_LINK: Regex by lazy {
+        Regex(
+            "href=\"(" + Regex.escape(ProviderVault.url(ProviderKey.SUBTITLE_HOST_B_CDN)) +
+                "/subtitle/[^\"]+?\\.zip)\"",
+        )
+    }
     private val TITLE = Regex("""<h4>([^<]+)</h4>""")
 
     private val pageCache = ConcurrentHashMap<String, CachedPage>()
@@ -60,7 +68,7 @@ object SubdlSource : OnlineSubtitleSource {
             bytes = bytes,
             fallbackName = result.downloadRef.substringAfterLast('/'),
             preferEpisode = result.episode,
-        ) ?: error("SubDL returned an unreadable payload")
+        ) ?: error("subtitle payload unreadable")
     }
 
     /**

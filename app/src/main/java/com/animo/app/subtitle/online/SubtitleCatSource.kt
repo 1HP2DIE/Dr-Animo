@@ -1,5 +1,7 @@
 package com.animo.app.subtitle.online
 
+import com.animo.app.provider.ProviderKey
+import com.animo.app.provider.ProviderVault
 import com.animo.app.subtitle.SubtitleFile
 import com.animo.app.subtitle.SubtitleFiles
 import com.animo.app.subtitle.match.MatchCandidate
@@ -21,10 +23,10 @@ import okhttp3.OkHttpClient
  */
 object SubtitleCatSource : OnlineSubtitleSource {
 
-    override val id: String = "subtitlecat"
-    override val name: String = "SubtitleCat"
+    override val id: String = "s1"
+    override val name: String = "Source A"
 
-    private const val BASE = "https://www.subtitlecat.com/"
+    private val BASE: String get() = ProviderVault.url(ProviderKey.SUBTITLE_HOST_A)
 
     /** A handful of release pages is plenty; more only adds duplicate languages. */
     private const val MAX_RELEASE_PAGES = 4
@@ -94,7 +96,7 @@ object SubtitleCatSource : OnlineSubtitleSource {
         val bytes = SubtitleHttp.bytes(client, result.downloadRef, referer = BASE)
         val fileName = result.downloadRef.substringAfterLast('/')
         return SubtitleFiles.decodePayload(bytes, fileName, preferEpisode = result.episode)
-            ?: error("SubtitleCat returned an unreadable payload")
+            ?: error("subtitle payload unreadable")
     }
 
     /**

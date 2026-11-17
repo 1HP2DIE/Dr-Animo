@@ -4,6 +4,8 @@ import com.animo.app.domain.model.AudioTrack
 import com.animo.app.domain.model.Episode
 import com.animo.app.domain.model.PlayableStream
 import com.animo.app.player.ResolveException
+import com.animo.app.provider.ProviderKey
+import com.animo.app.provider.ProviderVault
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
@@ -13,6 +15,7 @@ import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
+import org.junit.Before
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -32,6 +35,28 @@ import org.junit.Test
  * [RareAnimesProvider.embedUrl] are exercised for real against the intercepted pages.
  */
 class HindiStreamRepositoryTest {
+
+    /**
+     * The endpoints live in the encrypted vault at runtime; unit tests have no assets, so the same
+     * map is injected. The hosts are the ones the captured fixtures were recorded against.
+     */
+    @Before
+    fun installVault() {
+        ProviderVault.installForTests(
+            mapOf(
+                ProviderKey.DUB_HOST_A.slot to "https://toono.app",
+                ProviderKey.DUB_HOST_B.slot to "https://www.rareanimes.foo",
+                ProviderKey.DUB_HOST_B_REFERER.slot to "https://www.rareanimes.foo/",
+                ProviderKey.DUB_CDN.slot to "https://argon.razorshell.space",
+                ProviderKey.DUB_GATE_HOST.slot to "multiquality.click",
+                ProviderKey.DUB_GATE_PATH.slot to "/multiquality",
+                ProviderKey.DUB_EMBED_MARKER.slot to "multiquality",
+                ProviderKey.DUB_WATCH_MARKER.slot to "WatchMultiQuality",
+                ProviderKey.DUB_SLUG_PREFIX_A.slot to "toono-",
+                ProviderKey.DUB_SLUG_PREFIX_B.slot to "rare-",
+            ),
+        )
+    }
 
     // ------------------------------------------------------------------ toono
 
@@ -279,7 +304,7 @@ class HindiStreamRepositoryTest {
         repository.resolve(TOONO_ID, toonoEpisode(), AudioTrack.DUB).getOrThrow()
 
         val description = repository.describe()
-        assertTrue(description.contains("toono id U2vgc4LiRSp0lBM"))
+        assertTrue(description.contains("source A id U2vgc4LiRSp0lBM"))
         assertTrue(description.contains("embed #1 200"))
         assertTrue(description.contains("master "))
         assertNotNull(repository.resolveTrace().firstOrNull())

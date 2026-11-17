@@ -374,8 +374,8 @@ private fun EpisodeDrawerPreview() {
                 animeId = 1458,
                 number = number,
                 title = if (index % 3 == 0) "" else "Episode title $number",
-                subUrl = if (playable) "https://megaplay.buzz/stream/s-2/$id/sub" else null,
-                dubUrl = if (playable && index % 2 == 0) "https://megaplay.buzz/stream/s-2/$id/dub" else null,
+                subUrl = if (playable) "https://example.invalid/stream/s-2/$id/sub" else null,
+                dubUrl = if (playable && index % 2 == 0) "https://example.invalid/stream/s-2/$id/dub" else null,
             )
         }
     }

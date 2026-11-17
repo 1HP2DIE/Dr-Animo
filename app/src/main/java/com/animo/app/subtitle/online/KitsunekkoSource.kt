@@ -1,5 +1,7 @@
 package com.animo.app.subtitle.online
 
+import com.animo.app.provider.ProviderKey
+import com.animo.app.provider.ProviderVault
 import com.animo.app.subtitle.SubtitleFile
 import com.animo.app.subtitle.SubtitleFiles
 import com.animo.app.subtitle.isSubtitleFileName
@@ -28,11 +30,11 @@ import java.util.Locale
  */
 object KitsunekkoSource : OnlineSubtitleSource {
 
-    override val id: String = "kitsunekko"
-    override val name: String = "Kitsunekko"
+    override val id: String = "s3"
+    override val name: String = "Source C"
     override val languages: Set<String> = setOf("ja")
 
-    private const val BASE = "https://kitsunekko.net/"
+    private val BASE: String get() = ProviderVault.url(ProviderKey.SUBTITLE_HOST_C)
     private const val ROOT_LISTING = "dirlist.php?dir=subtitles/japanese/"
     private const val INDEX_TTL_MS = 6 * 60 * 60 * 1000L
 
@@ -80,7 +82,7 @@ object KitsunekkoSource : OnlineSubtitleSource {
         val bytes = SubtitleHttp.bytes(client, result.downloadRef)
         val fileName = result.downloadRef.substringAfterLast('/')
         return SubtitleFiles.decodePayload(bytes, fileName, preferEpisode = result.episode)
-            ?: error("Kitsunekko returned an unreadable payload")
+            ?: error("subtitle payload unreadable")
     }
 
     private suspend fun index(client: OkHttpClient): List<Folder> {

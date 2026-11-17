@@ -1,5 +1,8 @@
 package com.animo.app.data.hindi
 
+import com.animo.app.provider.ProviderKey
+import com.animo.app.provider.ProviderVault
+
 import androidx.sqlite.db.SimpleSQLiteQuery
 import com.animo.app.data.local.FilterSql
 import com.animo.app.data.local.dao.AnimeDao
@@ -23,9 +26,12 @@ import kotlinx.coroutines.flow.first
  * catalogues reuse bare slugs, so the prefix is what keeps `tarzan-jane` (toono movie) and
  * `tarzan-jane` (rareanimes post) as two different rows.
  */
-enum class HindiOrigin(val label: String, val slugPrefix: String) {
-    TOONO("toono.app", "toono-"),
-    RARE("rareanimes.foo", "rare-"),
+enum class HindiOrigin(val label: String, private val prefixKey: ProviderKey) {
+    SOURCE_A("Hindi source A", ProviderKey.DUB_SLUG_PREFIX_A),
+    SOURCE_B("Hindi source B", ProviderKey.DUB_SLUG_PREFIX_B);
+
+    /** Read from the vault: the literal prefix never ships, and the stored value stays stable. */
+    val slugPrefix: String get() = ProviderVault.text(prefixKey)
 }
 
 /**
@@ -76,7 +82,7 @@ object HindiIds {
      */
     fun toono(slug: String): Int {
         val key = slug.trim()
-        require(key.isNotEmpty()) { "HindiIds.toono: blank slug" }
+        require(key.isNotEmpty()) { "HindiIds: blank slug" }
         val bucket = abs(key.hashCode().toLong()) % TOONO_SPAN
         return -(bucket + 1L).toInt()
     }
@@ -92,8 +98,8 @@ object HindiIds {
         if (id in RARE_MIN..RARE_MAX) (-RARE_BASE - id.toLong()).toInt().takeIf { it > 0 } else null
 
     fun originOf(id: Int): HindiOrigin? = when {
-        id in TOONO_MIN..TOONO_MAX -> HindiOrigin.TOONO
-        id in RARE_MIN..RARE_MAX -> HindiOrigin.RARE
+        id in TOONO_MIN..TOONO_MAX -> HindiOrigin.SOURCE_A
+        id in RARE_MIN..RARE_MAX -> HindiOrigin.SOURCE_B
         else -> null
     }
 
@@ -190,8 +196,8 @@ class HindiCatalogImpl(
         var pages = 0
         var total = targets.sumOf { origin ->
             when (origin) {
-                HindiOrigin.TOONO -> TOONO_ESTIMATED_PAGES
-                HindiOrigin.RARE -> RARE_ESTIMATED_PAGES
+                HindiOrigin.SOURCE_A -> TOONO_ESTIMATED_PAGES
+                HindiOrigin.SOURCE_B -> RARE_ESTIMATED_PAGES
             }
         }
 
@@ -211,25 +217,25 @@ class HindiCatalogImpl(
         val failures = ArrayList<String>(2)
         var written = 0
 
-        if (HindiOrigin.TOONO in targets) {
+        if (HindiOrigin.SOURCE_A in targets) {
             try {
                 written += syncToono { remaining -> emit(remaining) }
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (error: Throwable) {
-                failures += "toono: ${error.message ?: error.javaClass.simpleName}"
-                log("hindi sync: toono phase failed — ${error.message}")
+                failures += "source A: ${error.message ?: error.javaClass.simpleName}"
+                log("hindi sync: source A phase failed — ${error.message}")
             }
         }
 
-        if (HindiOrigin.RARE in targets) {
+        if (HindiOrigin.SOURCE_B in targets) {
             try {
                 written += syncRare { remaining -> emit(remaining) }
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (error: Throwable) {
-                failures += "rareanimes: ${error.message ?: error.javaClass.simpleName}"
-                log("hindi sync: rareanimes phase failed — ${error.message}")
+                failures += "source B: ${error.message ?: error.javaClass.simpleName}"
+                log("hindi sync: source B phase failed — ${error.message}")
             }
         }
 
@@ -254,20 +260,20 @@ class HindiCatalogImpl(
             if (titles.isEmpty()) {
                 // Measured: page 126 is the last and page 127+ answers `html:""`. An empty page is
                 // the end signal, never an error.
-                log("toono: page $page is empty — catalogue ended after ${page - 1} pages")
+                log("source A: page $page is empty — catalogue ended after ${page - 1} pages")
                 break
             }
 
             val rows = writeToonoPage(titles)
             written += rows
-            if (page % TOONO_LOG_EVERY == 0) log("toono: page $page, $rows rows, $written total")
+            if (page % TOONO_LOG_EVERY == 0) log("source A: page $page, $rows rows, $written total")
             onPage(null)
 
             page += 1
             if (page <= TOONO_MAX_PAGES) delay(TOONO_PAGE_INTERVAL_MS)
         }
 
-        if (page > TOONO_MAX_PAGES) log("toono: stopped at the $TOONO_MAX_PAGES-page ceiling")
+        if (page > TOONO_MAX_PAGES) log("source A: stopped at the page ceiling")
         return written
     }
 
@@ -297,7 +303,7 @@ class HindiCatalogImpl(
         }
 
         if (totalPages == null) log("ra: x-wp-totalpages was never reported")
-        if (page > RARE_MAX_PAGES) log("ra: stopped at the $RARE_MAX_PAGES-page ceiling")
+        if (page > RARE_MAX_PAGES) log("source B: stopped at the page ceiling")
         return written
     }
 
@@ -310,10 +316,10 @@ class HindiCatalogImpl(
      * three stay empty/0 rather than being guessed: `statusNorm = "finished_airing"` for a show that
      * is still airing is a lie the filter sheet would then offer.
      */
-    private suspend fun writeToonoPage(titles: List<ToonoTitle>): Int {
+    private suspend fun writeToonoPage(titles: List<DubTitleA>): Int {
         val usable = titles.filter { it.slug.trim().isNotEmpty() }
         if (usable.size != titles.size) {
-            log("toono: dropped ${titles.size - usable.size} cards with a blank slug")
+            log("source A: dropped ${titles.size - usable.size} cards with a blank slug")
         }
         if (usable.isEmpty()) return 0
 
@@ -325,7 +331,7 @@ class HindiCatalogImpl(
             .mapNotNull { title ->
                 val id = HindiIds.toono(title.slug)
                 runCatching { toonoRow(title, id, stamps[id], now) }
-                    .onFailure { log("toono: unmappable card '${title.slug}': ${it.message}") }
+                    .onFailure { log("source A: unmappable card '${title.slug}': ${it.message}") }
                     .getOrNull()
             }
             .distinctBy { it.id }
@@ -336,7 +342,7 @@ class HindiCatalogImpl(
     }
 
     private fun toonoRow(
-        title: ToonoTitle,
+        title: DubTitleA,
         id: Int,
         previous: AnimeStamp?,
         now: Long,
@@ -351,7 +357,7 @@ class HindiCatalogImpl(
             titles = "",
             native = "",
             // Unique index: the provider prefix is what separates two catalogues that reuse slugs.
-            slug = HindiOrigin.TOONO.slugPrefix + Normalize.slugOrFallback(title.slug, id),
+            slug = HindiOrigin.SOURCE_A.slugPrefix + Normalize.slugOrFallback(title.slug, id),
             rating = "",
             ratingNorm = "",
             poster = title.poster.orEmpty(),
@@ -440,7 +446,7 @@ class HindiCatalogImpl(
             alternative = "",
             titles = "",
             native = "",
-            slug = HindiOrigin.RARE.slugPrefix + Normalize.slugOrFallback(post.slug, id),
+            slug = HindiOrigin.SOURCE_B.slugPrefix + Normalize.slugOrFallback(post.slug, id),
             rating = "",
             ratingNorm = "",
             poster = post.poster,
@@ -499,8 +505,8 @@ class HindiCatalogImpl(
 
         return try {
             val episodes = when (origin) {
-                HindiOrigin.TOONO -> toonoEpisodes(animeId, originUrl)
-                HindiOrigin.RARE -> rareEpisodes(animeId, originUrl)
+                HindiOrigin.SOURCE_A -> toonoEpisodes(animeId, originUrl)
+                HindiOrigin.SOURCE_B -> rareEpisodes(animeId, originUrl)
             }
             if (episodes.isEmpty()) {
                 val cached = runCatching { episodeDao.countForAnime(animeId) }.getOrDefault(0)
@@ -543,7 +549,7 @@ class HindiCatalogImpl(
         val now = nowSeconds()
 
         if (page.episodeUrls.isEmpty()) {
-            log("toono: $originUrl has no episode rows — treating it as a movie")
+            log("source A: $originUrl has no episode rows — treating it as a movie")
             return listOf(
                 Episode(
                     id = HindiIds.episodeId(animeId, 1),
@@ -564,7 +570,7 @@ class HindiCatalogImpl(
             // whose slug stopped carrying the season marker.
             val number = episodeNumber(url) ?: (index + 1)
             if (byNumber.containsKey(number)) {
-                log("toono: duplicate episode number $number on $originUrl ignored")
+                log("source A: duplicate episode number $number on $originUrl ignored")
                 return@forEachIndexed
             }
             if (index > 0) delay(TOONO_EMBED_INTERVAL_MS)
@@ -656,9 +662,9 @@ class HindiCatalogImpl(
         if (players.isEmpty()) return null
 
         return players.firstOrNull { link ->
-            link.label.contains(WATCH_MULTI_QUALITY, ignoreCase = true) ||
+            link.label.contains(WATCH_MARKER, ignoreCase = true) ||
                 link.url.contains(EMBED_PATH, ignoreCase = true)
-        } ?: players.firstOrNull { it.url.contains(MULTIQUALITY_PATH, ignoreCase = true) }
+        } ?: players.firstOrNull { it.url.contains(GATE_PATH, ignoreCase = true) }
             ?: players.first()
     }
 
@@ -794,11 +800,11 @@ class HindiCatalogImpl(
         const val PRESENCE_SAMPLE = 300
 
         const val DATE_LENGTH = 19
-        const val RARE_FALLBACK_BASE = "https://www.rareanimes.foo"
+        val RARE_FALLBACK_BASE: String get() = ProviderVault.url(ProviderKey.DUB_HOST_B)
 
-        const val WATCH_MULTI_QUALITY = "WatchMultiQuality"
+        val WATCH_MARKER: String get() = ProviderVault.text(ProviderKey.DUB_WATCH_MARKER)
         const val EMBED_PATH = "/embed/"
-        const val MULTIQUALITY_PATH = "/multiquality"
+        val GATE_PATH: String get() = ProviderVault.text(ProviderKey.DUB_GATE_PATH)
 
         val SEASON_EPISODE = Regex("(\\d{1,2})x(\\d{1,4})")
         val TRAILING_NUMBER = Regex("-(\\d{1,4})$")

@@ -31,7 +31,7 @@ class AnikotoProvider(
         if (needle.isEmpty()) return emptyList()
 
         val response = api.recentAnime(page.coerceAtLeast(1)).getOrElse { error ->
-            AppLog.w("anikoto search page $page failed: ${error.message}")
+            AppLog.w("catalogue page $page failed: ${error.message}")
             return emptyList()
         }
 
@@ -61,7 +61,7 @@ class AnikotoProvider(
         val animeId = seriesId.toIntOrNull() ?: return emptyList()
 
         val detail = api.series(animeId).getOrElse { error ->
-            AppLog.w("anikoto episodes($seriesId) failed: ${error.message}")
+            AppLog.w("episode list failed: ${error.message}")
             return emptyList()
         }
 
@@ -99,7 +99,7 @@ class AnikotoProvider(
 
     /** megaplay.buzz served 100% of the 3,425 sampled embed URLs (research/DATA_CONTRACT.md §3). */
     private companion object {
-        const val PROVIDER_ID = "anikoto"
+        const val PROVIDER_ID = "catalog"
     }
 }
 

@@ -149,8 +149,8 @@
     <string name="ui_settings_about">About</string>
     <string name="ui_settings_version_value">Version %1$s</string>
     <string name="ui_settings_data_source">Data source</string>
-    <string name="ui_settings_data_source_value">anikoto · megaplay</string>
-    <string name="ui_settings_disclaimer">Streams are resolved from third-party providers (anikoto, megaplay). Animo hosts no video content.</string>
+    <string name="ui_settings_data_source_value">Third-party providers</string>
+    <string name="ui_settings_disclaimer">Streams are resolved from third-party providers. Animo hosts no video content.</string>
 
     <!-- Changelog / what's new -->
     <string name="ui_changelog_title">What\'s new</string>

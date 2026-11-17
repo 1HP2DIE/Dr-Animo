@@ -31,6 +31,6 @@ class AnimeEggProvider : AnimeProvider {
     private fun notImplemented(): Nothing = throw ProviderNotImplementedException(PROVIDER_ID)
 
     private companion object {
-        const val PROVIDER_ID = "animegg"
+        const val PROVIDER_ID = "source_c"
     }
 }

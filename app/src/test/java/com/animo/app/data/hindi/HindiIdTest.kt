@@ -26,7 +26,7 @@ class HindiIdTest {
             assertTrue("$slug -> $id below TOONO_MIN", id >= HindiIds.TOONO_MIN)
             assertTrue("$slug -> $id above TOONO_MAX", id <= HindiIds.TOONO_MAX)
             assertNotEquals("$slug -> 0", 0, id)
-            assertEquals("$slug must classify as toono", HindiOrigin.TOONO, HindiIds.originOf(id))
+            assertEquals("$slug must classify as source A", HindiOrigin.SOURCE_A, HindiIds.originOf(id))
         }
     }
 
@@ -45,7 +45,7 @@ class HindiIdTest {
 
         val id = HindiIds.toono(slug)
         assertEquals(-147_483_651, id)
-        assertEquals(HindiOrigin.TOONO, HindiIds.originOf(id))
+        assertEquals(HindiOrigin.SOURCE_A, HindiIds.originOf(id))
     }
 
     @Test(expected = IllegalArgumentException::class)
@@ -67,7 +67,7 @@ class HindiIdTest {
         for (postId in listOf(1, 42, 1_234, 999_999_999)) {
             val id = HindiIds.rare(postId)
             assertEquals(postId, HindiIds.rarePostId(id))
-            assertEquals(HindiOrigin.RARE, HindiIds.originOf(id))
+            assertEquals(HindiOrigin.SOURCE_B, HindiIds.originOf(id))
         }
         assertNull(HindiIds.rarePostId(HindiIds.TOONO_MAX))
         assertNull(HindiIds.rarePostId(0))
@@ -82,10 +82,10 @@ class HindiIdTest {
 
     @Test
     fun `originOf splits the two ranges and rejects everything else`() {
-        assertEquals(HindiOrigin.TOONO, HindiIds.originOf(-1))
-        assertEquals(HindiOrigin.TOONO, HindiIds.originOf(-999_999_999))
-        assertEquals(HindiOrigin.RARE, HindiIds.originOf(-1_000_000_000))
-        assertEquals(HindiOrigin.RARE, HindiIds.originOf(-1_999_999_999))
+        assertEquals(HindiOrigin.SOURCE_A, HindiIds.originOf(-1))
+        assertEquals(HindiOrigin.SOURCE_A, HindiIds.originOf(-999_999_999))
+        assertEquals(HindiOrigin.SOURCE_B, HindiIds.originOf(-1_000_000_000))
+        assertEquals(HindiOrigin.SOURCE_B, HindiIds.originOf(-1_999_999_999))
 
         assertNull("0 is not Hindi", HindiIds.originOf(0))
         assertNull("a positive id is the original catalogue", HindiIds.originOf(42))

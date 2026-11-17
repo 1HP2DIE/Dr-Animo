@@ -1,5 +1,8 @@
 package com.animo.app.data.hindi
 
+import com.animo.app.provider.ProviderKey
+import com.animo.app.provider.ProviderVault
+
 import com.animo.app.data.remote.Normalize
 import com.animo.app.data.remote.dto.AnimoJson
 import java.io.IOException
@@ -244,10 +247,10 @@ class RareAnimesProvider(
                     ?: throw RareAnimesException("embedUrl(): not an absolute url: $url")
                 val host = parsed.host.lowercase()
                 val path = parsed.encodedPath
-                hops += "hop $hop: $host$path"
+                hops += "hop $hop"
 
                 // 1. Dead player mirror — same id space as the live player.
-                if (host == MULTIQUALITY_CLICK || host.endsWith(".$MULTIQUALITY_CLICK")) {
+                if (host == GATE_HOST || host.endsWith(".$GATE_HOST")) {
                     val id = lastSegment(path)
                         ?: throw RareEmbedUnavailableException(host, "no video id in $url")
                     hops += "nxdomain player host -> argon rewrite"
@@ -269,11 +272,11 @@ class RareAnimesProvider(
                 }
 
                 // 4. Player wrapper page.
-                if (path.contains("/multiquality", ignoreCase = true)) {
+                if (path.contains(GATE_PATH, ignoreCase = true)) {
                     val response = fetch(url, accept = ACCEPT_HTML, referer = RARE_REFERER, intervalMs = resolveIntervalMs)
-                    hops += "multiquality ${response.code} ${response.body.length}b"
+                    hops += "gate ${response.code} ${response.body.length}b"
                     if (!response.isSuccessful) {
-                        throw RareAnimesException("embed: multiquality answered HTTP ${response.code}")
+                        throw RareAnimesException("embed: gate answered HTTP ${response.code}")
                     }
                     val frame = playerFrame(response.body)
                         ?: throw RareEmbedUnavailableException(host, "no #playerIframe on $url")
@@ -423,7 +426,7 @@ class RareAnimesProvider(
             cooldownUntil.compareAndSet(until, 0L)
             return
         }
-        throw RareAnimesBlockedException(0, "rareanimes cooling down for another ${remaining / 1000}s")
+        throw RareAnimesBlockedException(0, "Hindi catalogue cooling down for another ${remaining / 1000}s")
     }
 
     private fun enterCooldown(reason: String) {
@@ -513,7 +516,7 @@ class RareAnimesProvider(
     }
 
     private companion object {
-        const val DEFAULT_BASE_URL = "https://www.rareanimes.foo"
+        val DEFAULT_BASE_URL: String by lazy { ProviderVault.url(ProviderKey.DUB_HOST_B) }
 
         /** The UA that returned 200 on every hop of the measured crawl. */
         const val UA_HEADLESS_CHROME =
@@ -523,7 +526,7 @@ class RareAnimesProvider(
         const val ACCEPT_JSON = "application/json, text/plain, */*"
         const val ACCEPT_HTML = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
         const val ACCEPT_LANGUAGE = "en-US,en;q=0.6"
-        const val RARE_REFERER = "https://www.rareanimes.foo/"
+        val RARE_REFERER: String by lazy { ProviderVault.url(ProviderKey.DUB_HOST_B_REFERER) }
 
         /** 1942 posts / 100 per page = 20 pages; WordPress clamps anything above 100. */
         const val DEFAULT_PER_PAGE = 100
@@ -563,9 +566,10 @@ class RareAnimesProvider(
 
         const val COOLDOWN_MS = 24L * 60L * 60L * 1000L
 
-        const val MULTIQUALITY_CLICK = "multiquality.click"
-        const val ARGON_BASE = "https://argon.razorshell.space"
-        const val ARGON_EMBED_PREFIX = "$ARGON_BASE/embed/"
+        val GATE_HOST: String get() = ProviderVault.text(ProviderKey.DUB_GATE_HOST)
+        val GATE_PATH: String get() = ProviderVault.text(ProviderKey.DUB_GATE_PATH)
+        val ARGON_BASE: String by lazy { ProviderVault.url(ProviderKey.DUB_CDN) }
+        val ARGON_EMBED_PREFIX: String by lazy { "$ARGON_BASE/embed/" }
 
         val RETRYABLE_CODES = setOf(403, 408, 425, 429, 500, 502, 503, 504)
 
@@ -588,10 +592,19 @@ class RareAnimesProvider(
             "<iframe[^>]*\\bid\\s*=\\s*[\"']playerIframe[\"'][^>]*\\bsrc\\s*=\\s*[\"']([^\"']+)[\"']",
             setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
         )
-        val PLAYER_FRAME_ANY = Regex(
-            "<iframe[^>]*\\bsrc\\s*=\\s*[\"']([^\"']*(?:argon\\.razorshell\\.space|multiquality)[^\"']*)[\"']",
-            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
-        )
+        /** Built from the vault: the CDN host and the wrapper marker are not literals here. */
+        val PLAYER_FRAME_ANY: Regex by lazy {
+            val cdnHost = Regex.escape(
+                ProviderVault.text(ProviderKey.DUB_CDN)
+                    .substringAfter("://")
+                    .substringBefore('/'),
+            )
+            val marker = Regex.escape(ProviderVault.text(ProviderKey.DUB_EMBED_MARKER))
+            Regex(
+                "<iframe[^>]*\\bsrc\\s*=\\s*[\"']([^\"']*(?:$cdnHost|$marker)[^\"']*)[\"']",
+                setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
+            )
+        }
 
         fun argonEmbed(id: String): String {
             if (!VIDEO_ID.matches(id)) {
@@ -721,10 +734,10 @@ data class RareLink(
 
     /** True when [url] can reach a player (or can be rewritten into one) — see [RareAnimesProvider.embedUrl]. */
     val isPlayerLink: Boolean
-        get() = host.endsWith("multiquality.click") ||
+        get() = host.endsWith(ProviderVault.text(ProviderKey.DUB_GATE_HOST)) ||
             url.contains("/embed/", ignoreCase = true) ||
             url.contains("/downlead/", ignoreCase = true) ||
-            url.contains("/multiquality", ignoreCase = true) ||
+            url.contains(ProviderVault.text(ProviderKey.DUB_GATE_PATH), ignoreCase = true) ||
             url.contains("/zipper", ignoreCase = true)
 }
 
@@ -746,6 +759,13 @@ data class RareContent(
  * because the post body contains no escaped markup.
  */
 object RareAnimesParser {
+
+    /** Hosts that belong to this provider itself, derived from the vault (never literals). */
+    private fun ownHostSuffixes(): List<String> = listOfNotNull(
+        ProviderVault.optionalUrl(ProviderKey.DUB_HOST_B)?.toHttpUrlOrNull()?.host,
+        ProviderVault.optionalUrl(ProviderKey.DUB_HOST_B_REFERER)?.toHttpUrlOrNull()?.host,
+    )
+
 
     /**
      * Measured structures:
@@ -807,11 +827,12 @@ object RareAnimesParser {
                 blockLanguage = MULTI_AUDIO
             }
 
+            val ownHosts = ownHostSuffixes()
             for (anchor in ANCHOR.findAll(body)) {
                 val url = anchor.groupValues[1].trim()
                 if (!url.startsWith("http", ignoreCase = true)) continue
                 val host = url.toHttpUrlOrNull()?.host?.lowercase() ?: continue
-                if (host.endsWith("rareanimes.foo") || host.endsWith("rareanimes.fans")) continue
+                if (ownHosts.any { host.endsWith(it) }) continue
 
                 val label = plainText(anchor.groupValues[2])
                 val resolvedLanguage = (blockLanguage ?: fallbackLanguage).orEmpty()

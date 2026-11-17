@@ -2,6 +2,8 @@ package com.animo.app.player
 
 import com.animo.app.domain.model.AudioTrack
 import com.animo.app.domain.model.PlayableStream
+import com.animo.app.provider.ProviderKey
+import com.animo.app.provider.ProviderVault
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -32,6 +34,9 @@ class MegaplayStreamResolver(
 ) : StreamResolver {
 
     private val refererCursor = AtomicInteger(0)
+
+    /** The only referer the stream CDN accepts (verified on device and via curl). */
+    private val cdnReferer: String get() = ProviderVault.url(ProviderKey.STREAM_REFERER)
 
     override suspend fun resolve(embedUrl: String, audio: AudioTrack): Result<PlayableStream> =
         withContext(dispatcher) {
@@ -119,7 +124,7 @@ class MegaplayStreamResolver(
 
         val fileId = MegaplayParser.fileId(html)
             ?: throw if (MegaplayParser.hasPlayerDiv(html)) {
-                ResolveException.Parse("megaplay-player present but data-id missing")
+                ResolveException.Parse("player element present but data-id missing")
             } else {
                 ResolveException.Dead("player div absent after referer retry")
             }
@@ -140,7 +145,7 @@ class MegaplayStreamResolver(
             // Device-verified 2026-11-17: the CDN host (fetch.*) accepts ONLY the megaplay referer —
             // anikototv.bz / anikoto.cz return 403 there (they only pass the *embed page* allowlist).
             // So the page referer is used for hops 1-2 and this fixed one for playback.
-            referer = CDN_REFERER,
+            referer = cdnReferer,
             userAgent = userAgent,
             audio = audio,
             thumbnails = JsonLite.stringField(sources.body, "image"),
@@ -157,7 +162,8 @@ class MegaplayStreamResolver(
         val stamp = System.currentTimeMillis() / 1000L
         var last = Resp(0, "")
         for (path in SOURCE_PATHS) {
-            val url = "https://megaplay.buzz/stream/$path?id=$fileId&platform=OTHER&st=other&_=$stamp"
+            val host = ProviderVault.url(ProviderKey.STREAM_HOST)
+            val url = "$host/stream/$path?id=$fileId&platform=OTHER&st=other&_=$stamp"
             val response = get(url, referer, xhr = true)
             last = response
             if (response.code == 403 || response.code == 404) return response
@@ -183,8 +189,6 @@ class MegaplayStreamResolver(
     private data class Resp(val code: Int, val body: String)
 
     companion object {
-        /** The only referer the stream CDN accepts (verified on device and via curl). */
-        const val CDN_REFERER = "https://megaplay.buzz/"
         private const val MARKER_404 = "Error Code: 404"
         private const val MARKER_410 = "Error Code: 410"
         private const val MARKER_MOVED = "doesn't exist or has been moved"
@@ -201,8 +205,11 @@ internal object MegaplayParser {
 
     private val DATA_ID =
         Regex("""data-id\s*=\s*["']([A-Za-z0-9_-]+)["']""", RegexOption.IGNORE_CASE)
-    private val PLAYER_DIV =
-        Regex("""id\s*=\s*["']megaplay-player["']""", RegexOption.IGNORE_CASE)
+    /** The player element id is provider-specific, so it comes from the vault, not a literal. */
+    private val PLAYER_DIV: Regex by lazy {
+        val marker = Regex.escape(ProviderVault.text(ProviderKey.PLAYER_MARKER))
+        Regex("id\\s*=\\s*[\"']$marker[\"']", RegexOption.IGNORE_CASE)
+    }
     private val START = Regex("""["]start["]\s*:\s*(-?[0-9]+(?:\.[0-9]+)?)""")
     private val END = Regex("""["]end["]\s*:\s*(-?[0-9]+(?:\.[0-9]+)?)""")
 
@@ -337,11 +344,12 @@ internal object JsonLite {
  */
 internal object MegaplayAes {
 
-    private const val AES_KEY = "i?LMTAx0Q6,:}50U"
-    private const val IV = "W0;27ToaUpl_P%'c"
-
-    private val keyBytes: ByteArray by lazy { AES_KEY.toByteArray(Charsets.UTF_8).copyOf(32) }
-    private val ivBytes: ByteArray by lazy { IV.toByteArray(Charsets.UTF_8) }
+    private val keyBytes: ByteArray by lazy {
+        ProviderVault.text(ProviderKey.EMBED_AES_KEY).toByteArray(Charsets.UTF_8).copyOf(32)
+    }
+    private val ivBytes: ByteArray by lazy {
+        ProviderVault.text(ProviderKey.EMBED_AES_IV).toByteArray(Charsets.UTF_8)
+    }
 
     fun decrypt(encoded: String): String {
         require(encoded.isNotEmpty()) { "empty AES payload" }

@@ -34,6 +34,6 @@ class ReAnimeProvider : AnimeProvider {
     private fun notImplemented(): Nothing = throw ProviderNotImplementedException(PROVIDER_ID)
 
     private companion object {
-        const val PROVIDER_ID = "reanime"
+        const val PROVIDER_ID = "source_d"
     }
 }

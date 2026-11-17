@@ -24,6 +24,7 @@ import com.animo.app.domain.repo.HindiCatalog
 import com.animo.app.domain.repo.StreamRepository
 import com.animo.app.player.ResolveException
 import com.animo.app.player.StreamResolver
+import com.animo.app.provider.ProviderVault
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -45,9 +46,6 @@ import okhttp3.OkHttpClient
  *   public `(OkHttpClient)` constructor and it will be found reflectively.
  */
 object ServiceLocator {
-
-    /** Class the container looks for when nobody registered a resolver explicitly. */
-    private const val STREAM_RESOLVER_CLASS = "com.animo.app.player.MegaplayStreamResolver"
 
     @Volatile
     private var applicationContext: Context? = null
@@ -73,6 +71,8 @@ object ServiceLocator {
             synchronized(this) {
                 if (applicationContext == null) {
                     applicationContext = app
+                    // Endpoints are decrypted once, here, before anything can ask for one.
+                    ProviderVault.install(app)
                     AppLog.i("container installed")
                 }
             }
@@ -162,92 +162,13 @@ object ServiceLocator {
     }
 
     /**
-     * Lazily instantiated, exactly once per process. Reads the explicit registration first, then
-     * tries — in order — `(OkHttpClient)`, `(Context, OkHttpClient)` and `()` constructors of
-     * [STREAM_RESOLVER_CLASS].
+     * Exactly one resolver per process, registered by `AnimoApp` rather than looked up by class name.
      *
-     * The player module is compiled separately from this one, so this is the single place in the
-     * build that is allowed to be class-name-driven. Until it exists, [UnavailableStreamResolver]
-     * keeps the app compiling and turns playback into a normal `Result.failure` instead of a crash.
+     * The old reflective lookup had two problems: it broke under R8 (the class gets renamed), and it
+     * left the provider's name as a string in the DEX. A direct registration fixes both.
      */
     val streamResolver: StreamResolver
-        get() = explicitResolver.get() ?: reflectedResolver
-
-    private val reflectedResolver: StreamResolver by lazy { loadStreamResolver() }
-
-    private fun loadStreamResolver(): StreamResolver {
-        val resolverClass = runCatching { Class.forName(STREAM_RESOLVER_CLASS) }.getOrNull()
-        if (resolverClass == null) {
-            AppLog.w("$STREAM_RESOLVER_CLASS not present yet — playback reports unavailable")
-            return UnavailableStreamResolver
-        }
-
-        val instance = instantiate(resolverClass)
-        if (instance == null) {
-            AppLog.e("no usable constructor on $STREAM_RESOLVER_CLASS")
-            return UnavailableStreamResolver
-        }
-
-        return instance as? StreamResolver ?: run {
-            AppLog.e("$STREAM_RESOLVER_CLASS does not implement StreamResolver")
-            UnavailableStreamResolver
-        }
-    }
-
-    /**
-     * Instantiates the resolver without a compile-time dependency on the player module.
-     *
-     * Two passes, because a Kotlin class with default arguments compiles to **one** full-arity
-     * constructor plus a synthetic `(..., int, DefaultConstructorMarker)` one — the convenient
-     * `(OkHttpClient)` form does not exist in the bytecode unless the author added `@JvmOverloads`.
-     */
-    private fun instantiate(resolverClass: Class<*>): Any? {
-        val direct: List<Array<Class<*>>> = listOf(
-            arrayOf(OkHttpClient::class.java),
-            arrayOf(Context::class.java, OkHttpClient::class.java),
-            emptyArray(),
-        )
-
-        for (signature in direct) {
-            val candidate = runCatching {
-                val args = signature.map { type ->
-                    when {
-                        type == OkHttpClient::class.java -> httpClient
-                        type == Context::class.java -> requireContext()
-                        else -> error("unsupported parameter $type")
-                    }
-                }.toTypedArray()
-                resolverClass.getConstructor(*signature).newInstance(*args)
-            }.getOrNull()
-            if (candidate != null) return candidate
-        }
-
-        // Kotlin default-argument constructor: (anchor..., argN, mask:Int, marker). Mask bits mark
-        // which trailing arguments are defaulted; the marker is ignored by the generated body.
-        for (constructor in resolverClass.constructors) {
-            val parameterTypes = constructor.parameterTypes
-            if (parameterTypes.size < 3) continue
-            if (!parameterTypes.last().name.endsWith("DefaultConstructorMarker")) continue
-
-            val anchor = when {
-                parameterTypes.first() == OkHttpClient::class.java -> httpClient
-                parameterTypes.first() == Context::class.java -> requireContext()
-                else -> continue
-            }
-
-            val realCount = parameterTypes.size - 2
-            val args = arrayOfNulls<Any?>(parameterTypes.size)
-            args[0] = anchor
-            // Everything from index 1 on is masked out, so null is never dereferenced.
-            args[realCount] = (1 shl realCount) - 2
-            args[realCount + 1] = null
-
-            val candidate = runCatching { constructor.newInstance(*args) }.getOrNull()
-            if (candidate != null) return candidate
-        }
-
-        return null
-    }
+        get() = explicitResolver.get() ?: UnavailableStreamResolver
 
     private fun requireContext(): Context = applicationContext
         ?: error("ServiceLocator.install(context) was never called")
