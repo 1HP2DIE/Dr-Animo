@@ -6,6 +6,9 @@ import com.animo.app.provider.ProviderVault
 import com.animo.app.domain.model.AudioTrack
 import com.animo.app.domain.model.Episode
 import com.animo.app.domain.model.PlayableStream
+import com.animo.app.domain.model.ServerLanguage
+import com.animo.app.domain.model.ServerOption
+import com.animo.app.domain.model.StreamServer
 import com.animo.app.domain.repo.StreamRepository
 import com.animo.app.player.ResolveException
 import java.io.IOException
@@ -118,6 +121,21 @@ class HindiStreamRepositoryImpl(
     private var trace: List<String> = emptyList()
 
     // ------------------------------------------------------------------ StreamRepository
+
+    /**
+     * A Hindi row has exactly one server: the catalogue it came from. Its audio is Hindi by
+     * definition, so there is no language choice to offer here.
+     */
+    override suspend fun serverOptions(animeId: Int, episode: Episode): List<ServerOption> = listOf(
+        ServerOption(
+            server = StreamServer.PRIMARY,
+            languages = listOf(
+                ServerLanguage(id = "hi", label = "Hindi", audio = AudioTrack.DUB, languageCode = "hi"),
+            ),
+            probed = true,
+            reachable = true,
+        ),
+    )
 
     override suspend fun resolve(
         animeId: Int,
