@@ -1,0 +1,39 @@
+{
+  "source": "toono.app",
+  "role": "hindi",
+  "baseUrl": "https://toono.app",
+  "verifiedAt": "2026-11-17",
+  "stack": { "cms": "wordpress", "counting": "wp-admin/admin-ajax.php action=action_search", "player": "jwplayer + hls.js", "cdn": "juicy.codes (*.groovy.monster)" },
+  "catalog": {
+    "localFile": "/home/grandpa/me/code/mixed/toon.app/site/data.json",
+    "titles": 1299,
+    "languageCounts": { "Hindi": 1256, "Telugu": 42, "Tamil": 41 },
+    "fields": ["t:title", "y:type", "s:slug", "p:poster", "o:synopsis", "r:rating", "u:url", "c:categories", "g:genres", "yr:year", "dur:duration"],
+    "enumerate": { "method": "POST admin-ajax action_search with nonce + vars.page", "pageSize": 10, "fallback": ["/series/", "/movies/", "sitemap.xml (newest 250 only)"] }
+  },
+  "stream": {
+    "hops": [
+      { "id": 1, "method": "GET", "url": "https://toono.app/episode/{slug}/", "expect": 200, "extract": "data-episode-id (numeric term id), data-lmt (JWT 300s), data-url (base64)" },
+      { "id": 2, "method": "GET", "url": "https://toono.app/?trembed=1&trid={episodeTermId}&trtype=2", "referer": "episode page", "expect": 200, "extract": "https://<embed-host>/embed/<videoId> (~422 B body)" },
+      { "id": 3, "method": "GET", "url": "https://argon.razorshell.space/embed/{videoId}", "expect": 200, "extract": "_juicycodes(\"..\"+\"..\") payload and /assets/players/jwplayer/player.js?cb=" },
+      { "id": 4, "method": "DECODE", "detail": "concat quoted args of _juicycodes(), execute player.js in a stubbed sandbox, read jwplayer().setup(...) playlist file", "reference": "/home/grandpa/me/code/mixed/toon.app/site/server.js decodePlaylist()" },
+      { "id": 5, "method": "GET", "url": "{master}.m3u8", "expect": 200, "variants": ["640x360 667k", "1280x720 1.58M", "1920x1080 3.89M"] },
+      { "id": 6, "method": "GET", "url": "{variant}.m3u8", "expect": 200, "segments": 167 },
+      { "id": 7, "method": "GET", "url": "{segment}", "expect": 206, "contentType": "video/mp4 (real MPEG-TS, 47 40 11 10)" }
+    ],
+    "headersEveryHop": {
+      "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "Accept-Language": "en-US,en;q=0.6",
+      "Referer": "https://argon.razorshell.space/",
+      "Accept": "*/*"
+    },
+    "gateMatrix": { "noHeaders": 403, "refererOnly": 403, "fullHeaders": 200, "staleUrlWithFullHeaders": 403 },
+    "ttl": "master URL time-limited; fresh resolve required per playback (cache <= 15 min)",
+    "android": { "okhttp": true, "tlsImpersonation": false, "note": "header-only gate — OkHttpDataSource.setDefaultRequestProperties covers playlist and segments", "jsRequired": true, "jsOptions": ["port decode to Kotlin", "quickjs-android", "WebView.evaluateJavascript", "server-side resolve"] }
+  },
+  "existingTooling": {
+    "server": "/home/grandpa/me/code/mixed/toon.app/site/server.js",
+    "endpoints": ["/api/episodes?u=<title page>", "/api/stream?u=<episode page>", "/api/status", "/api/sync", "/proxy?u=<cdn url>"],
+    "localPortTested": 8899
+  }
+}
