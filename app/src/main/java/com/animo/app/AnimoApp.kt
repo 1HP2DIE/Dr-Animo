@@ -3,6 +3,7 @@ package com.animo.app
 import android.app.Application
 import com.animo.app.data.sync.SyncScheduler
 import com.animo.app.di.ServiceLocator
+import com.animo.app.player.MegaplayStreamResolver
 
 /**
  * Process entry point. Order matters:
@@ -19,6 +20,11 @@ class AnimoApp : Application() {
 
         ServiceLocator.install(this)
         AppLog.i("Animo ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) starting")
+
+        // Deterministic resolver wiring (skips the reflective lookup in ServiceLocator).
+        ServiceLocator.registerStreamResolver(
+            MegaplayStreamResolver(client = ServiceLocator.httpClient),
+        )
 
         SyncScheduler.ensureScheduled(this)
     }
