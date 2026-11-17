@@ -49,6 +49,8 @@ across 10 series (the 8 failures were *synthesized* `/dub` URLs on sub-only epis
 
 ### MEASURED 4-way header matrix (live, `token_test.mjs matrix`)
 
+All CDN probes used `Referer: https://megaplay.buzz/` — the only referer the CDN accepts (see §1 rule 4).
+
 | Request | (a) bare | (b) `?token=` only | (c) token + Referer | (d) Referer only |
 |---|---|---|---|---|
 | master.m3u8 | **403** CF challenge | **403** CF challenge | 200 `application/vnd.apple.mpegurl` (255 B) | **200** (255 B) |
@@ -96,8 +98,19 @@ playlist verbatim, and never trust `Content-Type` (it lies: `image/jpeg`).
 2. **404 page is distinct** (3336 B, "doesn't exist or has been moved") — a synthesized dub URL on a
    sub-only episode. Never invent `/dub`; only use `embed_url.dub` when the API provides it.
 3. **`/hsub` does not exist** (404). `embed_url` only ever contains `sub` and `dub`.
-4. **Any of ~34 allowlisted domains works as page Referer**, including `megaplay.buzz` itself.
-   It is a presence/allowlist check, not a specific-host match. `https://anikototv.bz/` worked 15/15.
+4. **Any of ~34 allowlisted domains works as the *embed page* Referer**, including `megaplay.buzz`
+   itself. It is a presence/allowlist check, not a specific-host match. `https://anikototv.bz/`
+   worked 15/15 there.
+   **BUT the stream CDN is stricter** (device-verified 2026-11-17): `fetch.*` accepts
+   **only `Referer: https://megaplay.buzz/`** — `anikototv.bz` and `anikoto.cz` return **403**.
+   So: page referer (any) for hops 1–2, `https://megaplay.buzz/` for hops 4–5. Never reuse the page
+   referer for playback.
+
+   | Referer sent to `fetch.*master.m3u8` | Result |
+   |---|---|
+   | `https://anikototv.bz/` | **403** |
+   | `https://anikoto.cz/` | **403** |
+   | `https://megaplay.buzz/` | **200** |
 5. **Playlist host ≠ segment host.** Playlists: `fetch.nexabloom.top`. Segments: rotating
    `*.wintergrove.space`, `*.phantomharbor.space`, `*.twilightharbor.space`, `*.goldenanchor.space`.
    → headers must be applied by a **single shared data-source factory**, never per-URL.
