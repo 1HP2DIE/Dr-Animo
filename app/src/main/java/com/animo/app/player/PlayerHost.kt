@@ -205,8 +205,11 @@ fun PlayerHost(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT,
                 )
-                setUseController(true)
-                setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+                // The Compose overlay is the only chrome. Media3's own controller draws a second set
+                // of controls (gear, ±5 s, its own seek bar and clock) on every tap, and the two
+                // never agree — measured on device.
+                setUseController(false)
+                setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
                 setKeepContentOnPlayerReset(true)
             }
         },
