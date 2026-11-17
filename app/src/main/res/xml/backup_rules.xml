@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The catalog DB is a rebuildable cache of api.anikotoapi.site (~12 MB). Excluding it keeps
+  Auto Backup off the quota and guarantees a restore never resurrects a half-written schema.
+-->
+<full-backup-content>
+    <exclude
+        domain="database"
+        path="animo.db" />
+    <exclude
+        domain="database"
+        path="animo.db-wal" />
+    <exclude
+        domain="database"
+        path="animo.db-shm" />
+    <exclude
+        domain="file"
+        path="datastore" />
+</full-backup-content>

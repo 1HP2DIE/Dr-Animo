@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext stays OFF globally (targetSdk 35 default, and we do not want it enabled silently).
+  research/STACK.md §Cleartext: if a resolved master.m3u8 ever points at an http:// segment host,
+  add a SCOPED <domain-config cleartextTrafficPermitted="true"> for that host only — never a
+  base-config flip. All known hosts (anikotoapi.site, megaplay.buzz) are https.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Debug builds only: allow a local proxy / mitm inspection during development. -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>

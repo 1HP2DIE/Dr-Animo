@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude
+            domain="database"
+            path="animo.db" />
+        <exclude
+            domain="database"
+            path="animo.db-wal" />
+        <exclude
+            domain="database"
+            path="animo.db-shm" />
+        <exclude
+            domain="file"
+            path="datastore" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude
+            domain="database"
+            path="animo.db" />
+        <exclude
+            domain="database"
+            path="animo.db-wal" />
+        <exclude
+            domain="database"
+            path="animo.db-shm" />
+        <exclude
+            domain="file"
+            path="datastore" />
+    </device-transfer>
+</data-extraction-rules>

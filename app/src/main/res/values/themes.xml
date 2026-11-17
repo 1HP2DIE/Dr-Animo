@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+      Platform Material theme only: the project deliberately has no AppCompat / Material Components
+      dependency (no databinding, no XML layouts). Compose owns all UI; this theme only paints the
+      window before the first frame so there is no white flash on a dark app.
+    -->
+    <style name="Theme.Animo" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/animo_background</item>
+        <item name="android:colorBackground">@color/animo_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+
+    <style name="Theme.Animo.Player" parent="Theme.Animo">
+        <item name="android:windowBackground">@color/animo_scrim</item>
+        <item name="android:colorBackground">@color/animo_scrim</item>
+    </style>
+
+</resources>

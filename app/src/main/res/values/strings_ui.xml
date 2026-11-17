@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Compose UI copy (owned by Agent B / ui/**).
+  Kept in a separate file from res/values/strings.xml (owned by Agent A) so the two never collide.
+  Every key is prefixed `ui_` for the same reason.
+-->
+<resources>
+
+    <!-- Shared actions -->
+    <string name="ui_action_back">Back</string>
+    <string name="ui_action_clear">Clear</string>
+    <string name="ui_action_refresh">Refresh</string>
+    <string name="ui_action_search">Search</string>
+
+    <!-- Loading / empty / error primitives -->
+    <string name="ui_loading">Loading…</string>
+    <string name="ui_error_title">Something went wrong</string>
+    <string name="ui_empty_title">Nothing here yet</string>
+    <string name="ui_content_desc_poster">Poster of %1$s</string>
+    <string name="ui_content_desc_backdrop">Backdrop of %1$s</string>
+
+    <!-- Home -->
+    <string name="ui_home_search">Search catalog</string>
+    <string name="ui_home_continue">Continue watching</string>
+    <string name="ui_home_recent">Recently updated</string>
+    <string name="ui_home_recent_count">%1$d series</string>
+    <string name="ui_home_empty_title">Catalog is empty</string>
+    <string name="ui_home_empty_body">Pull down to sync. The first full pass downloads 9,404 series and takes a few minutes.</string>
+    <string name="ui_home_empty_action">Sync now</string>
+    <string name="ui_home_sync_failed">Sync failed: %1$s</string>
+    <string name="ui_sync_progress">Syncing %1$d/%2$d</string>
+    <string name="ui_sync_throttled_progress">Syncing %1$d/%2$d — rate limited, waiting…</string>
+
+    <!-- Search -->
+    <string name="ui_search_hint">Search title, romaji, native</string>
+    <string name="ui_search_count">%1$d results</string>
+    <string name="ui_search_count_capped">First %1$d results</string>
+    <string name="ui_search_empty_title">No results</string>
+    <string name="ui_search_empty_body">Nothing in the local catalog matches. Try another spelling, or clear the filters.</string>
+    <string name="ui_search_no_catalog_title">Catalog is empty</string>
+    <string name="ui_search_no_catalog_body">Search runs offline over the local catalog. Sync it from Home while online, then try again.</string>
+    <string name="ui_filters">Filters</string>
+    <string name="ui_filters_active">%1$d active</string>
+    <string name="ui_filter_all">All</string>
+    <string name="ui_filter_genre">Genre</string>
+    <string name="ui_filter_year">Year</string>
+    <string name="ui_filter_type">Type</string>
+    <string name="ui_filter_status">Status</string>
+    <string name="ui_filter_reset">Reset filters</string>
+
+    <!-- Detail -->
+    <string name="ui_detail_episodes">Episodes</string>
+    <string name="ui_detail_synopsis">Synopsis</string>
+    <string name="ui_detail_read_more">Read more</string>
+    <string name="ui_detail_read_less">Show less</string>
+    <string name="ui_detail_play">Play</string>
+    <string name="ui_detail_resume">Resume E%1$d</string>
+    <string name="ui_detail_resume_at">%1$s watched</string>
+    <string name="ui_detail_no_episodes_title">No episodes yet</string>
+    <string name="ui_detail_no_episodes_body">This series returns an empty episode list. That is a normal upstream answer for some titles — check again later.</string>
+    <string name="ui_detail_no_episodes_action">Check again</string>
+    <string name="ui_detail_episodes_failed">Could not load episodes: %1$s</string>
+    <string name="ui_detail_not_found">This series is not in the local catalog</string>
+    <string name="ui_detail_no_source">No playable source for this episode</string>
+    <string name="ui_detail_audio">Audio</string>
+
+    <!-- Player -->
+    <string name="ui_player_quality">Quality</string>
+    <string name="ui_player_quality_auto">Auto</string>
+    <string name="ui_player_quality_auto_hint">Adaptive — taken from the master playlist</string>
+    <string name="ui_player_error_title">Playback failed</string>
+    <string name="ui_player_error_body">The source did not respond. Retry, or pick another episode.</string>
+    <string name="ui_player_next">Next episode</string>
+    <string name="ui_player_previous">Previous episode</string>
+    <string name="ui_player_episode_label">E%1$d · %2$s</string>
+    <string name="ui_player_engine_pending">Player engine pending</string>
+    <string name="ui_player_engine_pending_body">UI shell is ready. The Media3 host is owned by Agent C.</string>
+
+</resources>
