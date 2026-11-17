@@ -9,6 +9,7 @@ import com.animo.app.domain.model.Anime
 import com.animo.app.domain.model.SyncProgress
 import com.animo.app.domain.model.SyncState
 import com.animo.app.domain.repo.AnimeRepository
+import com.animo.app.domain.repo.ContinueWatchingItem
 import com.animo.app.ui.UiState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -30,7 +31,8 @@ data class HomeUiModel(
     val recent: List<Anime> = emptyList(),
     val hindi: List<Anime> = emptyList(),
     val topRated: List<Anime> = emptyList(),
-    val continueWatching: List<Anime> = emptyList(),
+    /** Series rows plus their resume point, so the rail can draw progress without a lookup per card. */
+    val continueWatching: List<ContinueWatchingItem> = emptyList(),
     val sync: SyncProgress = SyncProgress(done = 0, total = 0, state = SyncState.IDLE),
     val isRefreshing: Boolean = false,
 ) {
@@ -51,7 +53,7 @@ private data class Shelves(
     val recent: List<Anime>,
     val hindi: List<Anime>,
     val topRated: List<Anime>,
-    val continueWatching: List<Anime>,
+    val continueWatching: List<ContinueWatchingItem>,
 )
 
 class HomeViewModel(private val repository: AnimeRepository) : ViewModel() {
@@ -66,7 +68,7 @@ class HomeViewModel(private val repository: AnimeRepository) : ViewModel() {
         repository.observeRecentOriginal(24),
         repository.observeRecentHindi(20),
         repository.observeTopRated(20),
-        repository.observeContinueWatching(20),
+        repository.observeContinueWatchingItems(20),
     ) { recent, hindi, topRated, continueWatching ->
         Shelves(recent, hindi, topRated, continueWatching)
     }

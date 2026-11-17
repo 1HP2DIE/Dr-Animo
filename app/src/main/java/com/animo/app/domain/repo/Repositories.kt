@@ -22,6 +22,8 @@ interface AnimeRepository {
     fun observeAnime(id: Int): Flow<Anime?>
     fun observeEpisodes(animeId: Int): Flow<List<Episode>>
     fun observeContinueWatching(limit: Int = 20): Flow<List<Anime>>
+    /** Same rows and ordering as [observeContinueWatching], plus the resume point of each series. */
+    fun observeContinueWatchingItems(limit: Int = 20): Flow<List<ContinueWatchingItem>>
     val sync: Flow<SyncProgress>
 
     suspend fun catalogSize(): Int
@@ -29,6 +31,32 @@ interface AnimeRepository {
     suspend fun ensureEpisodes(animeId: Int): Result<Unit>
     suspend fun saveProgress(animeId: Int, episodeId: Long, positionMs: Long, durationMs: Long)
     suspend fun progressFor(episodeId: Long): Long
+}
+
+/**
+ * A "continue watching" card: the series plus the resume point of the episode it was last touched
+ * on.
+ *
+ * [fraction] is deliberately nullable instead of defaulting to 0: progress rows do exist with
+ * `positionMs` or `durationMs` at 0 (a player callback that fired before the media settled, a row
+ * written by an older build), and dividing by zero would either crash or paint a full bar. `null`
+ * means "we do not know how far this is", and the card renders exactly as it did before progress
+ * existed — no bar, no percentage — rather than inventing one.
+ */
+data class ContinueWatchingItem(
+    val anime: Anime,
+    /** Episode number of the resume point; 0 when the episode list was never backfilled. */
+    val episodeNumber: Int = 0,
+    val positionMs: Long = 0L,
+    val durationMs: Long = 0L,
+) {
+    /** 0..1, clamped, or `null` when the row cannot describe progress at all. */
+    val fraction: Float?
+        get() = when {
+            durationMs <= 0L -> null
+            positionMs <= 0L -> null
+            else -> (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+        }
 }
 
 /**

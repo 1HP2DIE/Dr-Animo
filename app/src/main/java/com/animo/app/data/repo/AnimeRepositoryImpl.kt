@@ -22,6 +22,7 @@ import com.animo.app.domain.model.Filters
 import com.animo.app.domain.model.SyncProgress
 import com.animo.app.domain.model.SyncState
 import com.animo.app.domain.repo.AnimeRepository
+import com.animo.app.domain.repo.ContinueWatchingItem
 import com.animo.app.domain.repo.HindiCatalog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -115,7 +116,21 @@ class AnimeRepositoryImpl(
         episodeDao.observeForAnime(animeId).map { rows -> rows.map { it.toDomain() } }
 
     override fun observeContinueWatching(limit: Int): Flow<List<Anime>> =
-        animeDao.observeContinueWatching(limit).map { rows -> rows.map { it.toDomain() } }
+        // Derived from the richer query so both shelves share one ordering rule (most recently
+        // touched episode first) instead of two SQL statements that could drift apart.
+        observeContinueWatchingItems(limit).map { items -> items.map { it.anime } }
+
+    override fun observeContinueWatchingItems(limit: Int): Flow<List<ContinueWatchingItem>> =
+        progressDao.observeContinueWatching(limit).map { rows ->
+            rows.map { row ->
+                ContinueWatchingItem(
+                    anime = row.anime.toDomain(),
+                    episodeNumber = row.episodeNumber,
+                    positionMs = row.positionMs,
+                    durationMs = row.durationMs,
+                )
+            }
+        }
 
     override suspend fun catalogSize(): Int = animeDao.count()
 

@@ -277,12 +277,14 @@ private fun HomeContent(
                     key = "continue-rail",
                     items = model.continueWatching,
                     contentType = "continue",
-                    itemKey = { "continue-${it.id}" },
-                ) { anime ->
+                    itemKey = { "continue-${it.anime.id}" },
+                ) { item ->
                     ContinueWatchingCard(
-                        anime = anime,
-                        onClick = rememberAnimeClick(anime.id, onOpenAnime),
+                        anime = item.anime,
+                        onClick = rememberAnimeClick(item.anime.id, onOpenAnime),
                         modifier = Modifier.width(ContinueRailWidth),
+                        episodeNumber = item.episodeNumber,
+                        progress = item.fraction,
                     )
                 }
             }
