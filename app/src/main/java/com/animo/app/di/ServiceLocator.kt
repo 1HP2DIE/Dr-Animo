@@ -24,6 +24,7 @@ import com.animo.app.domain.repo.HindiCatalog
 import com.animo.app.domain.repo.StreamRepository
 import com.animo.app.player.ResolveException
 import com.animo.app.player.StreamResolver
+import com.animo.app.player.AltStreamSource
 import com.animo.app.provider.ProviderVault
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.serialization.json.Json
@@ -125,7 +126,13 @@ object ServiceLocator {
 
     val streamRepository: StreamRepository by lazy {
         RoutingStreamRepository(
-            original = StreamRepositoryImpl(resolverProvider = { streamResolver }),
+            original = StreamRepositoryImpl(
+                resolverProvider = { streamResolver },
+                // Second chance for episodes the embed chain cannot open, in up to seven audio
+                // tracks. The AniList id comes from the catalogue row, read on demand.
+                alternative = AltStreamSource(httpClient),
+                anilistIdOf = { id -> animeDao.findById(id)?.aniId?.takeIf { it.isNotBlank() } },
+            ),
             hindi = { hindiStreamRef.get() },
         )
     }

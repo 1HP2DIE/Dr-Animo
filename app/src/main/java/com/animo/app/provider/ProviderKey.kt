@@ -35,6 +35,12 @@ enum class ProviderKey(val slot: String) {
     DUB_SLUG_PREFIX_A("dub_slug_prefix_a"),
     DUB_SLUG_PREFIX_B("dub_slug_prefix_b"),
 
+    /** Alternative stream source: rotating API endpoints, its public origin, and the CDN headers. */
+    STREAM_SOURCE_B_SHARDS("source_b_shards"),
+    STREAM_SOURCE_B_ORIGIN("source_b_origin"),
+    STREAM_SOURCE_B_REFERER("source_b_referer"),
+    STREAM_SOURCE_B_USER_AGENT("source_b_user_agent"),
+
     SUBTITLE_HOST_A("sub_a"),
     SUBTITLE_HOST_B("sub_b"),
     SUBTITLE_HOST_B_CDN("sub_b_cdn"),

@@ -5,6 +5,7 @@ import com.animo.app.AppLog
 import com.animo.app.domain.model.AudioTrack
 import com.animo.app.domain.model.Episode
 import com.animo.app.domain.model.PlayableStream
+import com.animo.app.domain.repo.AlternativeStreamSource
 import com.animo.app.domain.repo.StreamRepository
 import com.animo.app.player.ResolveException
 import com.animo.app.player.StreamResolver
@@ -26,6 +27,10 @@ class StreamRepositoryImpl(
     private val resolverProvider: () -> StreamResolver,
     private val ttlMs: Long = CACHE_TTL_MS,
     private val clock: () -> Long = { SystemClock.elapsedRealtime() },
+    /** Second chance when the primary embed chain fails — see [AlternativeStreamSource]. */
+    private val alternative: AlternativeStreamSource? = null,
+    /** AniList id for the catalogue row, read lazily so this layer never touches Room directly. */
+    private val anilistIdOf: suspend (animeId: Int) -> String? = { null },
 ) : StreamRepository {
 
     private data class Key(val episodeId: Long, val audio: AudioTrack)
@@ -52,26 +57,59 @@ class StreamRepositoryImpl(
             AudioTrack.SUB -> episode.subUrl
             AudioTrack.DUB -> episode.dubUrl
         }?.takeIf { it.isNotBlank() }
-            ?: return Result.failure(
-                ResolveException.NotFound("episode ${episode.id} has no ${audio.name.lowercase()} source"),
-            )
 
         val key = Key(episode.id, audio)
-        read(key, embedUrl)?.let { return Result.success(it) }
+        if (embedUrl != null) read(key, embedUrl)?.let { return Result.success(it) }
 
         return mutex.withLock {
             // Second check: another caller may have resolved while we queued for the lock.
-            read(key, embedUrl)?.let { return@withLock Result.success(it) }
+            if (embedUrl != null) read(key, embedUrl)?.let { return@withLock Result.success(it) }
 
-            resolverProvider().resolve(embedUrl, audio)
+            val primary = if (embedUrl == null) {
+                Result.failure(
+                    ResolveException.NotFound(
+                        "episode ${episode.id} has no ${audio.name.lowercase()} source",
+                    ),
+                )
+            } else {
+                resolverProvider().resolve(embedUrl, audio)
+            }
+
+            val result = if (primary.isSuccess) {
+                primary
+            } else {
+                resolveAlternative(animeId, episode, audio) ?: primary
+            }
+
+            result
                 .onSuccess { stream ->
-                    store(key, Entry(stream, embedUrl, clock()))
+                    store(key, Entry(stream, embedUrl.orEmpty(), clock()))
                     AppLog.d("resolved ep${episode.id} ${audio.name} -> ${stream.masterUrl}")
                 }
                 .onFailure { error ->
                     AppLog.w("resolve failed for ep${episode.id} ${audio.name}: ${error.message}")
                 }
         }
+    }
+
+    /**
+     * The second source needs an AniList id rather than an embed URL, so it is asked only when the
+     * primary chain has already given up. A missing id is a normal outcome (Hindi rows have none),
+     * not an error.
+     */
+    private suspend fun resolveAlternative(
+        animeId: Int,
+        episode: Episode,
+        audio: AudioTrack,
+    ): Result<PlayableStream>? {
+        val source = alternative ?: return null
+        val anilistId = runCatching { anilistIdOf(animeId) }.getOrNull()?.takeIf { it.isNotBlank() }
+            ?: return null
+        val result = source.resolve(anilistId, episode, audio)
+        result.onFailure { error ->
+            AppLog.w("alternative source failed for ep${episode.id}: ${error.message}")
+        }
+        return result
     }
 
     override suspend fun invalidate(episodeId: Long) {

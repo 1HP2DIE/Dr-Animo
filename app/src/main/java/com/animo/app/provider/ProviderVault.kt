@@ -105,7 +105,7 @@ object ProviderVault {
             val id = ByteArray(idLength).also { buffer.get(it) }
 
             val valueLength = buffer.int
-            require(valueLength in 0..4096) { "vault value length out of range" }
+            require(valueLength in 0..16_384) { "vault value length out of range" }
             val value = ByteArray(valueLength).also { buffer.get(it) }
 
             out[String(id, Charsets.UTF_8)] = String(value, Charsets.UTF_8)
