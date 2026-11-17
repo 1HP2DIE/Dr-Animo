@@ -140,6 +140,7 @@ class MegaplayStreamResolver(
         val masterUrl = MegaplayParser.masterUrl(sources.body)
             ?: throw ResolveException.Parse("no playable file in getSources")
 
+        val tracks = StreamTracks.parse(sources.body)
         return PlayableStream(
             masterUrl = masterUrl,
             // Device-verified 2026-11-17: the CDN host (fetch.*) accepts ONLY the megaplay referer —
@@ -151,6 +152,9 @@ class MegaplayStreamResolver(
             thumbnails = JsonLite.stringField(sources.body, "image"),
             intro = MegaplayParser.markerMs(sources.body, "intro"),
             outro = MegaplayParser.markerMs(sources.body, "outro"),
+            // Subtitle and preview hosts gate on the same referer as the CDN (measured: 403 without).
+            subtitles = tracks.subtitles,
+            previewVtt = tracks.previewVtt,
         )
     }
 

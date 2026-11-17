@@ -38,11 +38,17 @@ object SubtitleFiles {
     }
 
     /** Direct link (`.srt`, `.vtt`, `.ass`). Redirects are followed by OkHttp. */
-    suspend fun download(client: OkHttpClient, url: String): SubtitleFile = withContext(Dispatchers.IO) {
+    suspend fun download(
+        client: OkHttpClient,
+        url: String,
+        /** Extra request headers; a stream's own subtitle host gates on its referer. */
+        headers: Map<String, String> = emptyMap(),
+    ): SubtitleFile = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url(url.trim())
             .header("Accept", "text/plain, */*")
             .header("User-Agent", "Animo")
+            .apply { headers.forEach { (name, value) -> if (value.isNotBlank()) header(name, value) } }
             .build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw IllegalStateException("HTTP ${response.code}")

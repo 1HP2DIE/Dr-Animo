@@ -79,6 +79,7 @@ import com.animo.app.domain.model.PlayableStream
 import com.animo.app.di.ServiceLocator
 import com.animo.app.player.PlayerController
 import com.animo.app.player.TrackOption
+import com.animo.app.player.StreamTracks
 import com.animo.app.subtitle.SubtitleCue
 import com.animo.app.subtitle.SubtitleFiles
 import com.animo.app.subtitle.SubtitleParser
@@ -202,6 +203,9 @@ private fun PlayerStage(
     var episodesVisible by remember { mutableStateOf(false) }
     var scrubPositionMs by remember { mutableStateOf<Long?>(null) }
     val hudState = rememberPlayerHudState()
+    // Lives here, not in the controls overlay: that leaves composition every time the chrome hides,
+    // and would download the preview index again on every tap.
+    val seekPreview = rememberSeekPreview(surfaceState.stream)
 
     // Lock: swallows every gesture until unlocked; bumping the token re-reveals the unlock button.
     var locked by remember { mutableStateOf(false) }
@@ -280,7 +284,23 @@ private fun PlayerStage(
     // Container cues are already "on screen now"; the player pushes them from Media3.
     var containerLines by remember { mutableStateOf(emptyList<String>()) }
 
-    val subtitleFromFile = fileActive && fileCues.isNotEmpty()
+    // ---- stream side-car subtitles ------------------------------------------
+    // The source publishes subtitle files next to the video (Server 1: up to ~16 languages). They
+    // are downloaded on demand and drawn by the same overlay as a side-loaded file.
+    var streamTrackId by remember { mutableStateOf<String?>(null) }
+    var streamCues by remember { mutableStateOf(emptyList<SubtitleCue>()) }
+    val streamCueCache = remember { mutableMapOf<String, List<SubtitleCue>>() }
+    // What the viewer chose, carried to the next episode: a label to look for, or "off".
+    var preferredStreamLabel by rememberSaveable { mutableStateOf<String?>(null) }
+    var subtitlesOffByViewer by rememberSaveable { mutableStateOf(false) }
+    val streamSubtitles = surfaceState.stream?.subtitles.orEmpty()
+
+    val activeCues = when {
+        streamTrackId != null -> streamCues
+        fileActive -> fileCues
+        else -> emptyList()
+    }
+    val subtitleFromFile = activeCues.isNotEmpty()
     var subtitleClockMs by remember { mutableLongStateOf(0L) }
     LaunchedEffect(subtitleFromFile) {
         while (subtitleFromFile) {
@@ -289,7 +309,7 @@ private fun PlayerStage(
         }
     }
     val subtitleLines = if (subtitleFromFile) {
-        fileCues.activeAt(subtitleClockMs).flatMap { cue -> cue.text.split('\n') }
+        activeCues.activeAt(subtitleClockMs).flatMap { cue -> cue.text.split('\n') }
     } else {
         containerLines
     }
@@ -308,11 +328,60 @@ private fun PlayerStage(
                 fileCues = parsed
                 fileLabel = name
                 fileActive = true
+                streamTrackId = null
                 containerLines = emptyList()
                 // One renderer at a time: the container track would otherwise draw a second copy.
                 controller.selectTextTrack(TrackOption.OFF_ID)
             }
         }
+    }
+
+    val loadStreamTrack: (Int) -> Unit = { index ->
+        val track = streamSubtitles.getOrNull(index)
+        val stream = surfaceState.stream
+        if (track != null && stream != null) {
+            val id = TrackRow.STREAM_PREFIX + index
+            scope.launch {
+                subtitleError = null
+                val cached = streamCueCache[track.url]
+                val cues = cached ?: run {
+                    subtitleBusy = track.label
+                    val file = runCatching {
+                        SubtitleFiles.download(
+                            client = ServiceLocator.httpClient,
+                            url = track.url,
+                            headers = mapOf("Referer" to stream.referer, "User-Agent" to stream.userAgent),
+                        )
+                    }.getOrNull()
+                    val parsed = file?.let {
+                        withContext(Dispatchers.Default) {
+                            runCatching { SubtitleParser.parse(it.name, it.content) }.getOrDefault(emptyList())
+                        }
+                    }.orEmpty()
+                    subtitleBusy = null
+                    parsed
+                }
+                if (cues.isEmpty()) {
+                    subtitleError = context.getString(R.string.ui_sub_error_load)
+                } else {
+                    streamCueCache[track.url] = cues
+                    streamCues = cues
+                    streamTrackId = id
+                    fileActive = false
+                    containerLines = emptyList()
+                    controller.selectTextTrack(TrackOption.OFF_ID)
+                }
+            }
+        }
+    }
+
+    // A new stream: put back what the viewer had (same label), or the source's sensible default.
+    LaunchedEffect(surfaceState.stream) {
+        val subs = surfaceState.stream?.subtitles.orEmpty()
+        if (subs.isEmpty() || subtitlesOffByViewer || streamTrackId != null || fileActive) return@LaunchedEffect
+        val pick = preferredStreamLabel?.let { label -> subs.firstOrNull { it.label == label } }
+            ?: StreamTracks.autoPick(subs, dub = model.audio == AudioTrack.DUB)
+        pick?.let { loadStreamTrack(subs.indexOf(it)) }
     }
 
     /**
@@ -321,7 +390,15 @@ private fun PlayerStage(
      * source, so the two can never both be "selected".
      */
     val onSelectText: (String) -> Unit = { id ->
-        when (id) {
+        subtitlesOffByViewer = id == TrackOption.OFF_ID
+        if (id.startsWith(TrackRow.STREAM_PREFIX)) {
+            val index = id.removePrefix(TrackRow.STREAM_PREFIX).toIntOrNull() ?: -1
+            preferredStreamLabel = streamSubtitles.getOrNull(index)?.label
+            loadStreamTrack(index)
+        } else {
+            streamTrackId = null
+        }
+        if (!id.startsWith(TrackRow.STREAM_PREFIX)) when (id) {
             TrackRow.FILE_ID -> {
                 fileActive = true
                 // The engine must stop drawing its own track, and any cue it already pushed must go
@@ -375,6 +452,9 @@ private fun PlayerStage(
         fileLabel = null
         fileActive = false
         containerLines = emptyList()
+        streamTrackId = null
+        streamCues = emptyList()
+        streamCueCache.clear()
     }
 
     val startOnlineSearch: () -> Unit = {
@@ -695,6 +775,7 @@ private fun PlayerStage(
                     flashMessage(context.getString(R.string.ui_player_ctl_locked), Icons.Rounded.Lock)
                 },
                 speed = speed,
+                preview = seekPreview,
                 onOpenSettings = { tab ->
                     settingsTab = tab
                     controlsVisible = true
@@ -793,8 +874,12 @@ private fun PlayerStage(
                     activeQualityId = activeQualityId,
                     audios = audios.map { TrackRow(it.id, it.label) },
                     selectedAudioId = selectedAudioId,
-                    texts = texts.map { TrackRow(it.id, it.label) },
-                    selectedTextId = if (fileActive) TrackRow.FILE_ID else selectedTextId,
+                    // Source side-cars first (that is where the languages are), then container tracks.
+                    texts = streamSubtitles.mapIndexed { index, sub ->
+                        TrackRow(TrackRow.STREAM_PREFIX + index, sub.label)
+                    } + texts.map { TrackRow(it.id, it.label) },
+                    selectedTextId = streamTrackId
+                        ?: if (fileActive) TrackRow.FILE_ID else selectedTextId,
                     speed = speed,
                     hasQualities = qualities.size > 1,
                     hasAudioTracks = audios.size > 1,
@@ -859,6 +944,7 @@ private fun PlayerControlsOverlay(
     onCycleFit: () -> Unit,
     onLock: () -> Unit,
     speed: Float,
+    preview: SeekPreviewState,
     onOpenSettings: (PlayerMenuTab) -> Unit,
     onOpenEpisodes: () -> Unit,
     sleepActive: Boolean,
@@ -1015,6 +1101,7 @@ private fun PlayerControlsOverlay(
                 onScrub = onScrub,
                 onSeek = onSeek,
                 chapters = chapters,
+                preview = preview,
             )
 
             Row(

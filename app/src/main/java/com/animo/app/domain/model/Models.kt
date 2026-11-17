@@ -85,6 +85,22 @@ data class PlayableStream(
     val thumbnails: String? = null,
     val intro: LongRange? = null,
     val outro: LongRange? = null,
+    /** Side-car subtitle files the source publishes next to the video (fetched with [referer]). */
+    val subtitles: List<StreamSubtitle> = emptyList(),
+    /** WebVTT index of seek-preview sprites (fetched with [referer]); `null` when there is none. */
+    val previewVtt: String? = null,
+)
+
+/** One subtitle file a source offers for a stream. */
+data class StreamSubtitle(
+    val url: String,
+    val label: String,
+    /** ISO-639 code when the source names one (`eng`, `en`, `por`…), else `null`. */
+    val language: String? = null,
+    /** The source's own pick for the default track. */
+    val isDefault: Boolean = false,
+    /** Signs-and-songs only — what a dub wants on by default. */
+    val forced: Boolean = false,
 )
 
 data class Filters(

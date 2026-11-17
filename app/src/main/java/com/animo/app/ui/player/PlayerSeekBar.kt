@@ -41,6 +41,8 @@ import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.unit.dp
 import com.animo.app.ui.common.formatClock
 import kotlin.math.roundToInt
@@ -71,6 +73,7 @@ fun PlayerSeekBar(
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
     chapters: List<SeekChapter> = emptyList(),
+    preview: SeekPreviewState? = null,
     trackColor: Color = PlayerChrome.track,
     bufferedColor: Color = PlayerChrome.buffered,
     progressColor: Color = PlayerChrome.accent,
@@ -214,6 +217,22 @@ fun PlayerSeekBar(
                     .padding(horizontal = 10.dp, vertical = 5.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
+                // The frame you would land on, when the source publishes preview sprites.
+                preview?.frameAt(targetMs)?.let { (sprite, cell) ->
+                    Canvas(
+                        Modifier
+                            .padding(bottom = 4.dp)
+                            .size(width = 160.dp, height = 90.dp)
+                            .clip(RoundedCornerShape(4.dp)),
+                    ) {
+                        drawImage(
+                            image = sprite,
+                            srcOffset = IntOffset(cell.x, cell.y),
+                            srcSize = IntSize(cell.width, cell.height),
+                            dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+                        )
+                    }
+                }
                 Text(
                     text = formatClock(targetMs),
                     style = MaterialTheme.typography.labelLarge,

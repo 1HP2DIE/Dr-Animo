@@ -224,7 +224,10 @@ internal fun SubtitlePane(
     LaunchedEffect(Unit) {
         // Opening the CC pane on an episode nobody has searched yet is the strongest signal that
         // the viewer wants subtitles — so search without making them ask twice.
-        if (state.online is OnlineSubtitlePhase.Idle) actions.onSearchOnline()
+        // …unless the stream already brought its own tracks; then searching is wasted requests.
+        if (state.online is OnlineSubtitlePhase.Idle && tuning.texts.isEmpty() && state.fileLabel == null) {
+            actions.onSearchOnline()
+        }
     }
     state.onlineNote?.let { note ->
         Text(

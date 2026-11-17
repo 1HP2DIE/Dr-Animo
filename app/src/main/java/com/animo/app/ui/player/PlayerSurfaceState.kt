@@ -40,6 +40,7 @@ class PlayerSurfaceState {
     private val speedState = mutableStateOf(1f)
     private val introState = mutableStateOf<LongRange?>(null)
     private val outroState = mutableStateOf<LongRange?>(null)
+    private val streamState = mutableStateOf<com.animo.app.domain.model.PlayableStream?>(null)
 
     private var togglePlayPauseCommand: (() -> Unit)? = null
     private var seekToCommand: ((Long) -> Unit)? = null
@@ -69,6 +70,17 @@ class PlayerSurfaceState {
      * Sources send `0..0` for "no marker" and the odd 1-second range; anything under five seconds
      * is not a song and must not grow a skip button.
      */
+    /**
+     * The resolved stream, for what rides along with the video: side-car subtitles, the preview
+     * sprite index, and the referer/user agent both of those hosts insist on.
+     */
+    val stream: com.animo.app.domain.model.PlayableStream? get() = streamState.value
+
+    fun setStream(stream: com.animo.app.domain.model.PlayableStream) {
+        streamState.value = stream
+        setMarkers(stream.intro, stream.outro)
+    }
+
     fun setMarkers(intro: LongRange?, outro: LongRange?) {
         introState.value = intro?.takeIf { it.last - it.first >= MIN_MARKER_MS }
         outroState.value = outro?.takeIf { it.last - it.first >= MIN_MARKER_MS }

@@ -61,7 +61,7 @@ internal fun PlayerHostSlot(
         masterUrlProvider().fold(
             onSuccess = {
                 stream = it
-                state.setMarkers(it.intro, it.outro)
+                state.setStream(it)
             },
             onFailure = { error ->
                 failure = error

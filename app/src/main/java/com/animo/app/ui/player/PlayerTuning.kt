@@ -73,6 +73,9 @@ data class TrackRow(
          * `onSelectText`.
          */
         const val FILE_ID = "file"
+
+        /** Prefix for a subtitle file the stream's source publishes; the suffix is its index. */
+        const val STREAM_PREFIX = "stream:"
     }
 }
 
