@@ -4,9 +4,12 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -28,9 +31,11 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.SearchOff
@@ -40,7 +45,6 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -60,8 +64,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -70,28 +78,45 @@ import com.animo.app.R
 import com.animo.app.domain.model.Anime
 import com.animo.app.domain.model.AudioTrack
 import com.animo.app.domain.model.Episode
+import com.animo.app.domain.repo.EpisodeProgress
 import com.animo.app.ui.LocalAppContainer
 import com.animo.app.ui.UiState
 import com.animo.app.ui.common.BadgeTone
-import com.animo.app.ui.common.EpisodeCard
-import com.animo.app.ui.common.EpisodeRow
 import com.animo.app.ui.common.EmptyState
+import com.animo.app.ui.common.EpisodeRow
 import com.animo.app.ui.common.ErrorState
 import com.animo.app.ui.common.LoadingState
 import com.animo.app.ui.common.PillBadge
+import com.animo.app.ui.common.PreviewData
 import com.animo.app.ui.common.SectionHeader
+import com.animo.app.ui.common.displayTitle
 import com.animo.app.ui.common.formatClock
 import com.animo.app.ui.common.formatScore
 import com.animo.app.ui.common.initials
 import com.animo.app.ui.common.isPlayable
 import com.animo.app.ui.common.pickAudio
+import com.animo.app.ui.settings.SettingsPreferences
 import com.animo.app.ui.theme.AnimoPalette
+import com.animo.app.ui.theme.AnimoTheme
 import com.animo.app.ui.theme.LocalIsDarkTheme
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 private val FullSpan: LazyGridItemSpanScope.() -> GridItemSpan = { GridItemSpan(maxLineSpan) }
 
 private val HeroShape = RoundedCornerShape(20.dp)
+
+/**
+ * One grid cell's worth of state, resolved before the grid is built.
+ *
+ * The map lookups happen once per (episode list, progress) pair instead of once per cell per
+ * recomposition, so scrolling a 1,000-episode season stays a pure draw of already-computed values.
+ */
+private data class EpisodeCell(
+    val episode: Episode,
+    val progress: EpisodeProgress?,
+    val isCurrent: Boolean,
+)
 
 @Composable
 fun DetailScreen(
@@ -101,8 +126,16 @@ fun DetailScreen(
     modifier: Modifier = Modifier,
 ) {
     val container = LocalAppContainer.current
-    val factory = remember(container, animeId) {
-        detailViewModelFactory(animeId, container.animeRepository)
+    val context = LocalContext.current.applicationContext
+    // The preference only seeds the audio chips; it is read here (not in the ViewModel) so the
+    // ViewModel keeps its Context-free constructor.
+    val preferences = remember(context) { SettingsPreferences(context) }
+    val factory = remember(container, animeId, preferences) {
+        detailViewModelFactory(
+            animeId = animeId,
+            repository = container.animeRepository,
+            defaultAudio = preferences.defaultAudio,
+        )
     }
     val viewModel: DetailViewModel = viewModel(factory = factory)
     DetailScreen(
@@ -179,7 +212,13 @@ private fun DetailContent(
     val noSourceMessage = stringResource(R.string.ui_detail_no_source)
     val gridState: LazyGridState = rememberLazyGridState()
 
-    var selectedAudio by rememberSaveable(anime.id) { mutableStateOf(AudioTrack.SUB) }
+    // Two remembered flags instead of one nullable value: `rememberSaveable` can only store bundle
+    // types, and a null supplier would throw on the first configuration change.
+    var pickedAudio by rememberSaveable(anime.id) { mutableStateOf(AudioTrack.SUB) }
+    var audioWasPicked by rememberSaveable(anime.id) { mutableStateOf(false) }
+    // The persisted default is only the *initial* choice: once the viewer taps a chip, their pick
+    // wins and later preference emissions must not overwrite it.
+    val selectedAudio = if (audioWasPicked) pickedAudio else model.initialAudio
     var synopsisExpanded by rememberSaveable(anime.id) { mutableStateOf(false) }
 
     val collapsed by remember {
@@ -194,6 +233,19 @@ private fun DetailContent(
     )
 
     val sortedEpisodes = remember(model.episodes) { model.episodes.sortedBy { it.number } }
+    val resumeEpisode = model.resume?.episode
+    val headerTarget = resumeEpisode ?: sortedEpisodes.firstOrNull()
+
+    // Derived once per emission, never per cell: the grid only reads these values.
+    val episodeCells = remember(sortedEpisodes, model.progress, resumeEpisode) {
+        sortedEpisodes.map { episode ->
+            EpisodeCell(
+                episode = episode,
+                progress = model.progress[episode.id],
+                isCurrent = episode.id == resumeEpisode?.id,
+            )
+        }
+    }
 
     // Single stable handler for every episode cell — one allocation for the whole grid.
     val onEpisodeTap: (Episode) -> Unit = remember(
@@ -218,8 +270,9 @@ private fun DetailContent(
             state = gridState,
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 36.dp),
+                .statusBarsPadding()
+                .navigationBarsPadding(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -231,7 +284,10 @@ private fun DetailContent(
                 MetaSection(
                     model = model,
                     selectedAudio = selectedAudio,
-                    onSelectAudio = { audio -> selectedAudio = audio },
+                    onSelectAudio = { audio ->
+                        pickedAudio = audio
+                        audioWasPicked = true
+                    },
                     onPlayEpisode = onEpisodeTap,
                 )
             }
@@ -257,13 +313,8 @@ private fun DetailContent(
                         SectionHeader(title = stringResource(R.string.ui_home_continue))
                         EpisodeRow(
                             episode = resume.episode,
-                            onClick = {
-                                if (resume.episode.isPlayable()) {
-                                    onEpisodeTap(resume.episode)
-                                } else {
-                                    scope.launch { snackbarHostState.showSnackbar(noSourceMessage) }
-                                }
-                            },
+                            onClick = { onEpisodeTap(resume.episode) },
+                            watchedFraction = model.progress[resume.episode.id]?.fraction ?: 0f,
                             subtitle = stringResource(
                                 R.string.ui_detail_resume_at,
                                 formatClock(resume.positionMs),
@@ -274,29 +325,17 @@ private fun DetailContent(
             }
 
             item(key = "episodes-header", span = FullSpan, contentType = "header") {
-                Column(Modifier.padding(top = 10.dp)) {
-                    SectionHeader(
-                        title = stringResource(R.string.ui_detail_episodes),
-                        subtitle = if (sortedEpisodes.isEmpty()) {
-                            null
-                        } else {
-                            stringResource(R.string.label_episodes_count, sortedEpisodes.size)
-                        },
-                        actionLabel = stringResource(R.string.ui_action_refresh),
-                        onAction = onRefreshEpisodes,
-                    )
-                    model.episodesError?.let { error ->
-                        Text(
-                            text = stringResource(R.string.ui_detail_episodes_failed, error),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                    }
-                }
+                EpisodesHeader(
+                    episodeCount = sortedEpisodes.size,
+                    target = headerTarget,
+                    isResume = resumeEpisode != null,
+                    error = model.episodesError,
+                    onPlayTarget = onEpisodeTap,
+                    onRefresh = onRefreshEpisodes,
+                )
             }
 
-            if (sortedEpisodes.isEmpty()) {
+            if (episodeCells.isEmpty()) {
                 item(key = "episodes-empty", span = FullSpan, contentType = "empty") {
                     EmptyState(
                         title = stringResource(R.string.ui_detail_no_episodes_title),
@@ -308,15 +347,17 @@ private fun DetailContent(
                 }
             } else {
                 items(
-                    items = sortedEpisodes,
-                    key = { episode -> episode.id },
+                    items = episodeCells,
+                    key = { cell -> cell.episode.id },
                     contentType = { "episode" },
-                ) { episode ->
-                    val onClick = remember(episode, onEpisodeTap) { { onEpisodeTap(episode) } }
-                    EpisodeCard(
-                        episode = episode,
+                ) { cell ->
+                    val onClick = remember(cell.episode, onEpisodeTap) { { onEpisodeTap(cell.episode) } }
+                    EpisodeTile(
+                        episode = cell.episode,
+                        progress = cell.progress,
+                        isCurrent = cell.isCurrent,
+                        showHindi = anime.isHindi,
                         onClick = onClick,
-                        isCurrent = model.resume?.episode?.id == episode.id,
                     )
                 }
             }
@@ -365,6 +406,202 @@ private fun DetailContent(
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding(),
         )
+    }
+}
+
+/**
+ * "Episodes / N episodes" plus the two things the section can do: jump straight back into the series
+ * and re-fetch the list.
+ *
+ * `SectionHeader` carries exactly one action, so the resume button sits beside it instead of inside
+ * it — the header keeps its own tick/title hierarchy and the buttons stay a single tap target each.
+ */
+@Composable
+private fun EpisodesHeader(
+    episodeCount: Int,
+    target: Episode?,
+    isResume: Boolean,
+    error: String?,
+    onPlayTarget: (Episode) -> Unit,
+    onRefresh: () -> Unit,
+) {
+    Column(Modifier.padding(top = 10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SectionHeader(
+                title = stringResource(R.string.ui_detail_episodes),
+                subtitle = if (episodeCount == 0) {
+                    null
+                } else {
+                    stringResource(R.string.label_episodes_count, episodeCount)
+                },
+                modifier = Modifier.weight(1f),
+            )
+            if (target != null) {
+                TextButton(
+                    onClick = { onPlayTarget(target) },
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                ) {
+                    Text(
+                        text = if (isResume) {
+                            stringResource(R.string.ui_detail_resume, target.number)
+                        } else {
+                            stringResource(R.string.ui_detail_episodes_play, target.number)
+                        },
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                    )
+                }
+            }
+            IconButton(
+                onClick = onRefresh,
+                modifier = Modifier.size(36.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Refresh,
+                    contentDescription = stringResource(R.string.ui_action_refresh),
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(17.dp),
+                )
+            }
+        }
+        if (error != null) {
+            Text(
+                text = stringResource(R.string.ui_detail_episodes_failed, error),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+    }
+}
+
+/**
+ * Compact episode cell: number, title (only when it says something the number does not), audio
+ * badges, and how far the viewer got.
+ *
+ * Deliberately not a fixed-height tile: the old 96 dp cell reserved a weighted spacer between the
+ * badges and the progress line, which read as a hole at the bottom of every episode. Here the
+ * content defines the height and the progress line is the last 2 dp of the card.
+ *
+ * The DUB badge is rendered **only** when `episode.dubUrl != null` — `is_dub` on the parent anime is
+ * an episode *count* and is absent on 73.7% of rows, so it can never be used to infer this. HINDI is
+ * a title-level fact (the negative id space), which is why it is passed in rather than derived.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun EpisodeTile(
+    episode: Episode,
+    progress: EpisodeProgress?,
+    isCurrent: Boolean,
+    showHindi: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = MaterialTheme.colorScheme
+    val playable = episode.isPlayable()
+    val shape = MaterialTheme.shapes.small
+    val fraction = progress?.fraction
+    val watched = progress?.isWatched == true
+    val title = episode.displayTitle()
+    val stateText = when {
+        watched -> stringResource(R.string.ui_detail_episodes_state_watched, episode.number)
+        fraction != null -> stringResource(
+            R.string.ui_detail_episodes_state_progress,
+            episode.number,
+            (fraction * 100f).roundToInt(),
+        )
+        else -> stringResource(R.string.ui_detail_episodes_state_unplayed, episode.number)
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(if (isCurrent) colors.primary.copy(alpha = 0.10f) else colors.surfaceContainer)
+            .border(
+                width = 1.dp,
+                color = if (isCurrent) colors.primary.copy(alpha = 0.45f) else colors.outline.copy(alpha = 0.55f),
+                shape = shape,
+            )
+            .clickable(enabled = playable, onClick = onClick)
+            .semantics { stateDescription = stateText }
+            .padding(horizontal = 9.dp, vertical = 7.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = episode.number.toString(),
+                // Tabular figures keep "9" and "11" the same width, so a column of numbers reads as a
+                // column instead of a ragged edge.
+                style = MaterialTheme.typography.titleLarge.copy(fontFeatureSettings = "tnum"),
+                color = if (playable) colors.onSurface else colors.onSurfaceVariant.copy(alpha = 0.45f),
+                maxLines = 1,
+            )
+            Spacer(Modifier.weight(1f))
+            if (watched) {
+                Icon(
+                    imageVector = Icons.Rounded.Check,
+                    contentDescription = null,
+                    tint = colors.primary,
+                    modifier = Modifier.size(14.dp),
+                )
+            }
+        }
+
+        if (episode.title.isNotBlank()) {
+            // `displayTitle()` fabricates "Episode N" for the 5+ blank/duplicate rows in the
+            // catalogue; when that is all a row has, the big number above already says it.
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            if (!episode.subUrl.isNullOrBlank()) {
+                PillBadge(text = stringResource(R.string.label_sub), tone = BadgeTone.Accent)
+            }
+            if (episode.dubUrl != null) {
+                PillBadge(text = stringResource(R.string.label_dub), tone = BadgeTone.Muted)
+            }
+            if (showHindi) {
+                PillBadge(text = stringResource(R.string.ui_detail_episodes_hindi), tone = BadgeTone.Amber)
+            }
+        }
+
+        // Always 2 dp tall so every cell in a row has the same height whether or not it was started.
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(2.dp),
+        ) {
+            if (!watched) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .clip(CircleShape)
+                        .background(colors.onSurface.copy(alpha = 0.10f)),
+                ) {
+                    val safe = (fraction ?: 0f).coerceIn(0f, 1f)
+                    if (safe > 0f) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth(safe)
+                                .height(2.dp)
+                                .clip(CircleShape)
+                                .background(colors.primary),
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -621,6 +858,42 @@ private fun SynopsisSection(
                     style = MaterialTheme.typography.labelLarge,
                 )
             }
+        }
+    }
+}
+
+/**
+ * Preview only — every value is a literal, so it composes without a container, a ViewModel or Room.
+ */
+@Preview(name = "EpisodeTile", showBackground = true, backgroundColor = 0xFF0D1113, widthDp = 240)
+@Composable
+private fun EpisodeTilePreview() {
+    AnimoTheme {
+        Column(
+            modifier = Modifier.padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            EpisodeTile(
+                episode = PreviewData.episode,
+                progress = EpisodeProgress(positionMs = 320_000L, durationMs = 1_440_000L),
+                isCurrent = true,
+                showHindi = false,
+                onClick = {},
+            )
+            EpisodeTile(
+                episode = PreviewData.episode.copy(id = 7L, number = 13, title = ""),
+                progress = EpisodeProgress(positionMs = 1_410_000L, durationMs = 1_440_000L),
+                isCurrent = false,
+                showHindi = false,
+                onClick = {},
+            )
+            EpisodeTile(
+                episode = PreviewData.episode.copy(id = 8L, number = 1042, subUrl = null, dubUrl = "dub"),
+                progress = null,
+                isCurrent = false,
+                showHindi = true,
+                onClick = {},
+            )
         }
     }
 }

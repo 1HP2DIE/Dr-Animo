@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Detail-screen episode list copy (owned by the detail screen).
+  Separate file from res/values/strings_ui.xml so the detail work and the shell work never collide;
+  every key is prefixed `ui_detail_episodes_` for the same reason.
+-->
+<resources>
+
+    <!-- Audio badge. Episode rows only carry sub/dub URLs, so the Hindi marker comes from the
+         series (`Anime.isHindi`) and is drawn on every episode of that title. -->
+    <string name="ui_detail_episodes_hindi">HINDI</string>
+
+    <!-- Accessibility: one spoken state per episode cell instead of three separate texts. -->
+    <string name="ui_detail_episodes_state_unplayed">Episode %1$d</string>
+    <string name="ui_detail_episodes_state_progress">Episode %1$d, %2$d%% watched</string>
+    <string name="ui_detail_episodes_state_watched">Episode %1$d, watched</string>
+
+    <!-- Header action when nothing was ever played: jump into the first episode. -->
+    <string name="ui_detail_episodes_play">Play E%1$d</string>
+
+</resources>

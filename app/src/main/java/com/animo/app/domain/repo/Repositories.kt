@@ -24,6 +24,15 @@ interface AnimeRepository {
     fun observeContinueWatching(limit: Int = 20): Flow<List<Anime>>
     /** Same rows and ordering as [observeContinueWatching], plus the resume point of each series. */
     fun observeContinueWatchingItems(limit: Int = 20): Flow<List<ContinueWatchingItem>>
+
+    /**
+     * Resume points of one series, keyed by episode id.
+     *
+     * One statement per series instead of one per episode: the detail grid paints a tick or a bar on
+     * every cell, and a 1,000-episode season must not turn a cold screen into 1,000 queries. It is a
+     * Flow, so a write from the player updates the grid without re-opening the screen.
+     */
+    fun observeEpisodeProgress(animeId: Int): Flow<Map<Long, EpisodeProgress>>
     val sync: Flow<SyncProgress>
 
     suspend fun catalogSize(): Int
@@ -57,6 +66,40 @@ data class ContinueWatchingItem(
             positionMs <= 0L -> null
             else -> (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
         }
+}
+
+/**
+ * Saved resume point of a single episode, as the detail grid needs it: how far in, and how long the
+ * episode actually is.
+ *
+ * [fraction] is nullable for the same reason as [ContinueWatchingItem.fraction] — older rows and
+ * early player callbacks carry `durationMs = 0`, and a fabricated 100% bar is worse than no bar.
+ * [isWatched] therefore never fires on an unknown length: a tick has to be earned by real numbers.
+ */
+data class EpisodeProgress(
+    val positionMs: Long,
+    val durationMs: Long,
+    val updatedAtMs: Long = 0L,
+) {
+    /** 0..1, clamped, or `null` when the row cannot describe progress at all. */
+    val fraction: Float?
+        get() = when {
+            durationMs <= 0L -> null
+            positionMs <= 0L -> null
+            else -> (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+        }
+
+    /** Watched through to the end: the grid swaps the progress line for a tick. */
+    val isWatched: Boolean get() = (fraction ?: 0f) >= WATCHED_FRACTION
+
+    companion object {
+        /**
+         * "Finished" starts before the literal end: the last 5% of an episode is the outro and the
+         * next-episode card, which nobody watches, so requiring 0.995 would leave a visible stub on
+         * every completed cell for ever.
+         */
+        const val WATCHED_FRACTION = 0.95f
+    }
 }
 
 /**

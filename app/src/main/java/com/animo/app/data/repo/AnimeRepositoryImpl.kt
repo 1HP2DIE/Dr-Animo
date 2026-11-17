@@ -23,6 +23,7 @@ import com.animo.app.domain.model.SyncProgress
 import com.animo.app.domain.model.SyncState
 import com.animo.app.domain.repo.AnimeRepository
 import com.animo.app.domain.repo.ContinueWatchingItem
+import com.animo.app.domain.repo.EpisodeProgress
 import com.animo.app.domain.repo.HindiCatalog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -128,6 +129,22 @@ class AnimeRepositoryImpl(
                     episodeNumber = row.episodeNumber,
                     positionMs = row.positionMs,
                     durationMs = row.durationMs,
+                )
+            }
+        }
+
+    /**
+     * One query for the season, not one per cell: `progress` is indexed on `animeId`, so this stays
+     * a single index scan however many episodes a title has, and Room re-runs it on every write to
+     * the table (the player's `saveProgress`) without the screen being re-opened.
+     */
+    override fun observeEpisodeProgress(animeId: Int): Flow<Map<Long, EpisodeProgress>> =
+        progressDao.observeForAnime(animeId).map { rows ->
+            rows.associate { row ->
+                row.episodeId to EpisodeProgress(
+                    positionMs = row.positionMs,
+                    durationMs = row.durationMs,
+                    updatedAtMs = row.updatedAtMs,
                 )
             }
         }

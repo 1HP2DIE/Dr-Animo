@@ -6,18 +6,20 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.animo.app.domain.model.Anime
+import com.animo.app.domain.model.AudioTrack
 import com.animo.app.domain.model.Episode
 import com.animo.app.domain.repo.AnimeRepository
+import com.animo.app.domain.repo.EpisodeProgress
 import com.animo.app.ui.UiState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.collectLatest
 
 data class ResumePoint(
     val episode: Episode,
@@ -27,25 +29,52 @@ data class ResumePoint(
 data class DetailUiModel(
     val anime: Anime,
     val episodes: List<Episode>,
-    val resume: ResumePoint?,
+    /** Saved resume point per episode id; empty when nothing was ever played. */
+    val progress: Map<Long, EpisodeProgress> = emptyMap(),
+    /** `Settings > Playback > Default audio`, before it is checked against what this title offers. */
+    val preferredAudio: AudioTrack = AudioTrack.SUB,
+    val resume: ResumePoint? = null,
     val isRefreshingEpisodes: Boolean = false,
     val episodesError: String? = null,
 ) {
     val hasSub: Boolean get() = episodes.any { !it.subUrl.isNullOrBlank() }
     val hasDub: Boolean get() = episodes.any { it.dubUrl != null }
     val firstEpisode: Episode? get() = episodes.minByOrNull { it.number }
+
+    /**
+     * The preference, coerced to a track this title actually carries.
+     *
+     * A `DUB` default must not light up the DUB chip on a sub-only series (and the player would then
+     * be asked for a stream that does not exist), so the fallback chain is exactly the one
+     * `pickAudio` uses per episode, applied once for the whole grid.
+     */
+    val initialAudio: AudioTrack
+        get() = when {
+            preferredAudio == AudioTrack.DUB && hasDub -> AudioTrack.DUB
+            preferredAudio == AudioTrack.SUB && hasSub -> AudioTrack.SUB
+            hasSub -> AudioTrack.SUB
+            hasDub -> AudioTrack.DUB
+            else -> preferredAudio
+        }
 }
 
+/**
+ * @param defaultAudio the persisted playback default. Passed as a flow (rather than read from a
+ *   `Context` here) so the ViewModel stays framework-free and testable, the same way
+ *   [com.animo.app.ui.settings.SettingsViewModel] gets its preferences.
+ */
 fun detailViewModelFactory(
     animeId: Int,
     repository: AnimeRepository,
+    defaultAudio: Flow<AudioTrack> = flowOf(AudioTrack.SUB),
 ): ViewModelProvider.Factory = viewModelFactory {
-    initializer { DetailViewModel(animeId, repository) }
+    initializer { DetailViewModel(animeId, repository, defaultAudio) }
 }
 
 class DetailViewModel(
     private val animeId: Int,
     private val repository: AnimeRepository,
+    defaultAudio: Flow<AudioTrack> = flowOf(AudioTrack.SUB),
 ) : ViewModel() {
 
     private data class EpisodeSyncFlags(
@@ -54,14 +83,19 @@ class DetailViewModel(
     )
 
     private val syncFlags = MutableStateFlow(EpisodeSyncFlags())
-    private val resumePositions = MutableStateFlow<Map<Long, Long>>(emptyMap())
 
+    /**
+     * Four Room flows plus the preference. Progress arrives as one map for the whole season, so the
+     * model below is built once per emission instead of once per episode cell — the grid can hold a
+     * thousand cells and none of them may look anything up.
+     */
     private val stream: Flow<UiState<DetailUiModel>> = combine(
         repository.observeAnime(animeId),
         repository.observeEpisodes(animeId),
+        repository.observeEpisodeProgress(animeId),
         syncFlags,
-        resumePositions,
-    ) { anime, episodes, flags, positions ->
+        defaultAudio,
+    ) { anime, episodes, progress, flags, audio ->
         if (anime == null) {
             UiState.Error(NOT_IN_CATALOG)
         } else {
@@ -69,7 +103,9 @@ class DetailViewModel(
                 DetailUiModel(
                     anime = anime,
                     episodes = episodes,
-                    resume = resolveResume(episodes, positions),
+                    progress = progress,
+                    preferredAudio = audio,
+                    resume = resolveResume(episodes, progress),
                     isRefreshingEpisodes = flags.refreshing,
                     episodesError = flags.error,
                 ),
@@ -86,11 +122,6 @@ class DetailViewModel(
     init {
         // Episode backfill on detail open — the architecture's budgeted trigger.
         refreshEpisodes()
-        viewModelScope.launch {
-            repository.observeEpisodes(animeId).collectLatest { episodes ->
-                loadResumePositions(episodes)
-            }
-        }
     }
 
     fun refreshEpisodes() {
@@ -109,42 +140,32 @@ class DetailViewModel(
     }
 
     /**
-     * `saveProgress` is per episode and there is no "last watched" query, so we inspect the newest
-     * episodes (bounded scan) and take the highest-numbered one with a real position. 24 reads at
-     * most, all against Room.
+     * "Last watched" is the most recently *written* row, not the highest episode number: a viewer who
+     * rewatches E3 after finishing E9 must be offered E3.
+     *
+     * [MIN_RESUME_MS] filters rows the player wrote before the media settled (opening an episode and
+     * backing out immediately) — those would otherwise become a permanent "Resume E1" on a title the
+     * user has not actually watched. A row that exists but cannot describe progress is still a
+     * legitimate resume point: the episode was played, we just do not know how far.
      */
-    private suspend fun loadResumePositions(episodes: List<Episode>) {
-        if (episodes.isEmpty()) {
-            if (resumePositions.value.isNotEmpty()) resumePositions.value = emptyMap()
-            return
-        }
-        val newest = episodes.sortedByDescending { it.number }.take(RESUME_SCAN)
-        val loaded = buildMap {
-            for (episode in newest) {
-                val position = repository.progressFor(episode.id)
-                if (position > MIN_RESUME_MS) put(episode.id, position)
-            }
-        }
-        if (resumePositions.value != loaded) {
-            resumePositions.value = loaded
-        }
-    }
-
     private fun resolveResume(
         episodes: List<Episode>,
-        positions: Map<Long, Long>,
+        progress: Map<Long, EpisodeProgress>,
     ): ResumePoint? {
-        if (positions.isEmpty()) return null
-        val episode = episodes
-            .filter { (positions[it.id] ?: 0L) > MIN_RESUME_MS }
-            .maxByOrNull { it.number }
-            ?: return null
-        return ResumePoint(episode = episode, positionMs = positions[episode.id] ?: 0L)
+        if (progress.isEmpty()) return null
+        val byId = episodes.associateBy { it.id }
+        return progress.entries
+            .asSequence()
+            .filter { it.value.positionMs > MIN_RESUME_MS }
+            .mapNotNull { entry ->
+                byId[entry.key]?.let { episode -> episode to entry.value }
+            }
+            .maxByOrNull { (_, saved) -> saved.updatedAtMs }
+            ?.let { (episode, saved) -> ResumePoint(episode = episode, positionMs = saved.positionMs) }
     }
 
     private companion object {
         const val MIN_RESUME_MS = 5_000L
-        const val RESUME_SCAN = 24
         const val NOT_IN_CATALOG = "series not in the local catalog (not synced yet)"
     }
 }
