@@ -70,7 +70,8 @@ class ShellViewModel(private val repository: AnimeRepository) : ViewModel() {
         if (isSyncing.value) return
         viewModelScope.launch {
             isSyncing.value = true
-            repository.refreshCatalog(force = true)
+            // Drawer "Sync now": delta walk, same as the worker and the settings button.
+            repository.refreshCatalog(force = false)
             isSyncing.value = false
             refreshCatalogueSize()
         }

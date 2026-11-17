@@ -187,7 +187,9 @@ class SettingsViewModel(
         viewModelScope.launch {
             isSyncing.value = true
             syncMessage.value = null
-            val result = repository.refreshCatalog(force = true)
+            // A manual sync is the same cheap delta walk as the worker: it stops as soon as the
+            // catalogue tail is unchanged. Nothing in the UI needs a 95-page full walk any more.
+            val result = repository.refreshCatalog(force = false)
             val failure = result.exceptionOrNull()
             if (failure != null) {
                 syncMessage.value = failure.message ?: failure::class.simpleName

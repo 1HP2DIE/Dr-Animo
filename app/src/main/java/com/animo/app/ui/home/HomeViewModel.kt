@@ -104,7 +104,8 @@ class HomeViewModel(private val repository: AnimeRepository) : ViewModel() {
         if (refreshing.value) return
         viewModelScope.launch {
             refreshing.value = true
-            val result = repository.refreshCatalog(force = true)
+            // Pull-to-refresh is a delta walk, not a re-download of 95 pages.
+            val result = repository.refreshCatalog(force = false)
             refreshing.value = false
             result.exceptionOrNull()?.let { error ->
                 _syncFailures.tryEmit(error.message ?: error::class.simpleName ?: "unknown")

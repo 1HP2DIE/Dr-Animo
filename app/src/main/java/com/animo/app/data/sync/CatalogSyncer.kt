@@ -17,14 +17,18 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 
 /**
- * The whole catalog job: 95 pages x 100 rows (~11.8 MB) plus a delta-driven detail pass.
+ * Catalog delta walk.
  *
- * Measured timings (research/DATA_CONTRACT.md §6): 95 pages at the 2.2 s gate = 3.2 min. Detail
- * fetches are capped by [DETAIL_BUDGET] so a single job can never approach the ~10 min budget
- * WorkManager gives a worker.
+ * `/recent-anime` is ordered `updated_at` **descending** (measured across pages 1-3), so a routine
+ * refresh only has to read the head of the list: once [UNCHANGED_PAGES_BEFORE_STOP] consecutive
+ * pages contain nothing new and nothing moved, everything below them is already in Room. A normal
+ * night is now 1-3 pages (~7 s) instead of the 95-page, 3.2-minute full walk the app used to do
+ * every day — which was both slow and the fastest route to a rate limit.
+ *
+ * A `force` call still walks the whole catalogue: that is the user's explicit "Sync now".
  *
  * Concurrency: a non-reentrant [Mutex] with `tryLock` — a second caller while a sync is in flight
- * gets a failure instead of silently queueing a duplicate 3-minute job.
+ * gets a failure instead of silently queueing a duplicate job.
  */
 class CatalogSyncer(
     private val api: AnikotoApi,
@@ -100,6 +104,8 @@ class CatalogSyncer(
         var pagesDone = 0
         var totalPages = 0
         var seen = 0
+        var unchangedStreak = 0
+        var newRows = 0
 
         while (page <= MAX_PAGES) {
             val response = api.recentAnime(page).getOrElse { error ->
@@ -122,11 +128,20 @@ class CatalogSyncer(
             val stamps = animeDao.stampsFor(response.data.map { it.id }).associateBy { it.id }
             val rows = response.data.map { dto -> dto.toEntity(stamps[dto.id]) }
 
+            var pageChanged = 0
             for (row in rows) {
                 val previous = stamps[row.id]
                 when {
-                    previous == null -> if (force) changed.add(row.id)
-                    previous.updatedAtEpoch != row.updatedAtEpoch -> changed.add(row.id)
+                    previous == null -> {
+                        newRows++
+                        pageChanged++
+                        // A brand-new row has no detail yet; the episode queue picks it up first.
+                        changed.add(row.id)
+                    }
+                    previous.updatedAtEpoch != row.updatedAtEpoch -> {
+                        changed.add(row.id)
+                        pageChanged++
+                    }
                 }
             }
 
@@ -145,6 +160,14 @@ class CatalogSyncer(
             )
 
             page++
+
+            // Early stop: the list is newest-first, so a run of untouched pages means the tail is
+            // already local. `force` is the user's explicit full refresh and never stops early.
+            unchangedStreak = if (pageChanged == 0) unchangedStreak + 1 else 0
+            if (!force && unchangedStreak >= UNCHANGED_PAGES_BEFORE_STOP) {
+                AppLog.i("catalog delta: stop after $pagesDone page(s), tail is unchanged")
+                break
+            }
         }
 
         if (pagesDone == 0) {
@@ -152,7 +175,9 @@ class CatalogSyncer(
         }
 
         db.rebuildSearchIndex()
-        AppLog.i("catalog pass: $pagesDone pages, $seen series, ${changed.size} changed")
+        AppLog.i(
+            "catalog pass: $pagesDone pages, $seen series, ${changed.size} changed, $newRows new",
+        )
 
         val detailsFetched = fetchChangedDetails(changed, emit)
 
@@ -211,6 +236,13 @@ class CatalogSyncer(
     private companion object {
         /** Hard ceiling for a runaway `total_pages`; the real catalog is 95. */
         const val MAX_PAGES = 400
+
+        /**
+         * Stop after this many consecutive pages with nothing new and nothing moved. Two, not one:
+         * a single quiet page can happen right after a catalog reshuffle, and the cost of a false
+         * stop (missing an update until the next run) is higher than two extra requests.
+         */
+        const val UNCHANGED_PAGES_BEFORE_STOP = 2
 
         /** Detail round trips per job: 60 * 2.2 s ≈ 132 s on top of the ~210 s catalog pass. */
         const val DETAIL_BUDGET = 60

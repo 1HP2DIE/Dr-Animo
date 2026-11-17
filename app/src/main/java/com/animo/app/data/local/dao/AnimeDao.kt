@@ -21,6 +21,14 @@ data class AnimeStamp(
     val episodeCount: Int,
 )
 
+/** Projection for the sync policy — never inflates a whole row just to read four columns. */
+data class DueRow(
+    val statusNorm: String,
+    val episodesDeclared: Int,
+    val episodeCount: Int,
+    val detailFetchedAt: Long?,
+)
+
 @Dao
 interface AnimeDao {
 
@@ -127,6 +135,101 @@ interface AnimeDao {
         """,
     )
     suspend fun idsAwaitingDetail(limit: Int): List<Int>
+
+    /**
+     * The nightly episode queue, ordered by [SyncPolicy.priority].
+     *
+     * Deliberately one statement: the alternative (load 9,404 rows, filter in Kotlin) is exactly the
+     * kind of work that made the old sync slow. The `NOT (...)` clause is the "never again" rule —
+     * a finished title whose stored episode count reached what the catalog declared is excluded
+     * before the LIMIT, so it can never crowd out a title that actually changed.
+     *
+     * A finished title that was never detailed is deliberately **absent** from the first branch:
+     * 8,967 rows are in that state and fetching them blind is 5.5 h of requests for episode lists
+     * nobody has opened. They are fetched on demand instead.
+     *
+     * @param ongoingCutoff `now - ONGOING_INTERVAL_MS`
+     * @param gapCutoff `now - GAP_INTERVAL_MS`
+     * @param unknownCutoff `now - UNKNOWN_RECHECK_MS`
+     * @param newRowCutoff `now - NEW_ROW_WINDOW_MS` — rows newer than this rank first
+     */
+    @Query(
+        """
+        SELECT id FROM anime
+        WHERE id > 0
+          AND NOT (
+                statusNorm = 'finished_airing'
+            AND detailFetchedAt IS NOT NULL
+            AND episodesDeclared > 0
+            AND episodeCount >= episodesDeclared
+          )
+          AND (
+                (statusNorm IN ('currently_airing','not_yet_aired')
+                 AND (detailFetchedAt IS NULL OR detailFetchedAt <= :ongoingCutoff))
+             OR (statusNorm NOT IN ('currently_airing','not_yet_aired')
+                 AND detailFetchedAt IS NOT NULL
+                 AND detailFetchedAt <= CASE
+                        WHEN episodesDeclared > episodeCount THEN :gapCutoff
+                        ELSE :unknownCutoff
+                     END)
+          )
+        ORDER BY
+          CASE
+            WHEN detailFetchedAt IS NULL AND updatedAtEpoch >= :newRowCutoff THEN 0
+            WHEN episodesDeclared > episodeCount THEN 1
+            WHEN statusNorm IN ('currently_airing','not_yet_aired') THEN 2
+            ELSE 3
+          END,
+          score DESC,
+          updatedAtEpoch DESC,
+          id ASC
+        LIMIT :limit
+        """,
+    )
+    suspend fun idsDueForEpisodeSync(
+        ongoingCutoff: Long,
+        gapCutoff: Long,
+        unknownCutoff: Long,
+        newRowCutoff: Long,
+        limit: Int,
+    ): List<Int>
+
+    /** Titles whose declared episode count is higher than what is stored — the visible "missing". */
+    @Query(
+        "SELECT COUNT(*) FROM anime WHERE id > 0 AND episodesDeclared > 0 AND episodeCount < episodesDeclared",
+    )
+    suspend fun countEpisodeGaps(): Int
+
+    /** How many titles the queue would consider right now (cheap, for settings/telemetry). */
+    @Query(
+        """
+        SELECT COUNT(*) FROM anime
+        WHERE id > 0
+          AND NOT (
+                statusNorm = 'finished_airing'
+            AND detailFetchedAt IS NOT NULL
+            AND episodesDeclared > 0
+            AND episodeCount >= episodesDeclared
+          )
+          AND (
+                (statusNorm IN ('currently_airing','not_yet_aired')
+                 AND (detailFetchedAt IS NULL OR detailFetchedAt <= :ongoingCutoff))
+             OR (statusNorm NOT IN ('currently_airing','not_yet_aired')
+                 AND detailFetchedAt IS NOT NULL
+                 AND detailFetchedAt <= CASE
+                        WHEN episodesDeclared > episodeCount THEN :gapCutoff
+                        ELSE :unknownCutoff
+                     END)
+          )
+        """,
+    )
+    suspend fun countDueForEpisodeSync(ongoingCutoff: Long, gapCutoff: Long, unknownCutoff: Long): Int
+
+    /** Detail age for one row, used by the on-demand path to honour the same policy. */
+    @Query(
+        "SELECT statusNorm, episodesDeclared, episodeCount, detailFetchedAt FROM anime WHERE id = :id",
+    )
+    suspend fun syncStateOf(id: Int): DueRow?
 
     @Query("DELETE FROM anime")
     suspend fun deleteAll()
