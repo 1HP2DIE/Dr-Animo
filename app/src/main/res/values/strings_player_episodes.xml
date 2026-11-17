@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Player episode-drawer copy (owned by the episode-drawer agent).
+  Kept in its own file so it never collides with strings.xml (data layer), strings_ui.xml (shell) or
+  strings_browse.xml (browse/library). Every key is prefixed `ui_player_episodes_` for the same reason.
+-->
+<resources>
+
+    <string name="ui_player_episodes_title">Episodes</string>
+    <string name="ui_player_episodes_count">%1$d episodes</string>
+    <string name="ui_player_episodes_close">Close episode list</string>
+    <string name="ui_player_episodes_current">Now playing</string>
+    <string name="ui_player_episodes_empty">No episodes available</string>
+
+</resources>
