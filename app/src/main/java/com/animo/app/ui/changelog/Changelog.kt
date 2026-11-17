@@ -28,6 +28,20 @@ object Changelog {
 
     val releases: List<Release> = listOf(
         Release(
+            version = "1.6.0",
+            date = "17 Nov 2026",
+            headline = "Subtitles you can read: bring your own file, restyle it, keep the look.",
+            changes = listOf(
+                Change(ChangeKind.NEW, "Load your own subtitle file from the phone — SRT, VTT or ASS"),
+                Change(ChangeKind.NEW, "Find subtitles online for the episode you are watching — matched to the title and episode number, in a dozen languages"),
+                Change(ChangeKind.NEW, "Or paste a link to a subtitle file and it plays straight away"),
+                Change(ChangeKind.NEW, "Subtitle look: text colour, size, outline, shadow, background, alignment and height on screen"),
+                Change(ChangeKind.NEW, "Subtitle presets — seven ready-made looks, plus save your own"),
+                Change(ChangeKind.IMPROVED, "Subtitles you already had in a stream now use the same styling, and the picker remembers your choice for the next episode"),
+                Change(ChangeKind.IMPROVED, "Subtitles get out of the way of the controls while you are scrubbing"),
+            ),
+        ),
+        Release(
             version = "1.5.0",
             date = "17 Nov 2026",
             headline = "The player is a real player now: episodes, quality, speed and a sleep timer.",
