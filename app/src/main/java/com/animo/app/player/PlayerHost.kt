@@ -64,6 +64,8 @@ fun PlayerHost(
      * so the viewer's colour/size/position settings apply; `PlayerView`'s own subtitle view is hidden.
      */
     onCues: ((List<String>) -> Unit)? = null,
+    /** An `AspectRatioFrameLayout.RESIZE_MODE_*`; applied live, no rebuild. */
+    resizeMode: Int = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -234,6 +236,7 @@ fun PlayerHost(
         update = { view ->
             view.player = player
             view.keepScreenOn = playing
+            if (view.resizeMode != resizeMode) view.resizeMode = resizeMode
         },
         onRelease = { view ->
             view.player = null

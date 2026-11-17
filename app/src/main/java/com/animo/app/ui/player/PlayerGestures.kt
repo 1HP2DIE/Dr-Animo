@@ -41,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -59,6 +60,12 @@ sealed interface PlayerHud {
     data class Seek(val targetMs: Long, val stepSeconds: Int) : PlayerHud
     data class Volume(val fraction: Float) : PlayerHud
     data class Brightness(val fraction: Float) : PlayerHud
+
+    /** Double-tap streak: drawn on the side that was tapped, not in the centre. */
+    data class TapSeek(val direction: Int, val seconds: Int) : PlayerHud
+
+    /** One-line confirmation for a mode change (fit, lock). */
+    data class Message(val text: String, val icon: ImageVector) : PlayerHud
 }
 
 @Stable
@@ -84,7 +91,14 @@ private const val MAX_STEP_SECONDS = 5
 
 private const val DOUBLE_TAP_WINDOW_MS = 260L
 
-private enum class GestureMode { UNDECIDED, SEEK, VOLUME, BRIGHTNESS }
+/** After a double tap, every further tap on the same side inside this window adds another 10 s. */
+private const val TAP_STREAK_WINDOW_MS = 650L
+
+/** Fingers must spread/close this far before a pinch counts — a resting thumb is not a pinch. */
+private const val PINCH_IN_RATIO = 0.82f
+private const val PINCH_OUT_RATIO = 1.22f
+
+private enum class GestureMode { UNDECIDED, SEEK, VOLUME, BRIGHTNESS, PINCH }
 
 /**
  * Gesture surface for the video.
@@ -106,6 +120,7 @@ fun Modifier.playerGestures(
     surfaceState: PlayerSurfaceState,
     hud: PlayerHudState,
     onToggleControls: () -> Unit,
+    onPinch: (zoomIn: Boolean) -> Unit = {},
 ): Modifier {
     val context = LocalContext.current
     val audio = remember(context) {
@@ -114,6 +129,9 @@ fun Modifier.playerGestures(
     val activity = remember(context) { context.findActivity() }
     val scope = rememberCoroutineScope()
     var lastTapAt by remember { mutableStateOf(0L) }
+    var streakSide by remember { mutableStateOf(0) }
+    var streakSeconds by remember { mutableStateOf(0) }
+    var streakUntil by remember { mutableStateOf(0L) }
 
     // Brightness is an override on the window; leaving the player must hand it back to the system.
     DisposableEffect(activity) {
@@ -137,6 +155,8 @@ fun Modifier.playerGestures(
             var dragStartY = down.position.y
             var startFraction = 0f
             var seekJob: kotlinx.coroutines.Job? = null
+            var pinchStart = 0f
+            var pinchFired = false
 
             /**
              * The hold is timed by a coroutine, not by the event loop: a finger that does not move
@@ -161,6 +181,27 @@ fun Modifier.playerGestures(
                 val event = awaitPointerEvent()
                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
                 if (!change.pressed) break
+
+                val pressed = event.changes.filter { it.pressed }
+                if (pressed.size >= 2 && (mode == GestureMode.UNDECIDED || mode == GestureMode.PINCH)) {
+                    holdTimer.cancel()
+                    val distance = (pressed[0].position - pressed[1].position).getDistance()
+                    if (mode != GestureMode.PINCH) {
+                        mode = GestureMode.PINCH
+                        pinchStart = distance.coerceAtLeast(1f)
+                    } else if (!pinchFired) {
+                        val ratio = distance / pinchStart
+                        if (ratio >= PINCH_OUT_RATIO) {
+                            pinchFired = true
+                            onPinch(true)
+                        } else if (ratio <= PINCH_IN_RATIO) {
+                            pinchFired = true
+                            onPinch(false)
+                        }
+                    }
+                    pressed.forEach { it.consume() }
+                    continue
+                }
 
                 if (mode == GestureMode.UNDECIDED &&
                     abs(change.position.y - down.position.y) > slop
@@ -211,15 +252,20 @@ fun Modifier.playerGestures(
             val released = mode == GestureMode.UNDECIDED
             if (released) {
                 val now = System.currentTimeMillis()
-                if (now - lastTapAt <= DOUBLE_TAP_WINDOW_MS) {
+                val side = if (leftHalf) -1 else 1
+                val inStreak = now <= streakUntil && side == streakSide
+                if (inStreak || now - lastTapAt <= DOUBLE_TAP_WINDOW_MS) {
+                    // Double tap, or one more tap in a running streak: each adds 10 s on that side.
                     lastTapAt = 0L
-                    val delta = if (leftHalf) -SKIP_MS else SKIP_MS
-                    val target = (surfaceState.positionMs + delta).coerceAtLeast(0L)
-                    surfaceState.skipBy(delta)
-                    hud.show(PlayerHud.Seek(targetMs = target, stepSeconds = (delta / 1_000L).toInt()))
+                    streakSeconds = if (inStreak) streakSeconds + (SKIP_MS / 1_000L).toInt() else (SKIP_MS / 1_000L).toInt()
+                    streakSide = side
+                    streakUntil = now + TAP_STREAK_WINDOW_MS
+                    surfaceState.skipBy(side * SKIP_MS)
+                    hud.show(PlayerHud.TapSeek(direction = side, seconds = streakSeconds))
+                    val stamp = streakUntil
                     scope.launch {
-                        delay(650L)
-                        if (hud.current is PlayerHud.Seek) hud.show(null)
+                        delay(TAP_STREAK_WINDOW_MS)
+                        if (streakUntil == stamp && hud.current is PlayerHud.TapSeek) hud.show(null)
                     }
                 } else {
                     lastTapAt = now
@@ -232,7 +278,8 @@ fun Modifier.playerGestures(
                 }
             }
 
-            hud.show(null)
+            // Tap-seek and mode messages time themselves out; everything else ends with the finger.
+            if (hud.current !is PlayerHud.TapSeek && hud.current !is PlayerHud.Message) hud.show(null)
         }
     }
 }
@@ -287,7 +334,7 @@ private fun applyBrightness(activity: android.app.Activity?, fraction: Float) {
 @Composable
 fun PlayerGestureHud(hud: PlayerHud?, modifier: Modifier = Modifier) {
     AnimatedVisibility(
-        visible = hud != null,
+        visible = hud != null && hud !is PlayerHud.TapSeek,
         enter = fadeIn(),
         exit = fadeOut(),
         modifier = modifier,
@@ -346,6 +393,23 @@ fun PlayerGestureHud(hud: PlayerHud?, modifier: Modifier = Modifier) {
                     )
                     LevelBar(fraction = current.fraction)
                 }
+
+                is PlayerHud.Message -> {
+                    Icon(
+                        imageVector = current.icon,
+                        contentDescription = null,
+                        tint = PlayerChrome.accentSoft,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Text(
+                        text = current.text,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = PlayerChrome.foreground,
+                    )
+                }
+
+                // Drawn on its own side by TapSeekIndicator.
+                is PlayerHud.TapSeek -> Unit
             }
         }
     }

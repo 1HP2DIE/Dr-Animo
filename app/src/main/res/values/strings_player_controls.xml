@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Player chrome beyond the settings sheet: chapter skips, up next, lock, video fit.
+  Every key is prefixed `ui_player_ctl_`.
+-->
+<resources>
+    <string name="ui_player_ctl_skip_intro">Skip intro</string>
+    <string name="ui_player_ctl_skip_outro">Skip outro</string>
+    <string name="ui_player_ctl_chapter_intro">Intro</string>
+    <string name="ui_player_ctl_chapter_outro">Outro</string>
+
+    <string name="ui_player_ctl_up_next">Up next</string>
+    <string name="ui_player_ctl_play_now">Play now</string>
+    <string name="ui_player_ctl_next_in">Next in %1$ds</string>
+    <string name="ui_player_ctl_dismiss">Hide up next</string>
+
+    <string name="ui_player_ctl_lock">Lock controls</string>
+    <string name="ui_player_ctl_locked">Controls locked</string>
+    <string name="ui_player_ctl_unlock">Unlock</string>
+    <string name="ui_player_ctl_unlocked">Controls unlocked</string>
+
+    <string name="ui_player_ctl_fit">Video size</string>
+    <string name="ui_player_ctl_fit_fit">Fit to screen</string>
+    <string name="ui_player_ctl_fit_zoom">Zoom to fill</string>
+    <string name="ui_player_ctl_fit_stretch">Stretch</string>
+
+    <string name="ui_player_ctl_tap_seek">%1$d seconds</string>
+    <string name="ui_player_ctl_time_remaining">Show remaining time</string>
+</resources>

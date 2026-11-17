@@ -3,6 +3,7 @@ package com.animo.app.ui.player
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -35,7 +36,11 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Replay10
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
-import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.AspectRatio
+import androidx.compose.material.icons.rounded.FitScreen
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.LockOpen
+import androidx.compose.material.icons.rounded.ZoomOutMap
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -50,6 +55,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
@@ -101,9 +109,17 @@ private const val CONTROLS_AUTO_HIDE_MS = 3_000L
 private const val END_OF_EPISODE_GRACE_MS = 700L
 private const val SKIP_MS = 10_000L
 
-/** Near-white rather than #FFFFFF: the player chrome never uses a pure colour. */
-private val PlayerForeground = Color(0xFFF1F5F4)
-private val PlayerControlScrim = Color(0x3DFFFFFF)
+/** How long the up-next card counts down before it starts the next episode on its own. */
+private const val UP_NEXT_COUNTDOWN_MS = 10_000L
+
+/** Without an outro marker, the up-next card appears this close to the end. */
+private const val UP_NEXT_FALLBACK_WINDOW_MS = 25_000L
+
+/** A chapter button disappears this long before the chapter ends — it would only flash. */
+private const val CHAPTER_TAIL_MS = 1_500L
+
+private val PlayerForeground = PlayerChrome.foreground
+private val PlayerControlScrim = PlayerChrome.controlFill
 
 @Composable
 fun PlayerScreen(
@@ -180,10 +196,39 @@ private fun PlayerStage(
         PlayerSurfaceState()
     }
     val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
     var controlsVisible by remember { mutableStateOf(true) }
     var settingsTab by remember { mutableStateOf<PlayerMenuTab?>(null) }
     var episodesVisible by remember { mutableStateOf(false) }
     var scrubPositionMs by remember { mutableStateOf<Long?>(null) }
+    val hudState = rememberPlayerHudState()
+
+    // Lock: swallows every gesture until unlocked; bumping the token re-reveals the unlock button.
+    var locked by remember { mutableStateOf(false) }
+    var lockRevealToken by remember { mutableIntStateOf(0) }
+
+    // Fit and the clock mode are viewer preferences for the session, not per episode.
+    var videoFit by rememberSaveable { mutableStateOf(VideoFit.FIT) }
+    var showRemaining by rememberSaveable { mutableStateOf(false) }
+
+    val flashMessage: (String, androidx.compose.ui.graphics.vector.ImageVector) -> Unit = { text, icon ->
+        val message = PlayerHud.Message(text, icon)
+        hudState.show(message)
+        scope.launch {
+            delay(1_100L)
+            if (hudState.current == message) hudState.show(null)
+        }
+    }
+    val applyFit: (VideoFit) -> Unit = { fit ->
+        if (fit != videoFit) {
+            videoFit = fit
+            when (fit) {
+                VideoFit.FIT -> flashMessage(context.getString(R.string.ui_player_ctl_fit_fit), Icons.Rounded.FitScreen)
+                VideoFit.ZOOM -> flashMessage(context.getString(R.string.ui_player_ctl_fit_zoom), Icons.Rounded.ZoomOutMap)
+                VideoFit.STRETCH -> flashMessage(context.getString(R.string.ui_player_ctl_fit_stretch), Icons.Rounded.AspectRatio)
+            }
+        }
+    }
 
     // Sleep timer: null = off, 0 = "end of episode", else the minutes that were picked.
     var sleepMinutes by remember { mutableStateOf<Int?>(null) }
@@ -209,7 +254,6 @@ private fun PlayerStage(
     // ---- subtitles ---------------------------------------------------------
     // The look is persisted, so it is loaded once and then written back debounced: a slider drag
     // must not produce one DataStore write per pixel.
-    val context = androidx.compose.ui.platform.LocalContext.current
     val subtitlePrefs = remember(context) { SubtitlePreferences(context) }
     var subtitleStyle by remember { mutableStateOf(SubtitleStyles.Default) }
     var subtitleStyleReady by remember { mutableStateOf(false) }
@@ -491,8 +535,69 @@ private fun PlayerStage(
         }
     }
 
+    // ---- chapters & up next ---------------------------------------------------
+    // derivedStateOf: these flip a handful of times per episode, while the position ticks 4x a
+    // second — reading the position directly here would recompose the whole stage on every tick.
+    val inIntro by remember(surfaceState) {
+        derivedStateOf {
+            val intro = surfaceState.intro
+            intro != null && surfaceState.positionMs in intro.first until (intro.last - CHAPTER_TAIL_MS)
+        }
+    }
+    val inOutro by remember(surfaceState) {
+        derivedStateOf {
+            val outro = surfaceState.outro
+            outro != null && surfaceState.positionMs in outro.first until (outro.last - CHAPTER_TAIL_MS)
+        }
+    }
+    val nearEnd by remember(surfaceState) {
+        derivedStateOf {
+            val duration = surfaceState.durationMs
+            val position = surfaceState.positionMs
+            duration > 0L && position < duration && (
+                surfaceState.outro?.let { position >= it.first }
+                    ?: (duration - position <= UP_NEXT_FALLBACK_WINDOW_MS)
+                )
+        }
+    }
+    val introLabel = stringResource(R.string.ui_player_ctl_chapter_intro)
+    val outroLabel = stringResource(R.string.ui_player_ctl_chapter_outro)
+    val chapters = listOfNotNull(
+        surfaceState.intro?.let { SeekChapter(it, introLabel) },
+        surfaceState.outro?.let { SeekChapter(it, outroLabel) },
+    )
+
+    // Two roads lead to the next episode (the countdown and the player's own "ended"); whichever
+    // arrives first wins, so a short outro can never advance twice and skip an episode.
+    var advanced by remember(model.episode.id) { mutableStateOf(false) }
+    val advanceOnce: () -> Unit = {
+        if (!advanced) {
+            advanced = true
+            viewModel.next()
+        }
+    }
+
+    var upNextDismissed by remember(model.episode.id) { mutableStateOf(false) }
+    val overlaysAllowed = !inPip && !locked && settingsTab == null && !episodesVisible &&
+        model.errorMessage == null
+    val upNextVisible = overlaysAllowed && model.hasNext && nearEnd && !upNextDismissed
+    // "End of episode" sleep means the viewer asked to stop here; the countdown must not override it.
+    val countdownArmed = autoplayNext && sleepMinutes != 0
+    var countdownLeftMs by remember(model.episode.id) { mutableLongStateOf(UP_NEXT_COUNTDOWN_MS) }
+    LaunchedEffect(upNextVisible, countdownArmed) {
+        countdownLeftMs = UP_NEXT_COUNTDOWN_MS
+        if (!upNextVisible || !countdownArmed) return@LaunchedEffect
+        while (countdownLeftMs > 0L) {
+            delay(100L)
+            // Paused means "not yet": the countdown waits with the video.
+            if (surfaceState.isPlaying) countdownLeftMs -= 100L
+        }
+        advanceOnce()
+    }
+
     BackHandler {
         when {
+            locked -> lockRevealToken++
             settingsTab != null -> settingsTab = null
             episodesVisible -> episodesVisible = false
             controlsVisible -> controlsVisible = false
@@ -511,24 +616,29 @@ private fun PlayerStage(
                 modifier = Modifier.fillMaxSize(),
                 controller = controller,
                 onEnded = {
-                    if (autoplayNext) viewModel.next()
+                    if (autoplayNext && sleepMinutes != 0) advanceOnce()
                 },
                 onCues = { lines -> containerLines = lines },
+                videoFit = videoFit,
             )
         }
 
-        // Gesture surface: tap = chrome, double tap = ±10 s, long press = accelerated seek,
-        // vertical drag = volume (right half) or brightness (left half).
-        val hudState = rememberPlayerHudState()
-        Box(
-            Modifier
-                .matchParentSize()
-                .playerGestures(
-                    surfaceState = surfaceState,
-                    hud = hudState,
-                    onToggleControls = { controlsVisible = !controlsVisible },
-                ),
-        )
+        // Gesture surface: tap = chrome, double tap = ±10 s (keep tapping to add more), long
+        // press = accelerated seek, vertical drag = volume/brightness, pinch = zoom/fit.
+        if (!locked) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .playerGestures(
+                        surfaceState = surfaceState,
+                        hud = hudState,
+                        onToggleControls = { controlsVisible = !controlsVisible },
+                        onPinch = { zoomIn -> applyFit(if (zoomIn) VideoFit.ZOOM else VideoFit.FIT) },
+                    ),
+            )
+        }
+
+        if (!inPip) TapSeekIndicator(hud = hudState.current)
 
         PlayerGestureHud(
             hud = hudState.current,
@@ -562,7 +672,7 @@ private fun PlayerStage(
             label = "player-controls-alpha",
         )
 
-        if (!inPip && (controlsVisible || controlsAlpha > 0.01f)) {
+        if (!inPip && !locked && (controlsVisible || controlsAlpha > 0.01f)) {
             PlayerControlsOverlay(
                 model = model,
                 surfaceState = surfaceState,
@@ -573,6 +683,18 @@ private fun PlayerStage(
                     scrubPositionMs = null
                 },
                 onBack = onBack,
+                chapters = chapters,
+                showRemaining = showRemaining,
+                onToggleRemaining = { showRemaining = !showRemaining },
+                videoFit = videoFit,
+                onCycleFit = { applyFit(videoFit.next()) },
+                onLock = {
+                    locked = true
+                    controlsVisible = false
+                    lockRevealToken++
+                    flashMessage(context.getString(R.string.ui_player_ctl_locked), Icons.Rounded.Lock)
+                },
+                speed = speed,
                 onOpenSettings = { tab ->
                     settingsTab = tab
                     controlsVisible = true
@@ -588,6 +710,56 @@ private fun PlayerStage(
                 modifier = Modifier
                     .matchParentSize()
                     .graphicsLayer { alpha = controlsAlpha },
+            )
+        }
+
+        // Floating actions: bottom-end, lifted above the bar while the chrome is up.
+        val floatLift by animateDpAsState(
+            targetValue = if (controlsVisible && !locked) 132.dp else 28.dp,
+            animationSpec = tween(durationMillis = 220),
+            label = "player-float-lift",
+        )
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .navigationBarsPadding()
+                .padding(end = 24.dp, bottom = floatLift),
+            horizontalAlignment = Alignment.End,
+        ) {
+            SkipChapterButton(
+                visible = overlaysAllowed && inIntro,
+                label = stringResource(R.string.ui_player_ctl_skip_intro),
+                onClick = { surfaceState.intro?.let { surfaceState.seekTo(it.last) } },
+            )
+            // With a next episode, the up-next card is the outro's action; without one, skip it.
+            SkipChapterButton(
+                visible = overlaysAllowed && inOutro && !model.hasNext,
+                label = stringResource(R.string.ui_player_ctl_skip_outro),
+                onClick = { surfaceState.outro?.let { surfaceState.seekTo(it.last) } },
+            )
+            UpNextCard(
+                visible = upNextVisible,
+                next = model.nextEpisode,
+                secondsLeft = if (countdownArmed) ((countdownLeftMs + 999L) / 1_000L).toInt() else null,
+                countdownFraction = if (countdownArmed) {
+                    1f - countdownLeftMs.toFloat() / UP_NEXT_COUNTDOWN_MS
+                } else {
+                    null
+                },
+                onPlay = advanceOnce,
+                onDismiss = { upNextDismissed = true },
+            )
+        }
+
+        if (locked && !inPip) {
+            LockedOverlay(
+                onUnlock = {
+                    locked = false
+                    controlsVisible = true
+                    flashMessage(context.getString(R.string.ui_player_ctl_unlocked), Icons.Rounded.LockOpen)
+                },
+                revealToken = lockRevealToken,
+                modifier = Modifier.matchParentSize(),
             )
         }
 
@@ -680,6 +852,13 @@ private fun PlayerControlsOverlay(
     onScrub: (Long) -> Unit,
     onSeek: (Long) -> Unit,
     onBack: () -> Unit,
+    chapters: List<SeekChapter>,
+    showRemaining: Boolean,
+    onToggleRemaining: () -> Unit,
+    videoFit: VideoFit,
+    onCycleFit: () -> Unit,
+    onLock: () -> Unit,
+    speed: Float,
     onOpenSettings: (PlayerMenuTab) -> Unit,
     onOpenEpisodes: () -> Unit,
     sleepActive: Boolean,
@@ -706,8 +885,8 @@ private fun PlayerControlsOverlay(
                 .background(AnimoPalette.playerBottomScrim),
         )
 
-        // Top: identity only. Every control lives at the bottom, where a thumb actually reaches in
-        // landscape — the old centred cluster covered the video and was unreachable one-handed.
+        // Top: identity on the left, frame-level tools on the right (fit, lock, episodes). Nothing
+        // here changes playback, so a stray thumb on the top edge can never seek or pause.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -742,18 +921,32 @@ private fun PlayerControlsOverlay(
                         model.episode.displayTitle(),
                     ),
                     style = MaterialTheme.typography.bodySmall,
-                    color = PlayerForeground.copy(alpha = 0.72f),
+                    color = PlayerChrome.foregroundMuted,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            IconButton(onClick = onOpenEpisodes) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.List,
-                    contentDescription = stringResource(R.string.ui_player_episodes),
-                    tint = PlayerForeground,
-                )
-            }
+            PlayerStatusReadout(Modifier.padding(horizontal = 12.dp))
+            PlayerGlyph(
+                icon = when (videoFit) {
+                    VideoFit.FIT -> Icons.Rounded.FitScreen
+                    VideoFit.ZOOM -> Icons.Rounded.ZoomOutMap
+                    VideoFit.STRETCH -> Icons.Rounded.AspectRatio
+                },
+                description = stringResource(R.string.ui_player_ctl_fit),
+                onClick = onCycleFit,
+            )
+            PlayerGlyph(
+                icon = Icons.Rounded.Lock,
+                description = stringResource(R.string.ui_player_ctl_lock),
+                onClick = onLock,
+            )
+            PlayerGlyph(
+                icon = Icons.AutoMirrored.Rounded.List,
+                description = stringResource(R.string.ui_player_episodes),
+                onClick = onOpenEpisodes,
+                size = 24.dp,
+            )
         }
 
         Column(
@@ -769,7 +962,7 @@ private fun PlayerControlsOverlay(
             // the screen stays symmetrical.
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(22.dp),
+                horizontalArrangement = Arrangement.spacedBy(28.dp),
             ) {
                 PlayerGlyph(
                     icon = Icons.Rounded.Replay10,
@@ -780,13 +973,13 @@ private fun PlayerControlsOverlay(
                 IconButton(
                     onClick = { surfaceState.togglePlayPause() },
                     modifier = Modifier
-                        .size(58.dp)
+                        .size(64.dp)
                         .clip(CircleShape)
                         .background(PlayerControlScrim),
                 ) {
                     if (surfaceState.isBuffering) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
+                            modifier = Modifier.size(26.dp),
                             color = PlayerForeground,
                             strokeWidth = 2.dp,
                         )
@@ -801,7 +994,7 @@ private fun PlayerControlsOverlay(
                                 if (surfaceState.isPlaying) R.string.ui_player_pause else R.string.ui_player_play,
                             ),
                             tint = PlayerForeground,
-                            modifier = Modifier.size(30.dp),
+                            modifier = Modifier.size(34.dp),
                         )
                     }
                 }
@@ -821,6 +1014,7 @@ private fun PlayerControlsOverlay(
                 durationMs = duration,
                 onScrub = onScrub,
                 onSeek = onSeek,
+                chapters = chapters,
             )
 
             Row(
@@ -843,15 +1037,37 @@ private fun PlayerControlsOverlay(
                         onClick = onNext,
                     )
                 }
+                // Tap the clock to flip between total and remaining — the answer to "can I finish
+                // this before my stop?" is one tap away.
+                val trailing = if (showRemaining && duration > 0L) {
+                    "-" + formatClock((duration - position).coerceAtLeast(0L))
+                } else {
+                    formatClock(duration)
+                }
                 Text(
-                    text = "${formatClock(position)} / ${formatClock(duration)}",
-                    modifier = Modifier.padding(start = 4.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = PlayerForeground.copy(alpha = 0.78f),
+                    text = "${formatClock(position)} / $trailing",
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable(
+                            onClickLabel = stringResource(R.string.ui_player_ctl_time_remaining),
+                            onClick = onToggleRemaining,
+                        )
+                        .padding(horizontal = 6.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = PlayerChrome.foregroundMuted,
                 )
                 Spacer(Modifier.weight(1f))
+                // Only when it is not the default: a "1x" badge is noise, a "1.5x" one is a reminder.
+                if (speed != 1f) {
+                    PlayerChip(
+                        label = formatSpeed(speed),
+                        onClick = { onOpenSettings(PlayerMenuTab.SPEED) },
+                        accent = true,
+                    )
+                    Spacer(Modifier.width(6.dp))
+                }
                 if (model.servers.isNotEmpty()) {
-                    ServerChip(
+                    PlayerChip(
                         label = serverChipLabel(model),
                         onClick = { onOpenSettings(PlayerMenuTab.AUDIO) },
                     )
@@ -878,11 +1094,7 @@ private fun PlayerControlsOverlay(
                     icon = Icons.Rounded.Bedtime,
                     description = stringResource(R.string.ui_player_sleep),
                     onClick = { onOpenSettings(PlayerMenuTab.SLEEP) },
-                    tint = if (sleepActive) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        PlayerForeground
-                    },
+                    tint = if (sleepActive) PlayerChrome.accent else PlayerForeground,
                 )
                 PlayerGlyph(
                     icon = Icons.Rounded.PictureInPictureAlt,
@@ -914,25 +1126,24 @@ private fun PlayerGlyph(
 }
 
 /**
- * "Server 2 · Hindi" — the single entry point for servers and languages.
- *
- * The old chip toggled SUB/DUB blindly; with more than one server that is no longer one switch, so
- * tapping now opens the server list where the languages each one actually has are visible.
+ * Small labelled value in the bottom bar ("S2 · Hindi", "1.5x"). Tapping opens the pane that
+ * changes it. [accent] marks a value that is off its default, so it reads as a state, not a label.
  */
 @Composable
-private fun ServerChip(
+private fun PlayerChip(
     label: String,
     onClick: () -> Unit,
+    accent: Boolean = false,
 ) {
     Text(
         text = label,
         modifier = Modifier
             .clip(RoundedCornerShape(6.dp))
             .background(PlayerControlScrim)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        style = MaterialTheme.typography.labelSmall,
-        color = PlayerForeground,
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 5.dp),
+        style = MaterialTheme.typography.labelMedium,
+        color = if (accent) PlayerChrome.accentSoft else PlayerForeground,
     )
 }
 

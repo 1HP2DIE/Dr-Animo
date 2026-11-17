@@ -38,6 +38,8 @@ class PlayerSurfaceState {
     private val duration = mutableLongStateOf(0L)
     private val buffered = mutableLongStateOf(0L)
     private val speedState = mutableStateOf(1f)
+    private val introState = mutableStateOf<LongRange?>(null)
+    private val outroState = mutableStateOf<LongRange?>(null)
 
     private var togglePlayPauseCommand: (() -> Unit)? = null
     private var seekToCommand: ((Long) -> Unit)? = null
@@ -56,6 +58,21 @@ class PlayerSurfaceState {
 
     /** Playback speed as last requested by the UI; survives a source swap because the slot re-applies it. */
     val speed: Float get() = speedState.value
+
+    /** Opening song, when the source marks one. Drives "Skip intro" and the seek-bar chapters. */
+    val intro: LongRange? get() = introState.value
+
+    /** Ending song, when the source marks one. Drives the "Up next" card. */
+    val outro: LongRange? get() = outroState.value
+
+    /**
+     * Sources send `0..0` for "no marker" and the odd 1-second range; anything under five seconds
+     * is not a song and must not grow a skip button.
+     */
+    fun setMarkers(intro: LongRange?, outro: LongRange?) {
+        introState.value = intro?.takeIf { it.last - it.first >= MIN_MARKER_MS }
+        outroState.value = outro?.takeIf { it.last - it.first >= MIN_MARKER_MS }
+    }
 
     fun update(
         positionMs: Long,
@@ -132,5 +149,9 @@ class PlayerSurfaceState {
     fun setSpeed(value: Float) {
         speedState.value = value
         speedCommand?.invoke(value)
+    }
+
+    private companion object {
+        const val MIN_MARKER_MS = 5_000L
     }
 }

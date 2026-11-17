@@ -49,6 +49,7 @@ internal fun PlayerHostSlot(
     controller: com.animo.app.player.PlayerController? = null,
     onEnded: (() -> Unit)? = null,
     onCues: ((List<String>) -> Unit)? = null,
+    videoFit: VideoFit = VideoFit.FIT,
 ) {
     var stream by remember { mutableStateOf<PlayableStream?>(null) }
     var failure by remember { mutableStateOf<Throwable?>(null) }
@@ -58,7 +59,10 @@ internal fun PlayerHostSlot(
         stream = null
         failure = null
         masterUrlProvider().fold(
-            onSuccess = { stream = it },
+            onSuccess = {
+                stream = it
+                state.setMarkers(it.intro, it.outro)
+            },
             onFailure = { error ->
                 failure = error
                 onError(error)
@@ -152,5 +156,6 @@ internal fun PlayerHostSlot(
         onPlayerAvailable = { livePlayer -> player = livePlayer },
         onEnded = onEnded,
         onCues = onCues,
+        resizeMode = videoFit.resizeMode,
     )
 }
