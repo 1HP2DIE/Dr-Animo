@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import com.animo.app.ui.common.findActivity
 import androidx.compose.ui.unit.dp
 import com.animo.app.ui.common.formatClock
 import kotlin.math.abs

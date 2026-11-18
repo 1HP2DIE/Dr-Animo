@@ -14,8 +14,12 @@ import com.animo.app.di.ServiceLocator
 import com.animo.app.domain.model.PlayableStream
 import com.animo.app.player.PreviewCell
 import com.animo.app.player.PreviewVtt
+import com.animo.app.player.cancelOnCancellation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.Request
@@ -35,7 +39,14 @@ class SeekPreviewState internal constructor(
     private val cells = mutableStateOf<List<PreviewCell>>(emptyList())
     private val sprites = mutableStateMapOf<String, ImageBitmap>()
     private val loading = HashSet<String>()
+    private val spriteJobs = mutableMapOf<String, Job>()
     private var headers: Map<String, String> = emptyMap()
+
+    /**
+     * Bumped for every stream. Work started for the previous episode must not write into the new
+     * one's state, and a load that was cancelled mid-flight must not publish its result.
+     */
+    private var generation = 0
 
     val available: Boolean get() = cells.value.isNotEmpty()
 
@@ -51,14 +62,22 @@ class SeekPreviewState internal constructor(
     }
 
     internal suspend fun load(stream: PlayableStream?) {
+        val gen = ++generation
+        // Sheets already on the wire belong to the episode that is leaving.
+        spriteJobs.values.forEach { it.cancel() }
+        spriteJobs.clear()
         cells.value = emptyList()
         sprites.clear()
         loading.clear()
         val indexUrl = stream?.previewVtt ?: return
         headers = mapOf("Referer" to stream.referer, "User-Agent" to stream.userAgent)
+        // `runCatching` stays inside the IO block: outside it would also swallow the
+        // CancellationException raised when the effect restarts, and then publish stale cells.
         val parsed = withContext(Dispatchers.IO) {
-            runCatching { PreviewVtt.parse(fetch(indexUrl).decodeToString(), indexUrl) }.getOrDefault(emptyList())
+            runCatching { PreviewVtt.parse(fetch(indexUrl).decodeToString(), indexUrl) }.getOrElse { emptyList() }
         }
+        currentCoroutineContext().ensureActive()
+        if (gen != generation) return
         cells.value = parsed
         // The first sheet covers the opening minutes, which is where most scrubbing starts.
         parsed.firstOrNull()?.let { requestSprite(it.imageUrl) }
@@ -66,22 +85,27 @@ class SeekPreviewState internal constructor(
 
     private fun requestSprite(url: String) {
         if (!loading.add(url)) return
-        scope.launch {
+        val gen = generation
+        spriteJobs[url] = scope.launch {
             val bitmap = withContext(Dispatchers.IO) {
                 runCatching {
                     val bytes = fetch(url)
                     BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
                 }.getOrNull()
             }
+            spriteJobs.remove(url)
+            if (gen != generation) return@launch
             if (bitmap != null) sprites[url] = bitmap else loading.remove(url)
         }
     }
 
-    private fun fetch(url: String): ByteArray {
+    private suspend fun fetch(url: String): ByteArray {
         val request = Request.Builder().url(url).apply {
             headers.forEach { (name, value) -> if (value.isNotBlank()) header(name, value) }
         }.build()
-        ServiceLocator.httpClient.newCall(request).execute().use { response ->
+        val call = ServiceLocator.httpClient.newCall(request)
+        call.cancelOnCancellation()
+        call.execute().use { response ->
             check(response.isSuccessful) { "HTTP ${response.code}" }
             return response.body?.bytes() ?: ByteArray(0)
         }

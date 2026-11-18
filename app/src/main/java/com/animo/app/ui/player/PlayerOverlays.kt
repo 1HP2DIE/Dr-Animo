@@ -43,6 +43,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -70,7 +71,9 @@ private val FloatingShape = RoundedCornerShape(12.dp)
 fun BoxScope.TapSeekIndicator(hud: PlayerHud?) {
     val tap = hud as? PlayerHud.TapSeek
     var last by remember { mutableStateOf<PlayerHud.TapSeek?>(null) }
-    if (tap != null) last = tap
+    // Written after composition, not during: a snapshot write in the body costs an extra pass on
+    // every appearance.
+    SideEffect { if (tap != null) last = tap }
     val shown = last ?: return
     val forward = shown.direction > 0
 
@@ -177,7 +180,7 @@ fun UpNextCard(
     modifier: Modifier = Modifier,
 ) {
     var shown by remember { mutableStateOf(next) }
-    if (next != null) shown = next
+    SideEffect { if (next != null) shown = next }
     val episode = shown ?: return
 
     AnimatedVisibility(

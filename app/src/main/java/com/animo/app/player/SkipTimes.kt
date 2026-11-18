@@ -59,17 +59,18 @@ object SkipTimes {
         episodeLengthMs: Long,
         api: String = ProviderVault.optionalUrl(ProviderKey.SKIP_TIMES_API).orEmpty(),
     ): Markers? = withContext(Dispatchers.IO) {
-        if (api.isBlank() || malId <= 0 || episode <= 0 || episodeLengthMs <= 0L) return@withContext null
+        if (api.isBlank() || malId <= 0 || episodeLengthMs <= 0L) return@withContext null
         val url = "${api.trimEnd('/')}/v2/skip-times/$malId/$episode".toHttpUrlOrNull()?.newBuilder()
             ?.addQueryParameter("types[]", "op")
             ?.addQueryParameter("types[]", "ed")
             ?.addQueryParameter("episodeLength", (episodeLengthMs / 1000.0).toString())
             ?.build() ?: return@withContext null
         runCatching {
-            client.newCall(Request.Builder().url(url).header("Accept", "application/json").build())
-                .execute().use { response ->
-                    if (!response.isSuccessful) null else parse(response.body?.string().orEmpty())
-                }
+            val call = client.newCall(Request.Builder().url(url).header("Accept", "application/json").build())
+            call.cancelOnCancellation()
+            call.execute().use { response ->
+                if (!response.isSuccessful) null else parse(response.body?.string().orEmpty())
+            }
         }.getOrNull()
     }
 }

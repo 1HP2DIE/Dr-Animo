@@ -116,15 +116,14 @@ fun PlayerSeekBar(
             .pointerInput(enabled, safeDuration) {
                 if (!enabled) return@pointerInput
                 detectTapGestures { offset ->
-                    val tapped = (offset.x / size.width.toFloat()).coerceIn(0f, 1f)
-                    onSeek((tapped * safeDuration).toLong())
+                    onSeek((fractionAt(offset.x) * safeDuration).toLong())
                 }
             }
             .pointerInput(enabled, safeDuration) {
                 if (!enabled) return@pointerInput
                 detectHorizontalDragGestures(
                     onDragStart = { offset ->
-                        val start = (offset.x / size.width.toFloat()).coerceIn(0f, 1f)
+                        val start = fractionAt(offset.x)
                         dragFraction = start
                         onScrub((start * safeDuration).toLong())
                     },
@@ -142,7 +141,7 @@ fun PlayerSeekBar(
                     },
                     onHorizontalDrag = { change, _ ->
                         change.consume()
-                        val current = (change.position.x / size.width.toFloat()).coerceIn(0f, 1f)
+                        val current = fractionAt(change.position.x)
                         dragFraction = current
                         onScrub((current * safeDuration).toLong())
                     },
@@ -158,7 +157,7 @@ fun PlayerSeekBar(
             val trackHeight = (3.dp + 3.dp * grow).toPx()
             val thumbRadius = (6.dp + 2.dp * grow).toPx()
             val centerY = size.height / 2f
-            val inset = 8.dp.toPx()
+            val inset = SEEK_TRACK_INSET.toPx()
             val usableWidth = (size.width - inset * 2f).coerceAtLeast(1f)
             val corner = CornerRadius(trackHeight / 2f, trackHeight / 2f)
             val top = centerY - trackHeight / 2f
@@ -259,3 +258,18 @@ fun PlayerSeekBar(
         }
     }
 }
+
+/**
+ * Where along the track a touch landed.
+ *
+ * The track is drawn inset by [SEEK_TRACK_INSET] on both sides so the thumb never hangs off the end,
+ * so hit-testing has to use the same span: dividing by the full width put the finger up to 8 dp away
+ * from the thumb and made the first and last 8 dp seek to the very start/end.
+ */
+private fun androidx.compose.ui.input.pointer.PointerInputScope.fractionAt(x: Float): Float {
+    val inset = SEEK_TRACK_INSET.toPx()
+    val usable = (size.width - inset * 2f).coerceAtLeast(1f)
+    return ((x - inset) / usable).coerceIn(0f, 1f)
+}
+
+private val SEEK_TRACK_INSET = 8.dp

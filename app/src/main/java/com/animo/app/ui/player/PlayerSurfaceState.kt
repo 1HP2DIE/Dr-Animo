@@ -30,14 +30,14 @@ import androidx.compose.runtime.mutableStateOf
  * ```
  */
 @Stable
-class PlayerSurfaceState {
+class PlayerSurfaceState(initialSpeed: Float = 1f) {
 
     private val playing = mutableStateOf(false)
     private val buffering = mutableStateOf(true)
     private val position = mutableLongStateOf(0L)
     private val duration = mutableLongStateOf(0L)
     private val buffered = mutableLongStateOf(0L)
-    private val speedState = mutableStateOf(1f)
+    private val speedState = mutableStateOf(initialSpeed)
     private val introState = mutableStateOf<LongRange?>(null)
     private val outroState = mutableStateOf<LongRange?>(null)
     private val streamState = mutableStateOf<com.animo.app.domain.model.PlayableStream?>(null)
@@ -67,10 +67,6 @@ class PlayerSurfaceState {
     val outro: LongRange? get() = outroState.value
 
     /**
-     * Sources send `0..0` for "no marker" and the odd 1-second range; anything under five seconds
-     * is not a song and must not grow a skip button.
-     */
-    /**
      * The resolved stream, for what rides along with the video: side-car subtitles, the preview
      * sprite index, and the referer/user agent both of those hosts insist on.
      */
@@ -81,6 +77,10 @@ class PlayerSurfaceState {
         setMarkers(stream.intro, stream.outro)
     }
 
+    /**
+     * Sources send `0..0` for "no marker" and the odd 1-second range; anything under five seconds
+     * is not a song and must not grow a skip button.
+     */
     fun setMarkers(intro: LongRange?, outro: LongRange?) {
         introState.value = intro?.takeIf { it.last - it.first >= MIN_MARKER_MS }
         outroState.value = outro?.takeIf { it.last - it.first >= MIN_MARKER_MS }
@@ -113,7 +113,8 @@ class PlayerSurfaceState {
         val base = position.value
         if (!playing.value || buffering.value) return base
         val elapsed = (SystemClock.elapsedRealtime() - positionStampMs).coerceAtLeast(0L)
-        val predicted = base + elapsed
+        // At 2x the playhead advances two milliseconds per millisecond of clock.
+        val predicted = base + (elapsed * speedState.value).toLong()
         val total = duration.value
         return if (total > 0L) predicted.coerceAtMost(total) else predicted
     }
@@ -146,7 +147,12 @@ class PlayerSurfaceState {
     }
 
     fun seekTo(positionMs: Long) {
-        seekToCommand?.invoke(positionMs.coerceAtLeast(0L))
+        // Move the reported playhead now: the host's next tick is up to 250 ms away, and until then
+        // the clock would snap back to where the seek started.
+        val target = positionMs.coerceAtLeast(0L)
+        position.value = target
+        positionStampMs = SystemClock.elapsedRealtime()
+        seekToCommand?.invoke(target)
     }
 
     fun skipBy(deltaMs: Long) {

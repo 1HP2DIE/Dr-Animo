@@ -1,8 +1,6 @@
 package com.animo.app.ui.player
 
 import android.app.Activity
-import android.content.Context
-import android.content.ContextWrapper
 import android.app.PictureInPictureParams
 import android.content.pm.ActivityInfo
 import android.os.Build
@@ -12,11 +10,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.animo.app.ui.common.findActivity
+import com.animo.app.ui.theme.LocalIsDarkTheme
 
 /**
  * Immersive video presentation: hide both system bars and hold the activity in landscape while the
@@ -41,22 +40,40 @@ internal fun ImmersiveVideoEffect(enabled: Boolean, immersive: Boolean = true) {
         onDispose { window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
 
+    // The bars float over the video while it is up, so their icons must stay light whatever the
+    // app theme is; they only follow the theme again once the player is gone.
+    val lightBars = !LocalIsDarkTheme.current
     DisposableEffect(activity, enabled && immersive) {
         if (activity == null || !enabled || !immersive) {
             return@DisposableEffect onDispose { }
         }
         val window = activity.window
         val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+        val previousBehaviour = insetsController.systemBarsBehavior
+        val previousOrientation = activity.requestedOrientation
         insetsController.systemBarsBehavior =
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         insetsController.hide(WindowInsetsCompat.Type.systemBars())
+        insetsController.isAppearanceLightStatusBars = false
+        insetsController.isAppearanceLightNavigationBars = false
 
         activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
 
         onDispose {
-            // Always back to portrait, not "whatever it was": leaving PiP hands the activity back
-            // while it is still in landscape, and every screen outside the player is portrait-first.
-            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            // Always back to portrait when the previous state was not a real choice: leaving PiP
+            // hands the activity back while it is still in landscape, and every other screen is
+            // portrait-first.
+            activity.requestedOrientation =
+                if (previousOrientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE ||
+                    previousOrientation == ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                ) {
+                    ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                } else {
+                    previousOrientation
+                }
+            insetsController.systemBarsBehavior = previousBehaviour
+            insetsController.isAppearanceLightStatusBars = lightBars
+            insetsController.isAppearanceLightNavigationBars = lightBars
             insetsController.show(WindowInsetsCompat.Type.systemBars())
         }
     }
@@ -101,8 +118,3 @@ internal object PipState {
 @Composable
 internal fun rememberInPictureInPicture(): Boolean = PipState.inPip.value
 
-internal tailrec fun Context.findActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.findActivity()
-    else -> null
-}

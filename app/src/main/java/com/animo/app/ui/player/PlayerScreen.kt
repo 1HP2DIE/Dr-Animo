@@ -54,6 +54,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.collectAsState
@@ -206,8 +207,12 @@ private fun PlayerStage(
 ) {
     // One surface state per playback instance: re-keying on episode/audio/reload gives the host a
     // clean slate instead of asking it to hot-swap sources.
+    // Playback speed is a viewer preference for the session, so it is keyed outside the surface and
+    // handed to every new one: a fresh state would otherwise start at 1.0x while the chip still
+    // showed the old value.
+    var speed by rememberSaveable { mutableStateOf(1f) }
     val surfaceState = remember(model.episode.id, model.audio, model.reloadToken) {
-        PlayerSurfaceState()
+        PlayerSurfaceState(initialSpeed = speed)
     }
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -321,11 +326,7 @@ private fun PlayerStage(
             delay(if (surfaceState.isPlaying) 90L else 300L)
         }
     }
-    val subtitleLines = if (subtitleFromFile) {
-        activeCues.activeAt(subtitleClockMs).flatMap { cue -> cue.text.split('\n') }
-    } else {
-        containerLines
-    }
+
 
     val installSubtitle: (String, String) -> Unit = { name, content ->
         scope.launch {
@@ -582,7 +583,6 @@ private fun PlayerStage(
         repository.observeEpisodeProgress(model.anime.id)
     }.collectAsState(initial = emptyMap())
 
-    var speed by remember { mutableStateOf(surfaceState.speed) }
     LaunchedEffect(speed) { surfaceState.setSpeed(speed) }
 
     val onProgress = remember(viewModel) { { position: Long, duration: Long ->
@@ -731,8 +731,10 @@ private fun PlayerStage(
             locked -> lockRevealToken++
             settingsTab != null -> settingsTab = null
             episodesVisible -> episodesVisible = false
-            onToggleFullscreen != null -> onBack()
+            // Chrome first: back with the controls up hides them, it does not throw the viewer out
+            // of a full-screen episode.
             controlsVisible -> controlsVisible = false
+            onToggleFullscreen != null -> onBack()
             else -> onBack()
         }
     }
@@ -780,12 +782,23 @@ private fun PlayerStage(
         )
 
         if (!inPip) {
-            SubtitleOverlay(
-                lines = subtitleLines,
-                style = subtitleStyle,
-                liftForControls = controlsVisible,
-                modifier = Modifier.matchParentSize(),
-            )
+            if (subtitleFromFile) {
+                // The 90 ms clock is read inside this child, so a tick invalidates the cue lookup and
+                // the overlay instead of the whole player stage.
+                StreamSubtitleLayer(
+                    cues = activeCues,
+                    clockMs = { subtitleClockMs },
+                    style = subtitleStyle,
+                    liftForControls = controlsVisible,
+                )
+            } else {
+                SubtitleOverlay(
+                    lines = containerLines,
+                    style = subtitleStyle,
+                    liftForControls = controlsVisible,
+                    modifier = Modifier.matchParentSize(),
+                )
+            }
         }
 
         if (!inPip && !controlsVisible && surfaceState.isBuffering && model.errorMessage == null) {
@@ -822,6 +835,9 @@ private fun PlayerStage(
                 onCycleFit = { applyFit(videoFit.next()) },
                 onLock = {
                     locked = true
+                    // The gesture surface leaves composition while locked, so its own cleanup never
+                    // runs: without this a seek/volume pill would sit on the screen forever.
+                    hudState.show(null)
                     controlsVisible = false
                     lockRevealToken++
                     flashMessage(context.getString(R.string.ui_player_ctl_locked), Icons.Rounded.Lock)
@@ -1481,4 +1497,30 @@ private fun PlayerErrorCard(
             }
         }
     }
+}
+
+/**
+ * Side-car subtitles, drawn from a clock the overlay owns.
+ *
+ * The player stage pushes position four times a second, which is visibly late for a cue that starts
+ * on a cut, so file subtitles run on a 90 ms clock of their own. Reading that clock here — and
+ * deriving the lines from it — keeps ~11 invalidations a second inside this child instead of
+ * recomposing every branch of the player stage with it.
+ */
+@Composable
+private fun StreamSubtitleLayer(
+    cues: List<com.animo.app.subtitle.SubtitleCue>,
+    clockMs: () -> Long,
+    style: com.animo.app.subtitle.SubtitleStyle,
+    liftForControls: Boolean,
+) {
+    val lines by remember(cues) {
+        derivedStateOf { cues.activeAt(clockMs()).flatMap { cue -> cue.text.split('\n') } }
+    }
+    SubtitleOverlay(
+        lines = lines,
+        style = style,
+        liftForControls = liftForControls,
+        modifier = Modifier.fillMaxSize(),
+    )
 }
