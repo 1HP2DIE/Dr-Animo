@@ -66,7 +66,11 @@ object SkipTimes {
             ?.addQueryParameter("episodeLength", (episodeLengthMs / 1000.0).toString())
             ?.build() ?: return@withContext null
         runCatching {
-            val call = client.newCall(Request.Builder().url(url).header("Accept", "application/json").build())
+            // Markers are a nicety: a slow community API must not hold a player start for 45 s.
+            val call = client.newBuilder()
+                .callTimeout(6, java.util.concurrent.TimeUnit.SECONDS)
+                .build()
+                .newCall(Request.Builder().url(url).header("Accept", "application/json").build())
             call.cancelOnCancellation()
             call.execute().use { response ->
                 if (!response.isSuccessful) null else parse(response.body?.string().orEmpty())

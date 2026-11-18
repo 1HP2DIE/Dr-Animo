@@ -121,6 +121,13 @@ class MirrorStreamSource(
             origin = base,
         )
         val servers = MirrorProtocol.servers(body)
+        // One entry per title/episode for the life of the process: a binge would grow this without
+        // limit, so the oldest third goes when it is full.
+        if (serverCache.size >= CACHE_MAX_ENTRIES && !serverCache.containsKey(key)) {
+            serverCache.entries.sortedBy { it.value.atMs }
+                .take(serverCache.size / 3 + 1)
+                .forEach { serverCache.remove(it.key) }
+        }
         serverCache[key] = Cached(now(), servers)
         return servers
     }
@@ -167,8 +174,11 @@ class MirrorStreamSource(
             .header("Range", "bytes=0-0")
             .build()
         val signed = noRedirects.newCall(request).execute().use { response ->
-            response.header("Location")?.takeIf { response.isRedirect }
-                ?: if (response.isSuccessful) url else throw IOException("download HTTP ${response.code}")
+            response.header("Location")?.takeIf { response.isRedirect }?.let { location ->
+                // A relative Location is legal and some CDNs send one; the downloader would throw
+                // on it and the whole server would look dead.
+                response.request.url.resolve(location)?.toString() ?: location
+            } ?: if (response.isSuccessful) url else throw IOException("download HTTP ${response.code}")
         }
         ensureServable(signed, referer)
         return signed
@@ -212,6 +222,8 @@ class MirrorStreamSource(
 
     private companion object {
         const val CACHE_TTL_MS = 10 * 60 * 1000L
+        /** Episodes kept in memory at once; a binge walks far more than this. */
+        const val CACHE_MAX_ENTRIES = 64
         const val PROGRESS_WAIT_S = 12L
     }
 }
