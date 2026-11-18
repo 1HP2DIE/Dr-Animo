@@ -38,6 +38,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -45,6 +46,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
@@ -59,9 +61,6 @@ import com.animo.app.domain.model.AiringSlot
 import com.animo.app.ui.common.EmptyState
 import com.animo.app.ui.shell.AnimoTopBar
 import com.animo.app.ui.theme.AnimoPalette
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 
@@ -77,7 +76,7 @@ fun ScheduleScreen(
     modifier: Modifier = Modifier,
 ) {
     val flow = remember { ServiceLocator.favorites.observeSchedule() }
-    val days: List<AiringDay>? by flow.collectAsState(initial = null)
+    val days: List<AiringDay>? by flow.collectAsStateWithLifecycle(initialValue = null)
     var selected by rememberSaveable { mutableIntStateOf(0) }
 
     Column(modifier.fillMaxSize()) {
@@ -168,12 +167,15 @@ private fun DayStrip(days: List<AiringDay>, selected: Int, onSelect: (Int) -> Un
     }
 }
 
-private val TimeFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("h:mm a")
-
 @Composable
 private fun AiringRow(slot: AiringSlot, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
-    val time = Instant.ofEpochSecond(slot.airAtSec).atZone(ZoneId.systemDefault()).format(TimeFormat)
+    // The platform's own format: honours the 24-hour setting and the locale's own ordering.
+    val context = LocalContext.current
+    val timeFormat = remember(context) { android.text.format.DateFormat.getTimeFormat(context) }
+    val time = remember(slot.airAtSec, timeFormat) {
+        timeFormat.format(java.util.Date(slot.airAtSec * 1_000L))
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
