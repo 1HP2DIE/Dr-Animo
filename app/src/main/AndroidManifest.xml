@@ -50,8 +50,8 @@
         -->
 
         <!--
-          Media3 media session service (owned by Agent C — player/PlaybackService).
-          mediaPlayback foregroundServiceType is required from API 34 for targetSdk 34+.
+          Media3 media session service. mediaPlayback foregroundServiceType is required from API 34
+          for targetSdk 34+.
         -->
         <service
             android:name=".player.PlaybackService"

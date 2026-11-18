@@ -16,4 +16,9 @@
     <exclude
         domain="file"
         path="datastore" />
+    <!-- The media itself lives in the external files dir, which is not backed up; a restored row
+         would claim a file that does not exist, with no way to start the download again. -->
+    <exclude
+        domain="file"
+        path="downloads.json" />
 </full-backup-content>

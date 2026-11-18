@@ -13,6 +13,10 @@
         <exclude
             domain="file"
             path="datastore" />
+        <!-- The media is not transferred; a row without its file could only be deleted. -->
+        <exclude
+            domain="file"
+            path="downloads.json" />
     </cloud-backup>
     <device-transfer>
         <exclude
@@ -27,5 +31,9 @@
         <exclude
             domain="file"
             path="datastore" />
+        <!-- The media is not transferred; a row without its file could only be deleted. -->
+        <exclude
+            domain="file"
+            path="downloads.json" />
     </device-transfer>
 </data-extraction-rules>
