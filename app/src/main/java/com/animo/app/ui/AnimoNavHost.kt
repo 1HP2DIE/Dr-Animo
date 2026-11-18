@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -188,7 +189,7 @@ fun AnimoNavHost(
 
                     composable(Routes.DOWNLOADS) {
                         DownloadsScreen(
-                            onBack = { navController.popBackStack() },
+                            onBack = { navController.backIfResumed() },
                             onPlay = { animeId, episodeId, audio ->
                                 navController.navigate(Routes.watch(animeId, episodeId, audio))
                             },
@@ -198,14 +199,14 @@ fun AnimoNavHost(
 
                     composable(Routes.SUPPORT) {
                         com.animo.app.ui.support.SupportScreen(
-                            onBack = { navController.popBackStack() },
+                            onBack = { navController.backIfResumed() },
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
 
                     composable(Routes.CHANGELOG) {
                         ChangelogScreen(
-                            onBack = { navController.popBackStack() },
+                            onBack = { navController.backIfResumed() },
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
@@ -229,7 +230,7 @@ fun AnimoNavHost(
                         val animeId = arguments.getInt(ARG_ANIME_ID)
                         DetailScreen(
                             animeId = animeId,
-                            onBack = { navController.popBackStack() },
+                            onBack = { navController.backIfResumed() },
                             onOpenDownloads = { navController.navigate(Routes.DOWNLOADS) },
                             autoplayEpisodeId = arguments.getLong(ARG_EPISODE_ID).takeIf { it > 0L },
                             autoplayAudio = AudioTrack.entries.firstOrNull { it.name == arguments.getString(ARG_AUDIO) },
@@ -254,11 +255,22 @@ fun AnimoNavHost(
                             animeId = animeId,
                             episodeId = episodeId,
                             initialAudio = audio,
-                            onBack = { navController.popBackStack() },
+                            onBack = { navController.backIfResumed() },
                         )
                     }
                 }
             }
         }
     }
+}
+
+/**
+ * Back, ignoring a second tap that lands before the first one has been handled.
+ *
+ * `popBackStack()` on a destination that is already leaving pops the one underneath it — tap twice
+ * quickly enough and the start destination goes too, leaving an empty host.
+ */
+private fun NavHostController.backIfResumed() {
+    val entry = currentBackStackEntry ?: return
+    if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) popBackStack()
 }
