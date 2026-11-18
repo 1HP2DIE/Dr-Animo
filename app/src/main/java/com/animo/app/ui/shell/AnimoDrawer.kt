@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.PlayCircle
@@ -156,6 +157,12 @@ fun AnimoDrawerContent(
                 selected = false,
                 onClick = onSyncNow,
                 trailing = { SyncProgressLabel(syncing = syncing, sync = sync) },
+            )
+            DrawerItem(
+                icon = Icons.Outlined.FavoriteBorder,
+                label = stringResource(R.string.ui_support_title),
+                selected = currentRoute == Routes.SUPPORT,
+                onClick = { onNavigate(Routes.SUPPORT) },
             )
             DrawerItem(
                 icon = Icons.Outlined.Info,

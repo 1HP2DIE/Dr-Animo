@@ -75,6 +75,7 @@ fun SettingsScreen(
     onOpenDrawer: () -> Unit,
     onOpenChangelog: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenSupport: () -> Unit = {},
 ) {
     val container = LocalAppContainer.current
     val context = LocalContext.current.applicationContext
@@ -100,6 +101,7 @@ fun SettingsScreen(
             viewModel.markChangelogSeen()
             onOpenChangelog()
         },
+        onOpenSupport = onOpenSupport,
         modifier = modifier,
     )
 }
@@ -118,6 +120,7 @@ private fun SettingsScreenContent(
     onSyncHindi: () -> Unit,
     onOpenDrawer: () -> Unit,
     onOpenChangelog: () -> Unit,
+    onOpenSupport: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -159,6 +162,7 @@ private fun SettingsScreenContent(
                 AboutSection(
                     changelogUnseen = Changelog.isUnseen(state.changelogSeenVersion),
                     onOpenChangelog = onOpenChangelog,
+                    onOpenSupport = onOpenSupport,
                 )
             }
         }
@@ -612,6 +616,7 @@ private fun PlaybackSection(
 private fun AboutSection(
     changelogUnseen: Boolean,
     onOpenChangelog: () -> Unit,
+    onOpenSupport: () -> Unit = {},
 ) {
     SettingsSection(title = stringResource(R.string.ui_settings_about)) {
         Column(
@@ -639,6 +644,12 @@ private fun AboutSection(
             value = stringResource(R.string.ui_settings_version_value, BuildConfig.VERSION_NAME),
             badge = if (changelogUnseen) stringResource(R.string.ui_settings_badge_new) else null,
             onClick = onOpenChangelog,
+        )
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        SettingsActionRow(
+            label = stringResource(R.string.ui_support_title),
+            value = stringResource(R.string.ui_support_settings_value),
+            onClick = onOpenSupport,
         )
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         SettingsValueRow(

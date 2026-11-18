@@ -51,6 +51,7 @@ object Routes {
     const val DOWNLOADS = "downloads"
     const val FAVORITES = "favorites"
     const val SCHEDULE = "schedule"
+    const val SUPPORT = "support"
     const val DETAIL = "detail/{$ARG_ANIME_ID}?$ARG_EPISODE_ID={$ARG_EPISODE_ID}&$ARG_AUDIO={$ARG_AUDIO}"
     const val PLAYER = "player/{$ARG_ANIME_ID}/{$ARG_EPISODE_ID}/{$ARG_AUDIO}"
 
@@ -165,6 +166,7 @@ fun AnimoNavHost(
                         SettingsScreen(
                             onOpenDrawer = openDrawer,
                             onOpenChangelog = { navController.navigate(Routes.CHANGELOG) },
+                            onOpenSupport = { navController.navigate(Routes.SUPPORT) },
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
@@ -190,6 +192,13 @@ fun AnimoNavHost(
                             onPlay = { animeId, episodeId, audio ->
                                 navController.navigate(Routes.watch(animeId, episodeId, audio))
                             },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+
+                    composable(Routes.SUPPORT) {
+                        com.animo.app.ui.support.SupportScreen(
+                            onBack = { navController.popBackStack() },
                             modifier = Modifier.fillMaxSize(),
                         )
                     }

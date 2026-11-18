@@ -84,4 +84,22 @@
     <string name="ui_settings_accent">Accent colour</string>
     <string name="ui_settings_amoled">Pure black</string>
     <string name="ui_settings_amoled_body">True black surfaces in dark mode. Saves battery on OLED screens.</string>
+    <string name="ui_support_title">Support Animo</string>
+    <string name="ui_support_settings_value">Telegram · Crypto</string>
+    <string name="ui_support_intro_title">Animo is free, with no ads</string>
+    <string name="ui_support_intro_body">If it saves you time, joining the channel or sending a small tip keeps the servers checked and new features coming.</string>
+    <string name="ui_support_community">Community</string>
+    <string name="ui_support_telegram">Telegram channel</string>
+    <string name="ui_support_telegram_body">New builds, fixes and announcements land here first.</string>
+    <string name="ui_support_telegram_open">Open in Telegram</string>
+    <string name="ui_support_crypto">Tip with crypto</string>
+    <string name="ui_support_bep20_title">USDT / BNB</string>
+    <string name="ui_support_bep20_hint">BNB Smart Chain address. Any BEP20 token works.</string>
+    <string name="ui_support_bep20_warning">Send on BNB Smart Chain (BEP20) only. Coins sent on another network to this address are lost.</string>
+    <string name="ui_support_binance_title">Binance Pay</string>
+    <string name="ui_support_binance_hint">From the Binance app: Pay → Send → Pay ID. No network fee.</string>
+    <string name="ui_support_copy">Copy</string>
+    <string name="ui_support_share">Share</string>
+    <string name="ui_support_copied">%s copied</string>
+    <string name="ui_support_footer">Tips are voluntary and unlock nothing: every feature stays free for everyone. Thank you.</string>
 </resources>
