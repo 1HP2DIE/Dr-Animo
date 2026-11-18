@@ -100,7 +100,11 @@ class DownloadEngine(client: OkHttpClient) {
             is Source.Hls -> downloadHls(source.mediaUrl, stream, directory, name, onProgress)
         }
         val subtitle = runCatching { downloadSubtitle(stream, directory, name, subtitleLabel) }
-            .onFailure { AppLog.w("download subtitle failed", it) }
+            .onFailure {
+                // Cancellation is not a failure to log and swallow: the caller must see it.
+                if (it is kotlinx.coroutines.CancellationException) throw it
+                AppLog.w("download subtitle failed", it)
+            }
             .getOrNull()
         Result(video, source.label, subtitle)
     }
