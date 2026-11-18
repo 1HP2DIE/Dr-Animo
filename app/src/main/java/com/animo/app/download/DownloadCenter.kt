@@ -22,6 +22,7 @@ import com.animo.app.domain.model.StreamContainer
 import com.animo.app.domain.model.StreamSubtitle
 import com.animo.app.domain.repo.AnimeRepository
 import com.animo.app.domain.repo.StreamRepository
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import okhttp3.OkHttpClient
@@ -47,6 +48,14 @@ class DownloadCenter(
     private val engine = DownloadEngine(client)
 
     val entries: StateFlow<List<DownloadEntry>> = store.entries
+
+    init {
+        // A queued row must always have a job behind it. `KEEP` leaves an existing job alone, so
+        // this only revives rows whose job was lost (an interrupted server switch, a cleared queue).
+        store.entries.value
+            .filter { it.status == DownloadStatus.QUEUED || it.status == DownloadStatus.RUNNING }
+            .forEach { schedule(it.id) }
+    }
 
     fun entry(episodeId: Long, audio: AudioTrack): DownloadEntry? =
         store.get(DownloadEntry.idOf(episodeId, audio.name))
@@ -126,32 +135,113 @@ class DownloadCenter(
 
     suspend fun retry(id: String) {
         store.update(id) { it.copy(status = DownloadStatus.QUEUED, error = null) }
-        schedule(id)
+        schedule(id, replace = true)
     }
 
     /** Cancels a running download and deletes whatever it wrote. */
     suspend fun delete(id: String) {
         WorkManager.getInstance(context).cancelUniqueWork(workName(id))
-        store.get(id)?.let { entry ->
-            entry.file?.delete()
-            entry.subtitlePath?.let { File(it).delete() }
-            // Unfinished pieces are named after the entry and its audio, whatever quality they got.
-            val stem = "${filePrefix(entry)} [${audioLabel(entry)} "
-            folderFor(entry).listFiles()?.forEach { file ->
-                if (file.name.startsWith(stem) || file.name.startsWith(".$stem")) {
-                    file.deleteRecursively()
-                }
-            }
-            folderFor(entry).takeIf { it.listFiles().isNullOrEmpty() }?.delete()
-        }
+        store.get(id)?.let(::removeFiles)
         store.remove(id)
     }
 
-    /** Called by [DownloadWorker]. Returns false when the download failed (the entry says why). */
+    private fun removeFiles(entry: DownloadEntry) {
+        entry.file?.delete()
+        entry.subtitlePath?.let { File(it).delete() }
+        // Unfinished pieces are named after the entry and its audio, whatever quality they got.
+        val stem = "${filePrefix(entry)} [${audioLabel(entry)} "
+        folderFor(entry).listFiles()?.forEach { file ->
+            if (file.name.startsWith(stem) || file.name.startsWith(".$stem")) file.deleteRecursively()
+        }
+        folderFor(entry).takeIf { it.listFiles().isNullOrEmpty() }?.delete()
+    }
+
+    /** Servers that have [entry]'s language for its episode, for the "change server" picker. */
+    suspend fun sourcesFor(entry: DownloadEntry): List<LanguageSource> {
+        val episode = animeRepository.observeEpisodes(entry.animeId).first().firstOrNull { it.id == entry.episodeId }
+            ?: return emptyList()
+        val key = entry.id.substringAfter(':')
+        return languages(entry.animeId, episode).firstOrNull { it.key == key }?.sources.orEmpty()
+            .filter { it.server != null }
+    }
+
+    /**
+     * Starts [id] again on another server. Pieces from different servers never mix (each server
+     * has its own encode, so byte N or segment N is a different moment), so the old file goes.
+     */
+    suspend fun changeServer(id: String, source: LanguageSource) {
+        stopAndWait(id)
+        val entry = store.get(id) ?: return
+        removeFiles(entry)
+        store.update(id) {
+            it.restartOn(source, note = null)
+        }
+        schedule(id, replace = true)
+    }
+
+    /**
+     * Cancels the job for [id] and waits (briefly) until it has really stopped. Cancelling is
+     * asynchronous: without the wait, the old job can still write a last piece into the file the
+     * new server is about to start, and a `KEEP` enqueue would be dropped as a duplicate.
+     */
+    private suspend fun stopAndWait(id: String) {
+        val work = WorkManager.getInstance(context)
+        work.cancelUniqueWork(workName(id))
+        kotlinx.coroutines.withTimeoutOrNull(5_000L) {
+            work.getWorkInfosForUniqueWorkFlow(workName(id)).first { infos ->
+                infos.none { it.state == androidx.work.WorkInfo.State.RUNNING }
+            }
+        }
+    }
+
+    private fun DownloadEntry.restartOn(source: LanguageSource, note: String?) = copy(
+        server = source.server?.number,
+        languageId = source.languageId,
+        status = DownloadStatus.QUEUED,
+        progress = 0f,
+        bytesDone = 0L,
+        bytesTotal = 0L,
+        speedBps = 0L,
+        qualityLabel = "",
+        filePath = null,
+        subtitlePath = null,
+        error = null,
+        note = note,
+        runToken = System.nanoTime(),
+    )
+
+    /**
+     * Called by [DownloadWorker]. When a server fails, the download starts over on the next server
+     * that has the same language, until one works or none is left. Returns false on final failure.
+     */
     internal suspend fun run(id: String, onProgress: (DownloadEntry) -> Unit): Boolean {
+        val tried = mutableSetOf<Int>()
+        while (true) {
+            val token = store.get(id)?.runToken ?: return true
+            if (attempt(id, onProgress)) return true
+            // Cancelled, or another server was picked meanwhile: that run owns the row now.
+            if (!kotlinx.coroutines.currentCoroutineContext().isActive) return false
+            val failed = store.get(id)?.takeIf { it.runToken == token } ?: return false
+            failed.server?.let(tried::add)
+            val next = runCatching { sourcesFor(failed) }.getOrDefault(emptyList())
+                .firstOrNull { it.server != null && it.server.number !in tried }
+                ?: return false
+            AppLog.i("download $id: Server ${failed.server} failed, switching to ${next.server?.label}")
+            removeFiles(failed)
+            store.update(id) {
+                it.restartOn(next, note = "Server ${failed.server ?: "?"} failed · switched to ${next.server?.label}")
+            }
+        }
+    }
+
+    private suspend fun attempt(id: String, onProgress: (DownloadEntry) -> Unit): Boolean {
         val entry = store.get(id) ?: return true
         if (entry.isFinished) return true
-        store.update(id) { it.copy(status = DownloadStatus.RUNNING, error = null, speedBps = 0L) }
+        val token = entry.runToken
+        // Every write below goes through this, so a superseded job cannot touch the new run's row.
+        suspend fun mine(change: (DownloadEntry) -> DownloadEntry) =
+            store.update(id) { if (it.runToken == token) change(it) else it }
+        mine { it.copy(status = DownloadStatus.RUNNING, error = null, speedBps = 0L) }
         // Speed: bytes over the last few seconds, smoothed so one stalled range does not make the
         // meter jump to zero and back.
         var sampleAt = System.currentTimeMillis()
@@ -168,11 +258,16 @@ class DownloadCenter(
                 entry.server?.let { com.animo.app.domain.model.StreamServer.fromNumber(it) },
                 entry.languageId,
             ).getOrThrow()
+            // Automatic order may land anywhere; remember where, so a failure moves on from there.
+            stream.server?.let { actual -> mine { it.copy(server = actual.number) } }
+            val serverTag = (stream.server?.number ?: entry.server)?.let { " S$it" }.orEmpty()
             val result = engine.download(
                 stream = stream,
                 targetHeight = entry.targetHeight,
                 directory = folderFor(entry),
-                baseName = { quality -> "${filePrefix(entry)} [${audioLabel(entry)} $quality]" },
+                // The server is in the name, so a late write from a job on another server never lands
+                // in this run's file or its resume ledger.
+                baseName = { quality -> "${filePrefix(entry)} [${audioLabel(entry)} $quality$serverTag]" },
                 subtitleLabel = entry.subtitleLabel,
                 onProgress = { done, total, fraction ->
                     val now = System.currentTimeMillis()
@@ -185,13 +280,13 @@ class DownloadCenter(
                         sampleBytes = done
                         sampleAt = now
                     }
-                    store.update(id) {
+                    mine {
                         it.copy(bytesDone = done, bytesTotal = total, progress = fraction, speedBps = speed.toLong())
                     }
                     store.get(id)?.let(onProgress)
                 },
             )
-            store.update(id) {
+            mine {
                 it.copy(
                     status = DownloadStatus.DONE,
                     progress = 1f,
@@ -207,12 +302,12 @@ class DownloadCenter(
         } catch (cancelled: CancellationException) {
             // Deleted or stopped by the system: WorkManager reschedules a stopped job by itself.
             store.get(id)?.let { current ->
-                if (current.status == DownloadStatus.RUNNING) store.update(id) { it.copy(status = DownloadStatus.QUEUED) }
+                if (current.status == DownloadStatus.RUNNING) mine { it.copy(status = DownloadStatus.QUEUED) }
             }
             throw cancelled
         } catch (error: Throwable) {
             AppLog.w("download $id failed", error)
-            store.update(id) { it.copy(status = DownloadStatus.FAILED, error = describe(error), speedBps = 0L) }
+            mine { it.copy(status = DownloadStatus.FAILED, error = describe(error), speedBps = 0L) }
             false
         }
     }
@@ -278,14 +373,18 @@ class DownloadCenter(
         else -> "video/mp4"
     }
 
-    private fun schedule(id: String) {
+    private fun schedule(id: String, replace: Boolean = false) {
         val request = OneTimeWorkRequestBuilder<DownloadWorker>()
             .setInputData(workDataOf(DownloadWorker.KEY_ID to id))
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .addTag(DownloadWorker.TAG)
             .build()
-        WorkManager.getInstance(context).enqueueUniqueWork(workName(id), ExistingWorkPolicy.KEEP, request)
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            workName(id),
+            if (replace) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP,
+            request,
+        )
     }
 
     private fun root(): File =

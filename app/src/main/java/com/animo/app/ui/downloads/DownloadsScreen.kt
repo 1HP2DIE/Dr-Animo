@@ -5,6 +5,7 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -26,10 +27,14 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DownloadForOffline
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -39,7 +44,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -57,6 +65,7 @@ import com.animo.app.di.ServiceLocator
 import com.animo.app.domain.model.AudioTrack
 import com.animo.app.download.DownloadEntry
 import com.animo.app.download.DownloadStatus
+import com.animo.app.download.LanguageSource
 import com.animo.app.download.formatSpeed
 import com.animo.app.download.formatTimeLeft
 import com.animo.app.ui.common.BadgeTone
@@ -81,6 +90,7 @@ fun DownloadsScreen(
     val totalBytes = remember(entries) { entries.filter { it.status == DownloadStatus.DONE }.sumOf { it.bytesTotal } }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    var switching by remember { mutableStateOf<DownloadEntry?>(null) }
     val chooserTitle = stringResource(R.string.ui_downloads_open_with_title)
     val noPlayer = stringResource(R.string.ui_downloads_no_player)
 
@@ -147,11 +157,87 @@ fun DownloadsScreen(
                         }
                     },
                     onRetry = { scope.launch { center.retry(entry.id) } },
+                    onChangeServer = { switching = entry },
                     onDelete = { scope.launch { center.delete(entry.id) } },
                 )
             }
         }
     }
+
+    switching?.let { entry ->
+        ChangeServerDialog(
+            entry = entry,
+            onPick = { source ->
+                switching = null
+                scope.launch { center.changeServer(entry.id, source) }
+            },
+            onDismiss = { switching = null },
+        )
+    }
+}
+
+/** The servers that have this download's language; picking one starts the download over there. */
+@Composable
+private fun ChangeServerDialog(
+    entry: DownloadEntry,
+    onPick: (LanguageSource) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var sources by remember(entry.id) { mutableStateOf<List<LanguageSource>?>(null) }
+    LaunchedEffect(entry.id) { sources = ServiceLocator.downloads.sourcesFor(entry) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.ui_downloads_change_server)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = stringResource(R.string.ui_downloads_change_server_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(4.dp))
+                when (val list = sources) {
+                    null -> LinearProgressIndicator(Modifier.fillMaxWidth())
+                    else -> if (list.isEmpty()) {
+                        Text(stringResource(R.string.ui_downloads_change_server_none))
+                    } else {
+                        list.forEach { source ->
+                            val current = source.server?.number == entry.server
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(MaterialTheme.shapes.small)
+                                    .background(
+                                        if (current) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent,
+                                    )
+                                    .clickable(enabled = !current) { onPick(source) }
+                                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Dns,
+                                    contentDescription = null,
+                                    tint = if (current) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Text(source.server?.label.orEmpty(), modifier = Modifier.weight(1f))
+                                if (current) {
+                                    Text(
+                                        text = stringResource(R.string.ui_downloads_current),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.ui_downloads_cancel)) } },
+    )
 }
 
 @Composable
@@ -161,6 +247,7 @@ private fun DownloadRow(
     onOpenWith: () -> Unit,
     onRetry: () -> Unit,
     onDelete: () -> Unit,
+    onChangeServer: () -> Unit = {},
 ) {
     val colors = MaterialTheme.colorScheme
     val shape = MaterialTheme.shapes.small
@@ -202,6 +289,7 @@ private fun DownloadRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     PillBadge(text = audioLabel, tone = BadgeTone.Accent)
+                    entry.server?.let { PillBadge(text = "S$it", tone = BadgeTone.Muted) }
                     entry.qualityLabel.takeIf { it.isNotBlank() }?.let { PillBadge(text = it, tone = BadgeTone.Outlined) }
                     when (entry.status) {
                         DownloadStatus.DONE -> Text(
@@ -226,10 +314,23 @@ private fun DownloadRow(
                 }
                 DownloadStatus.FAILED -> {
                     RowAction(Icons.Rounded.Refresh, stringResource(R.string.ui_downloads_retry), onRetry, colors.primary)
+                    RowAction(Icons.Rounded.SwapHoriz, stringResource(R.string.ui_downloads_change_server), onChangeServer)
                     RowAction(Icons.Rounded.Delete, stringResource(R.string.ui_downloads_delete), onDelete)
                 }
-                DownloadStatus.QUEUED, DownloadStatus.RUNNING ->
+                DownloadStatus.QUEUED, DownloadStatus.RUNNING -> {
+                    RowAction(Icons.Rounded.SwapHoriz, stringResource(R.string.ui_downloads_change_server), onChangeServer)
                     RowAction(Icons.Rounded.Close, stringResource(R.string.ui_downloads_cancel), onDelete)
+                }
+            }
+        }
+        entry.note?.takeIf { entry.status != DownloadStatus.DONE }?.let { note ->
+            Row(
+                modifier = Modifier.padding(end = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(Icons.Rounded.SwapHoriz, contentDescription = null, tint = colors.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                Text(note, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
             }
         }
         if (entry.status == DownloadStatus.FAILED) {

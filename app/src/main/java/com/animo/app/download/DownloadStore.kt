@@ -46,7 +46,15 @@ data class DownloadEntry(
     val filePath: String? = null,
     val subtitlePath: String? = null,
     val error: String? = null,
+    /** A line for the viewer that is not an error, e.g. "Server 4 failed · switched to Server 1". */
+    val note: String? = null,
     val createdAtMs: Long = 0L,
+    /**
+     * Changes every time the download starts over (another server). A job only writes to the row
+     * while the token it started with is still current, so a superseded job finishing late cannot
+     * overwrite the new run.
+     */
+    val runToken: Long = 0L,
 ) {
     val file: File? get() = filePath?.let(::File)
     val isFinished: Boolean get() = status == DownloadStatus.DONE && file?.exists() == true
