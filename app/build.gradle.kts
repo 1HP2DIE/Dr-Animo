@@ -129,8 +129,8 @@ android {
         applicationId = "com.animo.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 6
-        versionName = "1.6.0"
+        versionCode = 7
+        versionName = "1.7.0"
 
         // No endpoint ever reaches BuildConfig: every host is resolved from the encrypted
         // provider vault at runtime (see ProviderVault), so a string dump of the APK or a
@@ -155,6 +155,22 @@ android {
         isCoreLibraryDesugaringEnabled = true
     }
 
+    // Release signing comes from secrets/signing.properties (git-ignored, next to the keystore).
+    // Without it the release build is left unsigned instead of failing.
+    val signingProps = rootProject.file("secrets/signing.properties")
+        .takeIf { it.exists() }
+        ?.let { file -> Properties().apply { file.inputStream().use { load(it) } } }
+    signingConfigs {
+        if (signingProps != null) {
+            create("release") {
+                storeFile = rootProject.file(signingProps.getProperty("storeFile"))
+                storePassword = signingProps.getProperty("storePassword")
+                keyAlias = signingProps.getProperty("keyAlias")
+                keyPassword = signingProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false
@@ -162,6 +178,7 @@ android {
             versionNameSuffix = "-debug"
         }
         release {
+            signingConfigs.findByName("release")?.let { signingConfig = it }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

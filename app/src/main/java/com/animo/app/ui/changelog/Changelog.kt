@@ -28,6 +28,27 @@ object Changelog {
 
     val releases: List<Release> = listOf(
         Release(
+            version = "1.7.0",
+            date = "18 Nov 2026",
+            headline = "Download and watch offline, a weekly airing schedule, favourites and your own colours.",
+            changes = listOf(
+                Change(ChangeKind.NEW, "Download episodes and watch them offline: pick languages, subtitles and any quality the servers have"),
+                Change(ChangeKind.NEW, "Download SUB and DUB (or Hindi) of the same episode in one go"),
+                Change(ChangeKind.NEW, "Downloads page with progress, speed and time left; open any finished episode in VLC or another player"),
+                Change(ChangeKind.NEW, "Change a download's server, and a failed server hands over to the next one by itself"),
+                Change(ChangeKind.NEW, "Episodes play right on the title page; go full screen when you want, or turn on auto full screen in Settings"),
+                Change(ChangeKind.NEW, "Schedule tab: what airs each day this week, in your time zone, with Airing today on Home"),
+                Change(ChangeKind.NEW, "Favourites: tap the heart on any title, find them in their own tab and on Home"),
+                Change(ChangeKind.NEW, "New episodes of airing shows and favourites are picked up quietly in the background"),
+                Change(ChangeKind.NEW, "Six accent colours and a pure black mode for OLED screens"),
+                Change(ChangeKind.NEW, "More servers and languages, including Hindi, with skip intro, up next and screen lock in the player"),
+                Change(ChangeKind.NEW, "Support Animo page in the drawer: Telegram channel and crypto tips"),
+                Change(ChangeKind.IMPROVED, "Smoother screen changes, tab and drawer animations"),
+                Change(ChangeKind.IMPROVED, "Play and skip buttons sit in the exact middle of the player, and subtitles stay clear of the controls"),
+                Change(ChangeKind.IMPROVED, "Settings moved to the drawer to make room for Schedule and Favourites"),
+            ),
+        ),
+        Release(
             version = "1.6.0",
             date = "17 Nov 2026",
             headline = "Subtitles you can read: bring your own file, restyle it, keep the look.",

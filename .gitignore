@@ -16,3 +16,8 @@ research/vendor/animestream/
 # Local endpoint vault — real provider hosts must never be committed.
 secrets/providers.properties
 secrets/vault.key
+
+# Release signing key and its passwords — back these up, never commit them.
+secrets/animo-release.jks
+secrets/signing.properties
+release/
