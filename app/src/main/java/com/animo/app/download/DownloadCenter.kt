@@ -38,7 +38,10 @@ import java.util.concurrent.CancellationException
  * player.
  *
  * Files live in the app's own folder on shared storage (`Android/data/<app>/files/Movies/Animo`):
- * no storage permission needed, visible to a file manager over USB, removed with the app.
+ * no storage permission needed and removed with the app. Android 11+ hides that folder from USB and
+ * from the system file picker, so "open in another player" goes through a FileProvider grant — that
+ * is the only way a file leaves the app, which is why MediaStore (a copy, plus a phantom after
+ * uninstall) was not worth it.
  */
 class DownloadCenter(
     private val context: Context,
