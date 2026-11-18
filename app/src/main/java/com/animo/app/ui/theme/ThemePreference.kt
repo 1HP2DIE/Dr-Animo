@@ -4,8 +4,10 @@ import android.content.Context
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -83,9 +85,8 @@ fun rememberThemePreference(): ThemePreference {
     }
     // `null` until DataStore has answered: the theme on screen before that is a placeholder, not a
     // choice, and callers must not animate away from it.
-    val stored by produceState<Triple<ThemeMode, AccentPalette, Boolean>?>(initialValue = null, modeFlow) {
-        modeFlow.collect { value = it }
-    }
+    var stored by remember { mutableStateOf<Triple<ThemeMode, AccentPalette, Boolean>?>(null) }
+    LaunchedEffect(modeFlow) { modeFlow.collect { stored = it } }
     val loaded = stored != null
     val (mode, accent, amoled) = stored ?: Triple(ThemeMode.DARK, ActiveAccent.palette, false)
     return remember(stored, context, loaded) {
