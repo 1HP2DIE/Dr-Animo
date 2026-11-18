@@ -44,7 +44,12 @@ fun FavoriteButton(
     tint: Color = MaterialTheme.colorScheme.onSurface,
 ) {
     val repository = ServiceLocator.favorites
-    val favorite by remember(animeId) { repository.observeIsFavorite(animeId) }.collectAsState(initial = false)
+    val stored by remember(animeId) { repository.observeIsFavorite(animeId) }.collectAsState(initial = false)
+    // The write is asynchronous, so the heart follows the tap and the database confirms it a moment
+    // later. Without this a fast double tap read the same stale value twice and lost one of them.
+    var pending by remember(animeId) { mutableStateOf<Boolean?>(null) }
+    val favorite = pending ?: stored
+    LaunchedEffect(stored, pending) { if (pending == stored) pending = null }
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
     val pop = remember { Animatable(1f) }
@@ -61,7 +66,14 @@ fun FavoriteButton(
         onClick = {
             armed = true
             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-            scope.launch { repository.setFavorite(animeId, !favorite) }
+            val next = !favorite
+            pending = next
+            scope.launch {
+                // A Room failure must not take the composer down; the heart simply falls back to
+                // whatever is really stored.
+                runCatching { repository.setFavorite(animeId, next) }
+                    .onFailure { if (pending == next) pending = null }
+            }
         },
         modifier = modifier,
     ) {
