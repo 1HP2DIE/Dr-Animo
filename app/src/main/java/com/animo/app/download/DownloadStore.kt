@@ -41,6 +41,8 @@ data class DownloadEntry(
     /** Best estimate of the final size; 0 when unknown. */
     val bytesTotal: Long = 0L,
     val progress: Float = 0f,
+    /** Smoothed bytes per second while running; 0 when idle or unknown. */
+    val speedBps: Long = 0L,
     val filePath: String? = null,
     val subtitlePath: String? = null,
     val error: String? = null,
@@ -48,6 +50,10 @@ data class DownloadEntry(
 ) {
     val file: File? get() = filePath?.let(::File)
     val isFinished: Boolean get() = status == DownloadStatus.DONE && file?.exists() == true
+
+    /** Seconds left at the current speed, or `null` when it cannot be estimated yet. */
+    val secondsLeft: Long?
+        get() = if (speedBps > 0 && bytesTotal > bytesDone) (bytesTotal - bytesDone) / speedBps else null
 
     companion object {
         /** [key] is `SUB`/`DUB` for the original and English audio, `lang-<code>` for any other. */
@@ -99,9 +105,22 @@ class DownloadStore(private val file: File) {
         if (!file.exists()) return emptyList()
         json.decodeFromString(serializer, file.readText())
             // A process death mid-download leaves RUNNING behind; the worker re-marks it when it resumes.
-            .map { if (it.status == DownloadStatus.RUNNING) it.copy(status = DownloadStatus.QUEUED) else it }
+            .map { if (it.status == DownloadStatus.RUNNING) it.copy(status = DownloadStatus.QUEUED, speedBps = 0L) else it }
     }.getOrElse {
         AppLog.w("download list unreadable", it)
         emptyList()
     }
+}
+
+/** `1.4 MB/s`, `320 KB/s`. */
+fun formatSpeed(bytesPerSecond: Long): String = when {
+    bytesPerSecond >= 1L shl 20 -> "%.1f MB/s".format(bytesPerSecond / (1L shl 20).toDouble())
+    else -> "%d KB/s".format((bytesPerSecond shr 10).coerceAtLeast(1))
+}
+
+/** `2 h 05 min`, `13 min`, `40 s`. */
+fun formatTimeLeft(seconds: Long): String = when {
+    seconds >= 3600 -> "%d h %02d min".format(seconds / 3600, (seconds % 3600) / 60)
+    seconds >= 60 -> "%d min".format((seconds + 30) / 60)
+    else -> "%d s".format(seconds)
 }

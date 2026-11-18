@@ -49,4 +49,5 @@
     <string name="ui_download_error_none">No server could open this episode right now</string>
     <string name="ui_download_button">Download</string>
     <string name="ui_download_button_many">Download %1$d languages</string>
+    <string name="ui_downloads_left">%1$s left</string>
 </resources>

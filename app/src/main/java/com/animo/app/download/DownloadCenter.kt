@@ -151,7 +151,12 @@ class DownloadCenter(
     internal suspend fun run(id: String, onProgress: (DownloadEntry) -> Unit): Boolean {
         val entry = store.get(id) ?: return true
         if (entry.isFinished) return true
-        store.update(id) { it.copy(status = DownloadStatus.RUNNING, error = null) }
+        store.update(id) { it.copy(status = DownloadStatus.RUNNING, error = null, speedBps = 0L) }
+        // Speed: bytes over the last few seconds, smoothed so one stalled range does not make the
+        // meter jump to zero and back.
+        var sampleAt = System.currentTimeMillis()
+        var sampleBytes = -1L
+        var speed = 0.0
         return try {
             val audio = AudioTrack.entries.firstOrNull { it.name == entry.audio } ?: AudioTrack.SUB
             val episode = animeRepository.observeEpisodes(entry.animeId).first().firstOrNull { it.id == entry.episodeId }
@@ -170,7 +175,19 @@ class DownloadCenter(
                 baseName = { quality -> "${filePrefix(entry)} [${audioLabel(entry)} $quality]" },
                 subtitleLabel = entry.subtitleLabel,
                 onProgress = { done, total, fraction ->
-                    store.update(id) { it.copy(bytesDone = done, bytesTotal = total, progress = fraction) }
+                    val now = System.currentTimeMillis()
+                    if (sampleBytes < 0) {
+                        sampleBytes = done
+                        sampleAt = now
+                    } else if (now - sampleAt >= SPEED_WINDOW_MS) {
+                        val instant = (done - sampleBytes).coerceAtLeast(0L) * 1000.0 / (now - sampleAt)
+                        speed = if (speed == 0.0) instant else speed * 0.6 + instant * 0.4
+                        sampleBytes = done
+                        sampleAt = now
+                    }
+                    store.update(id) {
+                        it.copy(bytesDone = done, bytesTotal = total, progress = fraction, speedBps = speed.toLong())
+                    }
                     store.get(id)?.let(onProgress)
                 },
             )
@@ -178,6 +195,7 @@ class DownloadCenter(
                 it.copy(
                     status = DownloadStatus.DONE,
                     progress = 1f,
+                    speedBps = 0L,
                     filePath = result.file.absolutePath,
                     subtitlePath = result.subtitle?.absolutePath,
                     qualityLabel = result.qualityLabel,
@@ -194,7 +212,7 @@ class DownloadCenter(
             throw cancelled
         } catch (error: Throwable) {
             AppLog.w("download $id failed", error)
-            store.update(id) { it.copy(status = DownloadStatus.FAILED, error = describe(error)) }
+            store.update(id) { it.copy(status = DownloadStatus.FAILED, error = describe(error), speedBps = 0L) }
             false
         }
     }
@@ -312,6 +330,10 @@ class DownloadCenter(
     }
 
     private fun workName(id: String) = "download-$id"
+
+    private companion object {
+        const val SPEED_WINDOW_MS = 2_000L
+    }
 }
 
 /** A source for one language: a server and its id for that language (`null`s = automatic order). */

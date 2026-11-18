@@ -26,12 +26,12 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
             ?: applicationContext.getString(R.string.ui_downloads_title)
 
         runCatching { setForeground(foregroundInfo(id, title, 0f)) }
-        var lastShown = -1
+        var lastShownAt = 0L
         val ok = center.run(id) { entry ->
-            val percent = (entry.progress * 100).toInt()
-            if (percent != lastShown) {
-                lastShown = percent
-                notificationManager().notify(notificationId(id), notification(titleOf(entry), entry.progress))
+            val now = System.currentTimeMillis()
+            if (now - lastShownAt >= 1_000L) {
+                lastShownAt = now
+                notificationManager().notify(notificationId(id), notification(titleOf(entry), entry.progress, statusOf(entry)))
             }
         }
         val finished = center.entries.value.firstOrNull { it.id == id }
@@ -53,11 +53,18 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
         }
     }
 
-    private fun notification(title: String, progress: Float) =
+    /** `42% · 1.4 MB/s · 3 min left` */
+    private fun statusOf(entry: DownloadEntry): String = buildList {
+        add("${(entry.progress * 100).toInt()}%")
+        if (entry.speedBps > 0) add(formatSpeed(entry.speedBps))
+        entry.secondsLeft?.let { add(applicationContext.getString(R.string.ui_downloads_left, formatTimeLeft(it))) }
+    }.joinToString(" · ")
+
+    private fun notification(title: String, progress: Float, status: String? = null) =
         NotificationCompat.Builder(applicationContext, ensureChannel())
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentTitle(title)
-            .setContentText(applicationContext.getString(R.string.ui_downloads_running))
+            .setContentText(status ?: applicationContext.getString(R.string.ui_downloads_running))
             .setProgress(100, (progress * 100).toInt(), progress <= 0f)
             .setOngoing(true)
             .setOnlyAlertOnce(true)

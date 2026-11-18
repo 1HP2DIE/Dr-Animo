@@ -52,6 +52,8 @@ import com.animo.app.di.ServiceLocator
 import com.animo.app.domain.model.AudioTrack
 import com.animo.app.download.DownloadEntry
 import com.animo.app.download.DownloadStatus
+import com.animo.app.download.formatSpeed
+import com.animo.app.download.formatTimeLeft
 import com.animo.app.ui.common.EmptyState
 import kotlinx.coroutines.launch
 
@@ -236,7 +238,14 @@ private fun statusLine(entry: DownloadEntry, audioLabel: String): String {
         DownloadStatus.RUNNING -> {
             val percent = (entry.progress * 100).toInt()
             val size = if (entry.bytesTotal > 0) "${formatBytes(entry.bytesDone)} of ~${formatBytes(entry.bytesTotal)}" else formatBytes(entry.bytesDone)
-            "$audioLabel · $percent% · $size"
+            val left = entry.secondsLeft?.let { stringResource(R.string.ui_downloads_left, formatTimeLeft(it)) }
+            listOfNotNull(
+                audioLabel,
+                "$percent%",
+                size,
+                entry.speedBps.takeIf { it > 0 }?.let(::formatSpeed),
+                left,
+            ).joinToString(" · ")
         }
         DownloadStatus.QUEUED -> "$audioLabel · ${stringResource(R.string.ui_downloads_queued)}"
         DownloadStatus.FAILED -> entry.error ?: stringResource(R.string.ui_downloads_failed)
