@@ -103,7 +103,9 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
         return CHANNEL
     }
 
-    private fun notificationId(id: String) = NOTIFICATION_BASE + (id.hashCode() and 0xFFFF) * 2
+    // A 16-bit bucket made two of a few downloads share (and overwrite) one notification; the
+    // wider range keeps the "+1 done" summary id free.
+    private fun notificationId(id: String) = NOTIFICATION_BASE + Math.floorMod(id.hashCode(), 40_000) * 2
 
     companion object {
         const val KEY_ID = "download_id"

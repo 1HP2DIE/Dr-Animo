@@ -25,6 +25,7 @@ import com.animo.app.domain.repo.StreamRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
@@ -51,6 +52,11 @@ class DownloadCenter(
     client: OkHttpClient,
 ) {
     private val store = DownloadStore(File(context.filesDir, "downloads.json"))
+
+    /** Lifetime of the app, for upkeep that no screen owns. */
+    private val maintenance = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + Dispatchers.IO,
+    )
     private val engine = DownloadEngine(client)
 
     val entries: StateFlow<List<DownloadEntry>> = store.entries
@@ -61,6 +67,32 @@ class DownloadCenter(
         store.entries.value
             .filter { it.status == DownloadStatus.QUEUED || it.status == DownloadStatus.RUNNING }
             .forEach { schedule(it.id) }
+        reconcileFiles()
+    }
+
+    /**
+     * Marks finished rows whose file is gone.
+     *
+     * A restore from a backup that did not carry the media, or a file manager on older Android,
+     * leaves a row that says DONE and does nothing when tapped — and the only action offered on a
+     * finished row is Delete. Saying it failed puts Retry back on the row instead.
+     */
+    private fun reconcileFiles() {
+        maintenance.launch {
+            store.entries.value
+                .filter { it.status == DownloadStatus.DONE }
+                .filter { entry -> entry.filePath?.let { !File(it).exists() } ?: true }
+                .forEach { entry ->
+                    store.update(entry.id) {
+                        it.copy(
+                            status = DownloadStatus.FAILED,
+                            filePath = null,
+                            progress = 0f,
+                            error = "The file is no longer on this phone. Download it again.",
+                        )
+                    }
+                }
+        }
     }
 
     fun entry(episodeId: Long, audio: AudioTrack): DownloadEntry? =
@@ -273,6 +305,7 @@ class DownloadCenter(
         var sampleAt = System.currentTimeMillis()
         var sampleBytes = -1L
         var speed = 0.0
+        var lastPersistMs = 0L
         return try {
             val audio = AudioTrack.entries.firstOrNull { it.name == entry.audio } ?: AudioTrack.SUB
             val episode = animeRepository.observeEpisodes(entry.animeId).first().firstOrNull { it.id == entry.episodeId }
@@ -306,6 +339,13 @@ class DownloadCenter(
                         sampleBytes = done
                         sampleAt = now
                     }
+                    // Every write here rewrites the whole JSON list and wakes every collector, so
+                    // the store is told about progress about once a second, not on every tick.
+                    if (now - lastPersistMs < PERSIST_INTERVAL_MS) {
+                        store.get(id)?.let(onProgress)
+                        return@download
+                    }
+                    lastPersistMs = now
                     mine {
                         // A range that failed after counting its bytes can report past 100%; the bar
                         // must never draw beyond its track.
@@ -487,6 +527,7 @@ class DownloadCenter(
 
     private companion object {
         const val SPEED_WINDOW_MS = 2_000L
+        const val PERSIST_INTERVAL_MS = 1_000L
     }
 }
 

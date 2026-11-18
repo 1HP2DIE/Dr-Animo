@@ -102,16 +102,30 @@ class DownloadStore(private val file: File) {
                 val tmp = File(file.parentFile, file.name + ".tmp")
                 tmp.writeText(json.encodeToString(serializer, next))
                 if (!tmp.renameTo(file)) {
-                    file.delete()
-                    tmp.renameTo(file)
+                    // Some volumes refuse to replace an existing file. Move the old one aside first
+                    // and put it back if the new one will not take: deleting it outright left the
+                    // app with no list at all.
+                    val backup = File(file.parentFile, file.name + ".bak")
+                    if (!file.exists() || file.renameTo(backup)) {
+                        if (tmp.renameTo(file)) {
+                            backup.delete()
+                        } else {
+                            backup.renameTo(file)
+                            throw java.io.IOException("could not replace the download list")
+                        }
+                    } else {
+                        throw java.io.IOException("could not replace the download list")
+                    }
                 }
             }.onFailure { AppLog.w("download list write failed", it) }
         }
     }
 
     private fun load(): List<DownloadEntry> = runCatching {
-        if (!file.exists()) return emptyList()
-        json.decodeFromString(serializer, file.readText())
+        // A write that failed at the last step can leave the new list only as `.tmp`.
+        val source = listOf(file, File(file.parentFile, file.name + ".tmp"))
+            .firstOrNull { it.exists() } ?: return emptyList()
+        json.decodeFromString(serializer, source.readText())
             // A process death mid-download leaves RUNNING behind; the worker re-marks it when it resumes.
             .map { if (it.status == DownloadStatus.RUNNING) it.copy(status = DownloadStatus.QUEUED, speedBps = 0L) else it }
     }.getOrElse {
