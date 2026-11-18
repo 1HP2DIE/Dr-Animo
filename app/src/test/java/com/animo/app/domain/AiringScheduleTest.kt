@@ -5,6 +5,7 @@ import com.animo.app.domain.model.Anime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.ZoneId
 import java.time.ZoneOffset
 
 class AiringScheduleTest {
@@ -48,6 +49,39 @@ class AiringScheduleTest {
     fun `stale and unknown times are dropped`() {
         val week = AiringSchedule.build(listOf(anime(1, now - 60 * day), anime(2, null)), emptySet(), now, zone)
         assertTrue(week.all { it.slots.isEmpty() })
+    }
+
+    /**
+     * A weekly slot keeps its weekday across a clock change. Adding 604800 seconds instead slid a
+     * Sunday 23:30 show to Monday 00:30 the week the clocks went forward.
+     */
+    @Test
+    fun `a weekly slot keeps its weekday across spring forward`() {
+        val newYork = ZoneId.of("America/New_York")
+        // Recorded Sun 2026-03-01 23:30 EST; asked on Wed 2026-03-04 09:00 EST.
+        val week = AiringSchedule.build(
+            listOf(anime(1, 1_772_425_800L)),
+            emptySet(),
+            1_772_632_800L,
+            newYork,
+        )
+        val slot = week[4].slots.single()
+        assertEquals(java.time.DayOfWeek.SUNDAY, week[4].dayOfWeek)
+        assertEquals(1_773_027_000L, slot.airAtSec) // Sun 2026-03-08 23:30 EDT
+    }
+
+    /** The window is seven dates, so the last hour of day 7 survives a fall-back. */
+    @Test
+    fun `a slot late on day seven survives the end of daylight saving`() {
+        val newYork = ZoneId.of("America/New_York")
+        // Asked Thu 2026-10-29 09:00 EDT; the clocks go back on Sun 2026-11-01.
+        val week = AiringSchedule.build(
+            listOf(anime(1, 1_793_853_000L)),
+            emptySet(),
+            1_793_278_800L,
+            newYork,
+        )
+        assertEquals(1_793_853_000L, week[6].slots.single().airAtSec) // Wed 2026-11-04 23:30 EST
     }
 
     @Test
