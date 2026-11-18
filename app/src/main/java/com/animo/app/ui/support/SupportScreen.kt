@@ -69,8 +69,8 @@ import kotlinx.coroutines.launch
 
 /** Where support goes. Kept here, in one place, so a changed address is a one-line edit. */
 private object SupportLinks {
-    const val TELEGRAM_HANDLE = "@Team_Grandpa"
-    const val TELEGRAM_URL = "https://t.me/Team_Grandpa"
+    const val TELEGRAM_HANDLE = "@dr_animo_apk"
+    const val TELEGRAM_URL = "https://t.me/dr_animo_apk"
     const val BEP20_ADDRESS = "0xd293ecb0009d1ee041810c2584e879c784060002"
     const val BINANCE_PAY_ID = "1010167458"
 }
