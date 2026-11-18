@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -24,7 +25,10 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DownloadForOffline
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,6 +48,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -54,7 +59,9 @@ import com.animo.app.download.DownloadEntry
 import com.animo.app.download.DownloadStatus
 import com.animo.app.download.formatSpeed
 import com.animo.app.download.formatTimeLeft
+import com.animo.app.ui.common.BadgeTone
 import com.animo.app.ui.common.EmptyState
+import com.animo.app.ui.common.PillBadge
 import kotlinx.coroutines.launch
 
 /**
@@ -188,14 +195,28 @@ private fun DownloadRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = statusLine(entry, audioLabel),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (entry.status == DownloadStatus.FAILED) colors.error else colors.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Spacer(Modifier.height(6.dp))
+                // What the file is: language and quality as badges, so they never read as numbers.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    PillBadge(text = audioLabel, tone = BadgeTone.Accent)
+                    entry.qualityLabel.takeIf { it.isNotBlank() }?.let { PillBadge(text = it, tone = BadgeTone.Outlined) }
+                    when (entry.status) {
+                        DownloadStatus.DONE -> Text(
+                            text = formatBytes(entry.bytesTotal),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = colors.onSurfaceVariant,
+                        )
+                        DownloadStatus.QUEUED -> Text(
+                            text = stringResource(R.string.ui_downloads_queued),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = colors.onSurfaceVariant,
+                        )
+                        else -> Unit
+                    }
+                }
             }
             when (entry.status) {
                 DownloadStatus.DONE -> {
@@ -209,6 +230,27 @@ private fun DownloadRow(
                 }
                 DownloadStatus.QUEUED, DownloadStatus.RUNNING ->
                     RowAction(Icons.Rounded.Close, stringResource(R.string.ui_downloads_cancel), onDelete)
+            }
+        }
+        if (entry.status == DownloadStatus.FAILED) {
+            Row(
+                modifier = Modifier.padding(end = 10.dp),
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.ErrorOutline,
+                    contentDescription = null,
+                    tint = colors.error,
+                    modifier = Modifier
+                        .padding(top = 1.dp)
+                        .size(16.dp),
+                )
+                Text(
+                    text = entry.error ?: stringResource(R.string.ui_downloads_failed),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.error,
+                )
             }
         }
         if (entry.status == DownloadStatus.RUNNING || entry.status == DownloadStatus.QUEUED) {
@@ -226,29 +268,69 @@ private fun DownloadRow(
                         .padding(end = 10.dp),
                 )
             }
+            if (entry.status == DownloadStatus.RUNNING) RunningMetrics(entry)
         }
     }
 }
 
+/**
+ * Under the bar, each number in its own weight: the percent is the headline (accent, bold), the
+ * size is plain, the speed carries an icon, the time left is quiet. Tabular figures stop the line
+ * from jittering as digits change every second.
+ */
 @Composable
-private fun statusLine(entry: DownloadEntry, audioLabel: String): String {
-    val quality = entry.qualityLabel.takeIf { it.isNotBlank() }
-    return when (entry.status) {
-        DownloadStatus.DONE -> listOfNotNull(audioLabel, quality, formatBytes(entry.bytesTotal)).joinToString(" · ")
-        DownloadStatus.RUNNING -> {
-            val percent = (entry.progress * 100).toInt()
-            val size = if (entry.bytesTotal > 0) "${formatBytes(entry.bytesDone)} of ~${formatBytes(entry.bytesTotal)}" else formatBytes(entry.bytesDone)
-            val left = entry.secondsLeft?.let { stringResource(R.string.ui_downloads_left, formatTimeLeft(it)) }
-            listOfNotNull(
-                audioLabel,
-                "$percent%",
-                size,
-                entry.speedBps.takeIf { it > 0 }?.let(::formatSpeed),
-                left,
-            ).joinToString(" · ")
+private fun RunningMetrics(entry: DownloadEntry) {
+    val colors = MaterialTheme.colorScheme
+    val numbers = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum")
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(end = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "${(entry.progress * 100).toInt()}%",
+            style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum", fontWeight = FontWeight.SemiBold),
+            color = colors.primary,
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = if (entry.bytesTotal > 0) {
+                "${formatBytes(entry.bytesDone)} / ${formatBytes(entry.bytesTotal)}"
+            } else {
+                formatBytes(entry.bytesDone)
+            },
+            style = numbers,
+            color = colors.onSurface,
+            maxLines = 1,
+        )
+        Spacer(Modifier.weight(1f))
+        if (entry.speedBps > 0) {
+            Icon(
+                imageVector = Icons.Rounded.Speed,
+                contentDescription = null,
+                tint = colors.primary,
+                modifier = Modifier.size(14.dp),
+            )
+            Spacer(Modifier.width(3.dp))
+            Text(text = formatSpeed(entry.speedBps), style = numbers, color = colors.onSurface, maxLines = 1)
         }
-        DownloadStatus.QUEUED -> "$audioLabel · ${stringResource(R.string.ui_downloads_queued)}"
-        DownloadStatus.FAILED -> entry.error ?: stringResource(R.string.ui_downloads_failed)
+        entry.secondsLeft?.let { seconds ->
+            Spacer(Modifier.width(10.dp))
+            Icon(
+                imageVector = Icons.Rounded.Schedule,
+                contentDescription = null,
+                tint = colors.onSurfaceVariant,
+                modifier = Modifier.size(14.dp),
+            )
+            Spacer(Modifier.width(3.dp))
+            Text(
+                text = stringResource(R.string.ui_downloads_left, formatTimeLeft(seconds)),
+                style = numbers,
+                color = colors.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
     }
 }
 
