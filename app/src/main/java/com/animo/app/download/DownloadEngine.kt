@@ -46,7 +46,17 @@ data class QualityOption(val label: String, val height: Int)
  * One file is the point: VLC, MX Player and this app's own player all open it, which a Media3
  * download cache (chunks in a private database) would not allow.
  */
-class DownloadEngine(private val client: OkHttpClient) {
+class DownloadEngine(client: OkHttpClient) {
+
+    /**
+     * The shared client caps a *whole call* at 45 s, which would abort any episode whose body takes
+     * longer to arrive. A download is one long body read, so the call timeout goes and the read
+     * timeout stays: a stalled socket is still caught, and a slow-but-moving one is not killed.
+     */
+    private val client = client.newBuilder()
+        .callTimeout(0, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
 
     data class Result(val file: File, val qualityLabel: String, val subtitle: File?)
 
@@ -63,9 +73,9 @@ class DownloadEngine(private val client: OkHttpClient) {
                 .map { QualityOption(it.label.ifBlank { "${it.height}p" }, it.height) }
         }
         if (stream.container == StreamContainer.PROGRESSIVE) return@withContext listOf(ORIGINAL)
-        val text = fetchText(stream.masterUrl, stream)
-        if (!HlsPlaylist.isMaster(text)) return@withContext listOf(ORIGINAL)
-        HlsPlaylist.parseMaster(text, stream.masterUrl).variants
+        val master = fetchText(stream.masterUrl, stream)
+        if (!HlsPlaylist.isMaster(master.body)) return@withContext listOf(ORIGINAL)
+        HlsPlaylist.parseMaster(master.body, master.url).variants
             .filter { it.height > 0 }
             .distinctBy { it.height }
             .sortedByDescending { it.height }
@@ -110,9 +120,12 @@ class DownloadEngine(private val client: OkHttpClient) {
 
     private suspend fun hlsSource(url: String, stream: PlayableStream, target: Int, fallbackLabel: String): Source {
         val text = fetchText(url, stream)
-        if (!HlsPlaylist.isMaster(text)) return Source.Hls(url, fallbackLabel)
-        val master = HlsPlaylist.parseMaster(text, url)
-        val variant = pickByHeight(master.variants, target) { it.height }
+        if (!HlsPlaylist.isMaster(text.body)) return Source.Hls(text.url, fallbackLabel)
+        val master = HlsPlaylist.parseMaster(text.body, text.url)
+        // Height 0 means the playlist never said; in a real ladder that is the audio-only rendition,
+        // and picking it would save an episode with no picture.
+        val video = master.variants.filter { it.height > 0 }.ifEmpty { master.variants }
+        val variant = pickByHeight(video, target) { it.height }
             ?: throw DownloadException("the playlist lists no video")
         // A variant whose audio is a separate playlist cannot become one file without muxing.
         val separateAudio = variant.audioGroup?.let { group ->
@@ -131,11 +144,14 @@ class DownloadEngine(private val client: OkHttpClient) {
         name: String,
         onProgress: suspend (Long, Long, Float) -> Unit,
     ): File {
-        val part = File(directory, "$name.part")
+        // One part name per strategy: a lazy chunked file is pre-sized to its full length, so
+        // handing it to the resumable path would look like a finished download.
+        val resumablePart = File(directory, "$name.stream.part")
         // Many file hosts cap each connection (Server 4: ~30 KB/s), so a large file is fetched as
         // ranges over several connections at once when the host allows ranges.
         val total = rangeTotal(url, stream)
         if (total != null && total > CHUNK_SIZE * 2) {
+            val part = File(directory, "$name.chunked.part")
             downloadChunked(url, stream, part, total, onProgress)
             val extension = if (isMatroska(part)) "mkv" else "mp4"
             return finish(part, File(directory, "$name.$extension"))
@@ -143,7 +159,7 @@ class DownloadEngine(private val client: OkHttpClient) {
         var attempt = 0
         while (true) {
             try {
-                copyResumable(url, stream, part, onProgress)
+                copyResumable(url, stream, resumablePart, onProgress)
                 break
             } catch (error: IOException) {
                 if (error is DownloadException || ++attempt >= RETRIES) throw error
@@ -151,8 +167,8 @@ class DownloadEngine(private val client: OkHttpClient) {
                 delay(1_500L * attempt)
             }
         }
-        val extension = if (isMatroska(part)) "mkv" else "mp4"
-        return finish(part, File(directory, "$name.$extension"))
+        val extension = if (isMatroska(resumablePart)) "mkv" else "mp4"
+        return finish(resumablePart, File(directory, "$name.$extension"))
     }
 
     /** Total size when the host answers a one-byte range with 206, else `null` (no ranges). */
@@ -271,9 +287,24 @@ class DownloadEngine(private val client: OkHttpClient) {
         val offset = if (part.exists()) part.length() else 0L
         val request = request(url, stream) { if (offset > 0) header("Range", "bytes=$offset-") }
         client.newCall(request).execute().use { response ->
-            if (response.code == 416 && offset > 0) return // already complete
+            if (response.code == 416 && offset > 0) {
+                // "416" only means the bytes are already here when the server names that same total.
+                // Anything else (a leftover part from another strategy, a changed encode) is junk.
+                val total = response.header("Content-Range")?.substringAfter('/')?.trim()?.toLongOrNull()
+                if (total != null && total == offset) return
+                part.delete()
+                throw IOException("resume point rejected (HTTP 416 at $offset bytes)")
+            }
             check(response, url)
             val resumed = response.code == 206 && offset > 0
+            if (resumed) {
+                val start = response.header("Content-Range")
+                    ?.substringAfter("bytes ", "")?.substringBefore('-')?.trim()?.toLongOrNull()
+                if (start != null && start != offset) {
+                    part.delete()
+                    throw IOException("resume answered at byte $start, not $offset")
+                }
+            }
             val body = response.body ?: throw IOException("empty body")
             val total = (if (resumed) offset else 0L) + body.contentLength().coerceAtLeast(0L)
             var done = if (resumed) offset else 0L
@@ -295,6 +326,7 @@ class DownloadEngine(private val client: OkHttpClient) {
                     }
                 }
             }
+            if (total > 0 && done < total) throw IOException("short body ($done of $total bytes)")
             onProgress(done, total.coerceAtLeast(done), 1f)
         }
     }
@@ -308,7 +340,8 @@ class DownloadEngine(private val client: OkHttpClient) {
         name: String,
         onProgress: suspend (Long, Long, Float) -> Unit,
     ): File = coroutineScope {
-        val media = HlsPlaylist.parseMedia(fetchText(mediaUrl, stream), mediaUrl)
+        val mediaText = fetchText(mediaUrl, stream)
+        val media = HlsPlaylist.parseMedia(mediaText.body, mediaText.url)
         if (media.segments.isEmpty()) throw DownloadException("the playlist has no segments")
         val parts = File(directory, ".$name.parts").apply { mkdirs() }
         val keys = ConcurrentHashMap<String, ByteArray>()
@@ -342,7 +375,7 @@ class DownloadEngine(private val client: OkHttpClient) {
                     val data = fetchSegment(segment, stream, keys)
                     val tmp = File(parts, "$index.tmp")
                     tmp.writeBytes(data)
-                    tmp.renameTo(file)
+                    if (!tmp.renameTo(file)) throw IOException("could not stage segment $index")
                     bytes.addAndGet(data.size.toLong())
                     finished.incrementAndGet()
                 }
@@ -351,7 +384,7 @@ class DownloadEngine(private val client: OkHttpClient) {
         reporter.cancel()
 
         val init = media.initUri?.let { fetchBytes(it, stream, media.initRange) }
-        val part = File(directory, "$name.part")
+        val part = File(directory, "$name.hls.part")
         FileOutputStream(part).use { out ->
             init?.let(out::write)
             for (index in media.segments.indices) {
@@ -409,8 +442,16 @@ class DownloadEngine(private val client: OkHttpClient) {
             url = track.url,
             headers = mapOf("Referer" to stream.referer, "User-Agent" to stream.userAgent),
         )
-        val extension = file.name.substringAfterLast('.', "vtt").lowercase()
-            .takeIf { it in setOf("vtt", "srt", "ass", "ssa") } ?: "vtt"
+        // The URL often lies (a `.php` download, or SRT served as `.vtt`); the content is what a
+        // player keys on, so name the file after what is actually inside it.
+        val head = file.content.take(4096)
+        val extension = when {
+            head.trimStart().startsWith("WEBVTT") -> "vtt"
+            "[Script Info]" in head -> "ass"
+            "-->" in head -> "srt"
+            else -> file.name.substringAfterLast('.', "vtt").lowercase()
+                .takeIf { it in setOf("vtt", "srt", "ass", "ssa") } ?: "vtt"
+        }
         return File(directory, "$name.$extension").apply { writeText(file.content) }
     }
 
@@ -441,16 +482,25 @@ class DownloadEngine(private val client: OkHttpClient) {
             }
             .build()
 
-    private fun fetchText(url: String, stream: PlayableStream): String =
+    private class Text(val body: String, val url: String)
+
+    private fun fetchText(url: String, stream: PlayableStream): Text =
         client.newCall(request(url, stream)).execute().use { response ->
             check(response, url)
-            response.body?.string().orEmpty()
+            // Relative segment URIs must resolve against where the playlist actually came from:
+            // stream hosts redirect to a CDN, and the typed URL then points at the wrong path.
+            Text(response.body?.string().orEmpty(), response.request.url.toString())
         }
 
     private fun fetchBytes(url: String, stream: PlayableStream, range: LongRange?): ByteArray =
         client.newCall(request(url, stream) { range?.let { header("Range", "bytes=${it.first}-${it.last}") } })
             .execute().use { response ->
                 check(response, url)
+                // A host that ignores Range answers 200 with the whole resource; taking it would
+                // paste the entire file where one slice belongs.
+                if (range != null && response.code != 206) {
+                    throw DownloadException("the server ignored the range request (HTTP ${response.code})")
+                }
                 response.body?.bytes() ?: throw IOException("empty body")
             }
 
