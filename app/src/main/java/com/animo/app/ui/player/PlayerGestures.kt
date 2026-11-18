@@ -429,7 +429,7 @@ private fun LevelBar(fraction: Float) {
                 .fillMaxHeight()
                 .width(120.dp * fraction.coerceIn(0f, 1f))
                 .clip(CircleShape)
-                .background(Color(0xFF2FD6C0)),
+                .background(com.animo.app.ui.theme.AnimoPalette.accent),
         )
     }
 }

@@ -11,6 +11,8 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -19,7 +21,7 @@ import com.animo.app.ui.Routes
 import com.animo.app.ui.theme.AnimoTheme
 
 /**
- * Four top-level tabs. Selected = accent tint + filled icon + a soft accent indicator; unselected =
+ * Five top-level tabs. Selected = accent tint + filled icon + a soft accent indicator; unselected =
  * muted outline icon. Standard 80 dp NavigationBar height, labels always visible.
  */
 @Composable
@@ -48,10 +50,28 @@ fun AnimoBottomBar(
                     selected = selected,
                     onClick = { onSelect(tab.route) },
                     icon = {
-                        Icon(
-                            imageVector = if (selected) tab.selectedIcon else tab.icon,
-                            contentDescription = null,
+                        val scale by androidx.compose.animation.core.animateFloatAsState(
+                            targetValue = if (selected) 1.12f else 1f,
+                            animationSpec = androidx.compose.animation.core.spring(
+                                dampingRatio = 0.45f,
+                                stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow,
+                            ),
+                            label = "tab-pop",
                         )
+                        androidx.compose.animation.Crossfade(
+                            targetState = selected,
+                            animationSpec = androidx.compose.animation.core.tween(180),
+                            label = "tab-icon",
+                        ) { on ->
+                            Icon(
+                                imageVector = if (on) tab.selectedIcon else tab.icon,
+                                contentDescription = null,
+                                modifier = Modifier.graphicsLayer {
+                                    scaleX = scale
+                                    scaleY = scale
+                                },
+                            )
+                        }
                     },
                     label = {
                         Text(

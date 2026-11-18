@@ -12,6 +12,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,19 +40,34 @@ fun DrawerItem(
     trailing: (@Composable () -> Unit)? = null,
 ) {
     val colors = MaterialTheme.colorScheme
-    val background = if (selected) colors.primary.copy(alpha = 0.14f) else Color.Transparent
-    val contentColor = when {
-        !enabled -> colors.onSurfaceVariant.copy(alpha = 0.55f)
-        selected -> colors.primary
-        else -> colors.onSurface
-    }
+    val background by androidx.compose.animation.animateColorAsState(
+        if (selected) colors.primary.copy(alpha = 0.14f) else Color.Transparent,
+        androidx.compose.animation.core.tween(220),
+        label = "drawer-bg",
+    )
+    val contentColor by androidx.compose.animation.animateColorAsState(
+        when {
+            !enabled -> colors.onSurfaceVariant.copy(alpha = 0.55f)
+            selected -> colors.primary
+            else -> colors.onSurface
+        },
+        androidx.compose.animation.core.tween(220),
+        label = "drawer-fg",
+    )
+    val interaction = androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by androidx.compose.animation.core.animateFloatAsState(if (pressed) 0.97f else 1f, label = "drawer-press")
     Row(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .clip(MaterialTheme.shapes.small)
             .background(background)
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(interactionSource = interaction, indication = androidx.compose.material3.ripple(), enabled = enabled, onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),

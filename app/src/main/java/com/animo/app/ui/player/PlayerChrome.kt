@@ -24,9 +24,9 @@ internal object PlayerChrome {
     val panel = Color(0xE6141A1D)
     val panelBorder = Color(0x1FFFFFFF)
 
-    val accent = Color(0xFF2FD6C0)
-    val onAccent = Color(0xFF04211D)
-    val accentSoft = Color(0xFF9BF2E6)
+    val accent: Color get() = com.animo.app.ui.theme.AnimoPalette.accent
+    val onAccent: Color get() = com.animo.app.ui.theme.AnimoPalette.onAccent
+    val accentSoft: Color get() = com.animo.app.ui.theme.AnimoPalette.posterBadgeFg
 
     val track = Color(0x40FFFFFF)
     val buffered = Color(0x8CFFFFFF)

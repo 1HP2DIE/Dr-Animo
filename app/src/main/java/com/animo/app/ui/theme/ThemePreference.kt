@@ -27,6 +27,8 @@ import kotlinx.coroutines.launch
 internal val Context.animoUiPreferences: DataStore<Preferences> by preferencesDataStore(name = "animo_ui")
 
 internal val ThemeModeKey = stringPreferencesKey("ui_theme_mode")
+internal val AccentKey = stringPreferencesKey("ui_accent")
+internal val AmoledKey = androidx.datastore.preferences.core.booleanPreferencesKey("ui_amoled")
 
 /** Dark is the default product identity, so an absent key means dark, not "follow system". */
 enum class ThemeMode { DARK, LIGHT, SYSTEM }
@@ -49,6 +51,11 @@ internal fun String?.toThemeMode(): ThemeMode =
 class ThemePreference(
     val mode: ThemeMode,
     val onModeChange: (ThemeMode) -> Unit,
+    val accent: AccentPalette = AccentPalette.TEAL,
+    val onAccentChange: (AccentPalette) -> Unit = {},
+    /** Pure black surfaces in dark mode, for OLED screens. */
+    val amoled: Boolean = false,
+    val onAmoledChange: (Boolean) -> Unit = {},
 )
 
 /**
@@ -56,7 +63,7 @@ class ThemePreference(
  * (for example a single composable preview) still compose.
  */
 val LocalThemePreference = staticCompositionLocalOf {
-    ThemePreference(ThemeMode.DARK) {}
+    ThemePreference(ThemeMode.DARK, onModeChange = {})
 }
 
 /**
@@ -69,15 +76,25 @@ fun rememberThemePreference(): ThemePreference {
     val scope = rememberCoroutineScope()
     val modeFlow = remember(context) {
         context.animoUiPreferences.data
-            .map { prefs -> prefs[ThemeModeKey].toThemeMode() }
+            .map { prefs -> Triple(prefs[ThemeModeKey].toThemeMode(), AccentPalette.of(prefs[AccentKey]), prefs[AmoledKey] ?: false) }
             .distinctUntilChanged()
     }
-    val mode by modeFlow.collectAsState(initial = ThemeMode.DARK)
-    return remember(mode, context) {
-        ThemePreference(mode) { next ->
-            scope.launch {
-                context.animoUiPreferences.edit { prefs -> prefs[ThemeModeKey] = next.name }
-            }
-        }
+    val state by modeFlow.collectAsState(initial = Triple(ThemeMode.DARK, ActiveAccent.palette, false))
+    val (mode, accent, amoled) = state
+    return remember(state, context) {
+        ThemePreference(
+            mode = mode,
+            onModeChange = { next ->
+                scope.launch { context.animoUiPreferences.edit { prefs -> prefs[ThemeModeKey] = next.name } }
+            },
+            accent = accent,
+            onAccentChange = { next ->
+                scope.launch { context.animoUiPreferences.edit { prefs -> prefs[AccentKey] = next.name } }
+            },
+            amoled = amoled,
+            onAmoledChange = { next ->
+                scope.launch { context.animoUiPreferences.edit { prefs -> prefs[AmoledKey] = next } }
+            },
+        )
     }
 }

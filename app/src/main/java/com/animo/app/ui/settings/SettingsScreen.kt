@@ -2,6 +2,8 @@ package com.animo.app.ui.settings
 
 import android.text.format.DateUtils
 import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
@@ -211,6 +213,103 @@ private fun AppearanceSection(
                     text = stringResource(mode.labelRes()),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
+
+        val preference = com.animo.app.ui.theme.LocalThemePreference.current
+        Spacer(Modifier.height(12.dp))
+        Text(
+            text = stringResource(R.string.ui_settings_accent),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(10.dp))
+        AccentSwatches(selected = preference.accent, onSelect = preference.onAccentChange)
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(MaterialTheme.shapes.small)
+                .clickable { preference.onAmoledChange(!preference.amoled) }
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.ui_settings_amoled),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = stringResource(R.string.ui_settings_amoled_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            androidx.compose.material3.Switch(
+                checked = preference.amoled,
+                onCheckedChange = preference.onAmoledChange,
+            )
+        }
+    }
+}
+
+/** One round swatch per accent; the picked one grows a ring and a check, both animated. */
+@Composable
+private fun AccentSwatches(
+    selected: com.animo.app.ui.theme.AccentPalette,
+    onSelect: (com.animo.app.ui.theme.AccentPalette) -> Unit,
+) {
+    val dark = com.animo.app.ui.theme.LocalIsDarkTheme.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        com.animo.app.ui.theme.AccentPalette.entries.forEach { accent ->
+            val active = accent == selected
+            val ring by androidx.compose.animation.core.animateDpAsState(
+                targetValue = if (active) 3.dp else 0.dp,
+                animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.6f),
+                label = "swatch-ring",
+            )
+            val color = if (dark) accent.dark else accent.light
+            val label = stringResource(accent.labelRes)
+            Column(
+                modifier = Modifier
+                    .clip(MaterialTheme.shapes.small)
+                    .clickable(onClickLabel = label) { onSelect(accent) }
+                    .padding(4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .border(ring, MaterialTheme.colorScheme.onSurface, androidx.compose.foundation.shape.CircleShape)
+                        .padding(ring + 2.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(color),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = active,
+                        enter = androidx.compose.animation.scaleIn() + androidx.compose.animation.fadeIn(),
+                        exit = androidx.compose.animation.scaleOut() + androidx.compose.animation.fadeOut(),
+                    ) {
+                        Icon(
+                            imageVector = androidx.compose.material.icons.Icons.Rounded.Check,
+                            contentDescription = null,
+                            tint = if (dark) accent.onDark else androidx.compose.ui.graphics.Color.White,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (active) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

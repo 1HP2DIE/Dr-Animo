@@ -32,8 +32,8 @@ internal val AnimoShapes = Shapes(
  * Everything else goes through [MaterialTheme.colorScheme] so a future light theme keeps working.
  */
 object AnimoPalette {
-    val accent: Color get() = TealAccent
-    val onAccent: Color get() = OnTeal
+    val accent: Color get() = ActiveAccent.palette.dark
+    val onAccent: Color get() = ActiveAccent.palette.onDark
     val surface: Color get() = CharcoalSurface
     val surfaceHigh: Color get() = CharcoalSurfaceHigh
     val surfaceHighest: Color get() = CharcoalSurfaceHighest
@@ -55,7 +55,7 @@ object AnimoPalette {
     val onPoster: Color get() = OnPoster
     val onPosterSecondary: Color get() = OnPosterSecondary
     val posterBadgeBg: Color get() = PosterBadgeBg
-    val posterBadgeFg: Color get() = PosterBadgeFg
+    val posterBadgeFg: Color get() = ActiveAccent.palette.darkSoft
 
     val posterPlaceholder: Brush get() = PosterPlaceholderBrush
     val posterScrim: Brush get() = PosterTitleScrim
@@ -147,11 +147,16 @@ private val AnimoLightScheme = lightColorScheme(
 @Composable
 fun AnimoTheme(
     darkTheme: Boolean = true,
+    accent: AccentPalette = AccentPalette.TEAL,
+    amoled: Boolean = false,
+    animate: Boolean = false,
     content: @Composable () -> Unit,
 ) {
+    val base = (if (darkTheme) AnimoDarkScheme else AnimoLightScheme).styled(darkTheme, accent, amoled)
+    val scheme = if (animate) base.animated() else base
     CompositionLocalProvider(LocalIsDarkTheme provides darkTheme) {
         MaterialTheme(
-            colorScheme = if (darkTheme) AnimoDarkScheme else AnimoLightScheme,
+            colorScheme = scheme,
             typography = AnimoTypography,
             shapes = AnimoShapes,
             content = content,
@@ -175,5 +180,12 @@ fun AnimoAppTheme(
         ThemeMode.LIGHT -> false
         ThemeMode.SYSTEM -> isSystemInDarkTheme()
     }
-    AnimoTheme(darkTheme = dark, content = content)
+    androidx.compose.runtime.SideEffect { ActiveAccent.palette = preference.accent }
+    AnimoTheme(
+        darkTheme = dark,
+        accent = preference.accent,
+        amoled = preference.amoled,
+        animate = true,
+        content = content,
+    )
 }
