@@ -8,10 +8,15 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
+import com.animo.app.ui.common.findActivity
 
 /**
  * Whether the active scheme is the dark one. Needed by artwork placeholders: the poster fill and its
@@ -180,12 +185,25 @@ fun AnimoAppTheme(
         ThemeMode.LIGHT -> false
         ThemeMode.SYSTEM -> isSystemInDarkTheme()
     }
-    androidx.compose.runtime.SideEffect { ActiveAccent.palette = preference.accent }
+    val view = LocalView.current
+    val context = LocalContext.current
+    SideEffect {
+        ActiveAccent.palette = preference.accent
+        // The window is edge-to-edge, so the system-bar icons are drawn over our own surface. They
+        // have to follow the app's theme: a light theme with white icons is invisible, and
+        // `enableEdgeToEdge()` alone only follows the phone's setting.
+        val activity = context.findActivity() ?: return@SideEffect
+        val controller = WindowCompat.getInsetsController(activity.window, view)
+        controller.isAppearanceLightStatusBars = !dark
+        controller.isAppearanceLightNavigationBars = !dark
+    }
     AnimoTheme(
         darkTheme = dark,
         accent = preference.accent,
         amoled = preference.amoled,
-        animate = true,
+        // Nothing to animate on the first frame: DataStore has not answered yet, so the scheme on
+        // screen is a placeholder and a crossfade from it would be a visible flash.
+        animate = preference.loaded,
         content = content,
     )
 }

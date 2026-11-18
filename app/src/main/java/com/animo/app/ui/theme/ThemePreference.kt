@@ -4,8 +4,8 @@ import android.content.Context
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -56,6 +56,8 @@ class ThemePreference(
     /** Pure black surfaces in dark mode, for OLED screens. */
     val amoled: Boolean = false,
     val onAmoledChange: (Boolean) -> Unit = {},
+    /** False until the stored value has been read: the theme on screen is then a placeholder. */
+    val loaded: Boolean = false,
 )
 
 /**
@@ -79,9 +81,14 @@ fun rememberThemePreference(): ThemePreference {
             .map { prefs -> Triple(prefs[ThemeModeKey].toThemeMode(), AccentPalette.of(prefs[AccentKey]), prefs[AmoledKey] ?: false) }
             .distinctUntilChanged()
     }
-    val state by modeFlow.collectAsState(initial = Triple(ThemeMode.DARK, ActiveAccent.palette, false))
-    val (mode, accent, amoled) = state
-    return remember(state, context) {
+    // `null` until DataStore has answered: the theme on screen before that is a placeholder, not a
+    // choice, and callers must not animate away from it.
+    val stored by produceState<Triple<ThemeMode, AccentPalette, Boolean>?>(initialValue = null, modeFlow) {
+        modeFlow.collect { value = it }
+    }
+    val loaded = stored != null
+    val (mode, accent, amoled) = stored ?: Triple(ThemeMode.DARK, ActiveAccent.palette, false)
+    return remember(stored, context, loaded) {
         ThemePreference(
             mode = mode,
             onModeChange = { next ->
@@ -92,6 +99,7 @@ fun rememberThemePreference(): ThemePreference {
                 scope.launch { context.animoUiPreferences.edit { prefs -> prefs[AccentKey] = next.name } }
             },
             amoled = amoled,
+            loaded = loaded,
             onAmoledChange = { next ->
                 scope.launch { context.animoUiPreferences.edit { prefs -> prefs[AmoledKey] = next } }
             },
