@@ -224,6 +224,8 @@ private fun PlayerStage(
     // Lives here, not in the controls overlay: that leaves composition every time the chrome hides,
     // and would download the preview index again on every tap.
     val seekPreview = rememberSeekPreview(surfaceState.stream)
+    // Independent of the lock: a brightness override set while dragging must survive locking.
+    ReleaseBrightnessOnExit()
 
     // Lock: swallows every gesture until unlocked; bumping the token re-reveals the unlock button.
     var locked by remember { mutableStateOf(false) }
@@ -579,7 +581,10 @@ private fun PlayerStage(
 
     // The same rows the detail grid reads, so the drawer never disagrees with the season list.
     val repository = LocalAppContainer.current.animeRepository
-    val episodeProgress by remember(repository, model.anime.id) {
+    // Kept as State, not unwrapped here: this flow re-emits every few seconds while playing
+    // (progress is saved four times a minute), and reading it in the stage would recompose the
+    // whole player for a drawer that is usually closed.
+    val episodeProgress = remember(repository, model.anime.id) {
         repository.observeEpisodeProgress(model.anime.id)
     }.collectAsState(initial = emptyMap())
 
@@ -929,11 +934,11 @@ private fun PlayerStage(
             )
         }
 
-        EpisodeDrawer(
+        EpisodeDrawerSlot(
+            progress = episodeProgress,
             visible = episodesVisible && !inPip,
             episodes = model.episodes,
             currentEpisodeId = model.episode.id,
-            progress = episodeProgress.mapNotNull { (id, entry) -> entry.fraction?.let { id to it } }.toMap(),
             onSelect = { episode ->
                 episodesVisible = false
                 viewModel.selectEpisode(episode)
@@ -1522,5 +1527,30 @@ private fun StreamSubtitleLayer(
         style = style,
         liftForControls = liftForControls,
         modifier = Modifier.fillMaxSize(),
+    )
+}
+
+/**
+ * The episode drawer, with its progress read inside this child.
+ *
+ * Progress is written to the database four times a minute during playback; unwrapping the flow in
+ * the player stage re-ran every branch of it for a drawer that is closed most of the time.
+ */
+@Composable
+private fun EpisodeDrawerSlot(
+    progress: androidx.compose.runtime.State<Map<Long, com.animo.app.domain.repo.EpisodeProgress>>,
+    visible: Boolean,
+    episodes: List<com.animo.app.domain.model.Episode>,
+    currentEpisodeId: Long,
+    onSelect: (com.animo.app.domain.model.Episode) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    EpisodeDrawer(
+        visible = visible,
+        episodes = episodes,
+        currentEpisodeId = currentEpisodeId,
+        progress = progress.value.mapNotNull { (id, entry) -> entry.fraction?.let { id to it } }.toMap(),
+        onSelect = onSelect,
+        onDismiss = onDismiss,
     )
 }

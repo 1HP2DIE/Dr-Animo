@@ -134,16 +134,6 @@ fun Modifier.playerGestures(
     var streakSeconds by remember { mutableStateOf(0) }
     var streakUntil by remember { mutableStateOf(0L) }
 
-    // Brightness is an override on the window; leaving the player must hand it back to the system.
-    DisposableEffect(activity) {
-        onDispose {
-            val window = activity?.window ?: return@onDispose
-            val attrs = window.attributes
-            attrs.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
-            window.attributes = attrs
-        }
-    }
-
     return this.pointerInput(surfaceState, audio, activity) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
@@ -437,3 +427,24 @@ private fun LevelBar(fraction: Float) {
 
 /** Shared with the player chrome: 10 s is the double-tap and the base skip. */
 private const val SKIP_MS = 10_000L
+
+/**
+ * Hands the window brightness back to the system when the player goes.
+ *
+ * This lives outside [playerGestures] on purpose: that surface leaves composition the moment the
+ * viewer locks the player, and the override has to outlive it — locking to watch in the dark is
+ * exactly when the dimmed screen must stay dim.
+ */
+@Composable
+internal fun ReleaseBrightnessOnExit() {
+    val context = LocalContext.current
+    val activity = remember(context) { context.findActivity() }
+    DisposableEffect(activity) {
+        onDispose {
+            val window = activity?.window ?: return@onDispose
+            val attrs = window.attributes
+            attrs.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+            window.attributes = attrs
+        }
+    }
+}
