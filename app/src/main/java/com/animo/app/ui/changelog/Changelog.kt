@@ -28,6 +28,14 @@ object Changelog {
 
     val releases: List<Release> = listOf(
         Release(
+            version = "1.7.1",
+            date = "18 Nov 2026",
+            headline = "Our Telegram channel moved.",
+            changes = listOf(
+                Change(ChangeKind.IMPROVED, "Support page links to the new Telegram channel, @dr_animo_apk"),
+            ),
+        ),
+        Release(
             version = "1.7.0",
             date = "18 Nov 2026",
             headline = "Download and watch offline, a weekly airing schedule, favourites and your own colours.",

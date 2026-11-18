@@ -129,8 +129,8 @@ android {
         applicationId = "com.animo.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 7
-        versionName = "1.7.0"
+        versionCode = 8
+        versionName = "1.7.1"
 
         // No endpoint ever reaches BuildConfig: every host is resolved from the encrypted
         // provider vault at runtime (see ProviderVault), so a string dump of the APK or a
