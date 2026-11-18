@@ -73,6 +73,8 @@
     <string name="ui_schedule_empty_title">Nothing airs this day</string>
     <string name="ui_schedule_empty_body">Only titles with a known air time show up here. Times refresh in the background.</string>
     <string name="ui_home_airing_today">Airing today</string>
+    <!-- Compact badge under a poster: "EP 7". Kept short so it never wraps in a 2-column rail. -->
+    <string name="ui_home_airing_episode">EP %d</string>
     <string name="ui_home_favorites">Your favourites</string>
     <string name="ui_home_week">This week</string>
     <string name="ui_accent_teal">Teal</string>

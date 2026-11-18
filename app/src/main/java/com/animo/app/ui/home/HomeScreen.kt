@@ -244,9 +244,9 @@ private fun HomeContent(
     onOpenFavorites: () -> Unit = {},
 ) {
     val favoritesFlow = remember { ServiceLocator.favorites.observeFavorites() }
-    val favorites by favoritesFlow.collectAsState(initial = emptyList())
+    val favorites by favoritesFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     val scheduleFlow = remember { ServiceLocator.favorites.observeSchedule() }
-    val week by scheduleFlow.collectAsState(initial = emptyList())
+    val week by scheduleFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     val today = week.firstOrNull()?.slots.orEmpty()
     val airingTodayLabel = stringResource(R.string.ui_home_airing_today)
     val weekLabel = stringResource(R.string.ui_home_week)
@@ -452,8 +452,6 @@ private fun HomeContent(
 
 // ---------------------------------------------------------------- shelf helpers
 
-private val AiringTime = java.time.format.DateTimeFormatter.ofPattern("h:mm a")
-
 /** Poster plus its air time today; an episode already out shows the accent "Out" label. */
 @Composable
 private fun AiringCard(
@@ -461,9 +459,13 @@ private fun AiringCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val time = java.time.Instant.ofEpochSecond(slot.airAtSec)
-        .atZone(java.time.ZoneId.systemDefault())
-        .format(AiringTime)
+    // The platform's own time format, so a 24-hour setting is respected and a locale that puts the
+    // day period first is not printed as "18:30 PM".
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val timeFormat = remember(context) { android.text.format.DateFormat.getTimeFormat(context) }
+    val time = remember(slot.airAtSec, timeFormat) {
+        timeFormat.format(java.util.Date(slot.airAtSec * 1_000L))
+    }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         AnimeCard(anime = slot.anime, onClick = onClick, titleLines = 2)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -475,7 +477,7 @@ private fun AiringCard(
             )
             slot.episode?.let {
                 Text(
-                    text = "EP $it",
+                    text = stringResource(R.string.ui_home_airing_episode, it),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
