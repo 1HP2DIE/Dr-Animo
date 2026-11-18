@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.PlayCircle
@@ -142,6 +143,12 @@ fun AnimoDrawerContent(
                 label = stringResource(R.string.ui_home_continue),
                 selected = false,
                 onClick = { onNavigate(Routes.LIBRARY) },
+            )
+            DrawerItem(
+                icon = Icons.Outlined.Download,
+                label = stringResource(R.string.ui_downloads_title),
+                selected = currentRoute == Routes.DOWNLOADS,
+                onClick = { onNavigate(Routes.DOWNLOADS) },
             )
             DrawerItem(
                 icon = Icons.Outlined.Sync,

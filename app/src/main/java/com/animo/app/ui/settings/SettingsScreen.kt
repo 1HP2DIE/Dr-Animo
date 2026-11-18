@@ -88,6 +88,8 @@ fun SettingsScreen(
         themeMode = themePreference.mode,
         onThemeModeChange = themePreference.onModeChange,
         onAutoplayChange = viewModel::setAutoplayNext,
+        onAutoFullscreenChange = viewModel::setAutoFullscreen,
+        onDownloadQualityChange = viewModel::setDownloadQuality,
         onDefaultAudioChange = viewModel::setDefaultAudio,
         onSyncNow = viewModel::syncNow,
         onSyncHindi = viewModel::syncHindiNow,
@@ -108,6 +110,8 @@ private fun SettingsScreenContent(
     onThemeModeChange: (ThemeMode) -> Unit,
     onAutoplayChange: (Boolean) -> Unit,
     onDefaultAudioChange: (AudioTrack) -> Unit,
+    onAutoFullscreenChange: (Boolean) -> Unit = {},
+    onDownloadQualityChange: (DownloadQuality) -> Unit = {},
     onSyncNow: () -> Unit,
     onSyncHindi: () -> Unit,
     onOpenDrawer: () -> Unit,
@@ -143,6 +147,10 @@ private fun SettingsScreenContent(
                     defaultAudio = state.defaultAudio,
                     onAutoplayChange = onAutoplayChange,
                     onDefaultAudioChange = onDefaultAudioChange,
+                    autoFullscreen = state.autoFullscreen,
+                    onAutoFullscreenChange = onAutoFullscreenChange,
+                    downloadQuality = state.downloadQuality,
+                    onDownloadQualityChange = onDownloadQualityChange,
                 )
             }
             item(key = "about") {
@@ -371,8 +379,79 @@ private fun PlaybackSection(
     defaultAudio: AudioTrack,
     onAutoplayChange: (Boolean) -> Unit,
     onDefaultAudioChange: (AudioTrack) -> Unit,
+    autoFullscreen: Boolean = false,
+    onAutoFullscreenChange: (Boolean) -> Unit = {},
+    downloadQuality: DownloadQuality = DownloadQuality.HD,
+    onDownloadQualityChange: (DownloadQuality) -> Unit = {},
 ) {
     SettingsSection(title = stringResource(R.string.ui_settings_playback)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.ui_settings_auto_fullscreen),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = stringResource(R.string.ui_settings_auto_fullscreen_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Switch(checked = autoFullscreen, onCheckedChange = onAutoFullscreenChange)
+        }
+
+        HorizontalDivider(
+            thickness = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f),
+        )
+
+        Column(Modifier.padding(vertical = 8.dp)) {
+            Text(
+                text = stringResource(R.string.ui_settings_download_quality),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = stringResource(R.string.ui_settings_download_quality_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                val options = DownloadQuality.entries
+                options.forEachIndexed { index, quality ->
+                    SegmentedButton(
+                        selected = downloadQuality == quality,
+                        onClick = { onDownloadQualityChange(quality) },
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+                        label = {
+                            Text(
+                                stringResource(
+                                    if (quality == DownloadQuality.HD) {
+                                        R.string.ui_download_quality_hd
+                                    } else {
+                                        R.string.ui_download_quality_highest
+                                    },
+                                ),
+                            )
+                        },
+                    )
+                }
+            }
+        }
+
+        HorizontalDivider(
+            thickness = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f),
+        )
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()

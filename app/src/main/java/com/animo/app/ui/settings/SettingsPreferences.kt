@@ -34,6 +34,22 @@ class SettingsPreferences(private val context: Context) {
         }
         .distinctUntilChanged()
 
+    /**
+     * True = playback opens straight into full screen (the old behaviour). False = the video plays
+     * at the top of the title page and full screen is one tap away.
+     */
+    val autoFullscreen: Flow<Boolean> = store.data
+        .map { prefs -> prefs[AutoFullscreenKey] ?: false }
+        .distinctUntilChanged()
+
+    /** Quality a download starts at when the viewer does not pick one from the list. */
+    val downloadQuality: Flow<DownloadQuality> = store.data
+        .map { prefs ->
+            prefs[DownloadQualityKey]?.let { name -> DownloadQuality.entries.firstOrNull { it.name == name } }
+                ?: DownloadQuality.HD
+        }
+        .distinctUntilChanged()
+
     /** Wall-clock time of the last *finished* sync; `null` = this install has never completed one. */
     val lastSyncEpoch: Flow<Long?> = store.data
         .map { prefs -> prefs[LastSyncEpochKey] }
@@ -49,6 +65,14 @@ class SettingsPreferences(private val context: Context) {
 
     suspend fun setAutoplayNext(enabled: Boolean) {
         store.edit { prefs -> prefs[AutoplayNextKey] = enabled }
+    }
+
+    suspend fun setAutoFullscreen(enabled: Boolean) {
+        store.edit { prefs -> prefs[AutoFullscreenKey] = enabled }
+    }
+
+    suspend fun setDownloadQuality(quality: DownloadQuality) {
+        store.edit { prefs -> prefs[DownloadQualityKey] = quality.name }
     }
 
     suspend fun setDefaultAudio(audio: AudioTrack) {
@@ -82,5 +106,13 @@ class SettingsPreferences(private val context: Context) {
         val DefaultAudioKey = stringPreferencesKey("ui_default_audio")
         val LastSyncEpochKey = longPreferencesKey("ui_last_sync_epoch")
         val ChangelogSeenKey = stringPreferencesKey("ui_changelog_seen_version")
+        val AutoFullscreenKey = booleanPreferencesKey("ui_auto_fullscreen")
+        val DownloadQualityKey = stringPreferencesKey("ui_download_quality")
     }
+}
+
+/** Default quality for downloads: HD (720p, or the closest below it) or the highest on offer. */
+enum class DownloadQuality(val targetHeight: Int) {
+    HD(720),
+    HIGHEST(Int.MAX_VALUE),
 }

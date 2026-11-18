@@ -24,6 +24,8 @@ data class SettingsUiState(
     val catalogueBytes: Long = 0L,
     val lastSyncEpoch: Long? = null,
     val autoplayNext: Boolean = true,
+    val autoFullscreen: Boolean = false,
+    val downloadQuality: DownloadQuality = DownloadQuality.HD,
     val defaultAudio: AudioTrack = AudioTrack.SUB,
     val sync: SyncProgress = SyncProgress(done = 0, total = 0, state = SyncState.IDLE),
     val isSyncing: Boolean = false,
@@ -117,9 +119,15 @@ class SettingsViewModel(
         preferences.changelogSeenVersion,
     ) { autoplay, audio, lastSync, seen -> Prefs(autoplay, audio, lastSync, seen) }
 
+    private val viewing = combine(preferences.autoFullscreen, preferences.downloadQuality) { full, quality ->
+        full to quality
+    }
+
     private val catalogue = combine(catalogueSize, catalogueBytes) { size, bytes -> size to bytes }
 
-    private val playbackAndCatalogue = combine(playback, catalogue) { prefs, stats -> prefs to stats }
+    private val playbackAndCatalogue = combine(playback, catalogue, viewing) { prefs, stats, view ->
+        Triple(prefs, stats, view)
+    }
 
     val state: StateFlow<SettingsUiState> = combine(
         playbackAndCatalogue,
@@ -128,12 +136,14 @@ class SettingsViewModel(
         syncMessage,
         hindi,
     ) { core, sync, syncing, message, hindiStats ->
-        val (playbackPrefs, catalogueStats) = core
+        val (playbackPrefs, catalogueStats, viewPrefs) = core
         SettingsUiState(
             catalogueSize = catalogueStats.first,
             catalogueBytes = catalogueStats.second,
             lastSyncEpoch = playbackPrefs.lastSyncEpoch,
             autoplayNext = playbackPrefs.autoplayNext,
+            autoFullscreen = viewPrefs.first,
+            downloadQuality = viewPrefs.second,
             defaultAudio = playbackPrefs.defaultAudio,
             changelogSeenVersion = playbackPrefs.changelogSeen,
             sync = sync,
@@ -246,6 +256,14 @@ class SettingsViewModel(
                 if (written > 0) recordSyncFinished()
             }
         }
+    }
+
+    fun setAutoFullscreen(enabled: Boolean) {
+        viewModelScope.launch { preferences.setAutoFullscreen(enabled) }
+    }
+
+    fun setDownloadQuality(quality: DownloadQuality) {
+        viewModelScope.launch { preferences.setDownloadQuality(quality) }
     }
 
     fun setAutoplayNext(enabled: Boolean) {

@@ -26,6 +26,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.List
 import androidx.compose.material.icons.rounded.Forward10
+import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.HighQuality
 import androidx.compose.material.icons.rounded.PictureInPictureAlt
@@ -155,9 +157,13 @@ fun PlayerScreen(
     viewModel: PlayerScreenViewModel,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    /** False = drawn inline at the top of the title page; true = immersive, landscape. */
+    fullscreen: Boolean = true,
+    /** Present when the player can switch between inline and full screen. */
+    onToggleFullscreen: (() -> Unit)? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    ImmersiveVideoEffect(enabled = state is UiState.Content)
+    ImmersiveVideoEffect(enabled = state is UiState.Content, immersive = fullscreen)
 
     Box(
         Modifier
@@ -183,6 +189,8 @@ fun PlayerScreen(
                 viewModel = viewModel,
                 model = current.data,
                 onBack = onBack,
+                inline = !fullscreen,
+                onToggleFullscreen = onToggleFullscreen,
             )
         }
     }
@@ -193,6 +201,8 @@ private fun PlayerStage(
     viewModel: PlayerScreenViewModel,
     model: PlayerUiModel,
     onBack: () -> Unit,
+    inline: Boolean = false,
+    onToggleFullscreen: (() -> Unit)? = null,
 ) {
     // One surface state per playback instance: re-keying on episode/audio/reload gives the host a
     // clean slate instead of asking it to hot-swap sources.
@@ -714,11 +724,14 @@ private fun PlayerStage(
         advanceOnce()
     }
 
-    BackHandler {
+    // Inline, back belongs to the page around the player unless one of the player's own layers
+    // is open.
+    BackHandler(enabled = !inline || locked || settingsTab != null || episodesVisible) {
         when {
             locked -> lockRevealToken++
             settingsTab != null -> settingsTab = null
             episodesVisible -> episodesVisible = false
+            onToggleFullscreen != null -> onBack()
             controlsVisible -> controlsVisible = false
             else -> onBack()
         }
@@ -827,6 +840,8 @@ private fun PlayerStage(
                 onNext = viewModel::next,
                 onPrevious = viewModel::previous,
                 onEnterPip = enterPip,
+                inline = inline,
+                onToggleFullscreen = onToggleFullscreen,
                 modifier = Modifier
                     .matchParentSize()
                     .graphicsLayer { alpha = controlsAlpha },
@@ -835,15 +850,19 @@ private fun PlayerStage(
 
         // Floating actions: bottom-end, lifted above the bar while the chrome is up.
         val floatLift by animateDpAsState(
-            targetValue = if (controlsVisible && !locked) 132.dp else 28.dp,
+            targetValue = when {
+                inline -> if (controlsVisible) 56.dp else 10.dp
+                controlsVisible && !locked -> 132.dp
+                else -> 28.dp
+            },
             animationSpec = tween(durationMillis = 220),
             label = "player-float-lift",
         )
         Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .navigationBarsPadding()
-                .padding(end = 24.dp, bottom = floatLift),
+                .then(if (inline) Modifier else Modifier.navigationBarsPadding())
+                .padding(end = if (inline) 12.dp else 24.dp, bottom = floatLift),
             horizontalAlignment = Alignment.End,
         ) {
             SkipChapterButton(
@@ -992,9 +1011,26 @@ private fun PlayerControlsOverlay(
     onPrevious: () -> Unit,
     onEnterPip: () -> Unit,
     modifier: Modifier = Modifier,
+    inline: Boolean = false,
+    onToggleFullscreen: (() -> Unit)? = null,
 ) {
     val position = scrubPositionMs ?: surfaceState.positionMs
     val duration = surfaceState.durationMs
+
+    if (inline) {
+        InlineControlsOverlay(
+            surfaceState = surfaceState,
+            position = position,
+            duration = duration,
+            onScrub = onScrub,
+            onSeek = onSeek,
+            chapters = chapters,
+            preview = preview,
+            onToggleFullscreen = onToggleFullscreen,
+            modifier = modifier,
+        )
+        return
+    }
 
     Box(modifier) {
         Box(
@@ -1227,7 +1263,111 @@ private fun PlayerControlsOverlay(
                     description = stringResource(R.string.ui_player_pip),
                     onClick = onEnterPip,
                 )
+                if (onToggleFullscreen != null) {
+                    PlayerGlyph(
+                        icon = Icons.Rounded.FullscreenExit,
+                        description = stringResource(R.string.ui_player_exit_fullscreen),
+                        onClick = onToggleFullscreen,
+                    )
+                }
             }
+        }
+    }
+}
+
+/**
+ * Controls for the inline player at the top of the title page: the same centred transport and seek
+ * bar, plus the full-screen switch. Everything else (servers, subtitles, quality, speed, lock,
+ * episodes) lives in full screen, where there is room for it — a 16:9 strip on a phone is not.
+ */
+@Composable
+private fun InlineControlsOverlay(
+    surfaceState: PlayerSurfaceState,
+    position: Long,
+    duration: Long,
+    onScrub: (Long) -> Unit,
+    onSeek: (Long) -> Unit,
+    chapters: List<SeekChapter>,
+    preview: SeekPreviewState,
+    onToggleFullscreen: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier.background(PlayerChrome.inlineScrim)) {
+        Row(
+            modifier = Modifier.align(Alignment.Center),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
+        ) {
+            PlayerGlyph(
+                icon = Icons.Rounded.Replay10,
+                description = null,
+                onClick = { surfaceState.skipBy(-SKIP_MS) },
+                size = 26.dp,
+            )
+            IconButton(
+                onClick = { surfaceState.togglePlayPause() },
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(CircleShape)
+                    .background(PlayerControlScrim),
+            ) {
+                if (surfaceState.isBuffering) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        color = PlayerForeground,
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Icon(
+                        imageVector = if (surfaceState.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                        contentDescription = stringResource(
+                            if (surfaceState.isPlaying) R.string.ui_player_pause else R.string.ui_player_play,
+                        ),
+                        tint = PlayerForeground,
+                        modifier = Modifier.size(28.dp),
+                    )
+                }
+            }
+            PlayerGlyph(
+                icon = Icons.Rounded.Forward10,
+                description = null,
+                onClick = { surfaceState.skipBy(SKIP_MS) },
+                size = 26.dp,
+            )
+        }
+
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+                .padding(horizontal = 8.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "${formatClock(position)} / ${formatClock(duration)}",
+                    modifier = Modifier.padding(start = 6.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = PlayerChrome.foregroundMuted,
+                )
+                Spacer(Modifier.weight(1f))
+                if (onToggleFullscreen != null) {
+                    PlayerGlyph(
+                        icon = Icons.Rounded.Fullscreen,
+                        description = stringResource(R.string.ui_player_fullscreen),
+                        onClick = onToggleFullscreen,
+                        size = 26.dp,
+                    )
+                }
+            }
+            PlayerSeekBar(
+                positionMs = position,
+                bufferedMs = surfaceState.bufferedMs,
+                durationMs = duration,
+                onScrub = onScrub,
+                onSeek = onSeek,
+                chapters = chapters,
+                preview = preview,
+            )
         }
     }
 }

@@ -20,19 +20,29 @@ import androidx.core.view.WindowInsetsControllerCompat
 
 /**
  * Immersive video presentation: hide both system bars and hold the activity in landscape while the
- * player is on screen. Everything is restored on dispose, so leaving the player returns the app to
+ * player is full screen ([immersive]); keep the screen awake whenever video is on screen at all. Everything is restored on dispose, so leaving the player returns the app to
  * its previous orientation and chrome.
  *
  * The activity declares `configChanges=orientation|screenSize|…` in the manifest, so the locked
  * rotation never recreates the surface underneath a live ExoPlayer.
  */
 @Composable
-internal fun ImmersiveVideoEffect(enabled: Boolean) {
+internal fun ImmersiveVideoEffect(enabled: Boolean, immersive: Boolean = true) {
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
 
+    // A 22-minute episode is longer than the screen timeout, and waking the phone by touching the
+    // video also toggles the controls — the flag is the only correct fix. Inline playback needs it
+    // just as much as full screen.
     DisposableEffect(activity, enabled) {
-        if (activity == null || !enabled) {
+        if (activity == null || !enabled) return@DisposableEffect onDispose { }
+        val window = activity.window
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose { window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+    }
+
+    DisposableEffect(activity, enabled && immersive) {
+        if (activity == null || !enabled || !immersive) {
             return@DisposableEffect onDispose { }
         }
         val window = activity.window
@@ -43,12 +53,7 @@ internal fun ImmersiveVideoEffect(enabled: Boolean) {
 
         activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
 
-        // A 22-minute episode is longer than the screen timeout, and waking the phone by touching
-        // the video also toggles the controls — the flag is the only correct fix.
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-
         onDispose {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             // Always back to portrait, not "whatever it was": leaving PiP hands the activity back
             // while it is still in landscape, and every screen outside the player is portrait-first.
             activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT

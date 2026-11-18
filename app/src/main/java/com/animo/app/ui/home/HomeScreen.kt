@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Menu
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -81,6 +82,7 @@ private val ContinueRailWidth = 196.dp
 fun HomeScreen(
     onOpenAnime: (Int) -> Unit,
     onOpenSearch: () -> Unit,
+    onOpenDownloads: () -> Unit = {},
     modifier: Modifier = Modifier,
     onOpenDrawer: () -> Unit = {},
     onOpenLibrary: () -> Unit = {},
@@ -94,6 +96,7 @@ fun HomeScreen(
         viewModel = viewModel,
         onOpenAnime = onOpenAnime,
         onOpenSearch = onOpenSearch,
+        onOpenDownloads = onOpenDownloads,
         onOpenDrawer = onOpenDrawer,
         onOpenLibrary = onOpenLibrary,
         onOpenBrowse = onOpenBrowse,
@@ -107,6 +110,7 @@ fun HomeScreen(
     viewModel: HomeViewModel,
     onOpenAnime: (Int) -> Unit,
     onOpenSearch: () -> Unit,
+    onOpenDownloads: () -> Unit = {},
     modifier: Modifier = Modifier,
     onOpenDrawer: () -> Unit = {},
     onOpenLibrary: () -> Unit = {},
@@ -150,6 +154,7 @@ fun HomeScreen(
                     counts = counts,
                     onOpenDrawer = onOpenDrawer,
                     onOpenSearch = onOpenSearch,
+                    onOpenDownloads = onOpenDownloads,
                     onOpenBrowse = onOpenBrowse,
                 ) {
                     EmptyState(
@@ -164,6 +169,7 @@ fun HomeScreen(
                     counts = counts,
                     onOpenDrawer = onOpenDrawer,
                     onOpenSearch = onOpenSearch,
+                    onOpenDownloads = onOpenDownloads,
                     onOpenBrowse = onOpenBrowse,
                 ) {
                     ErrorState(
@@ -177,6 +183,7 @@ fun HomeScreen(
                     onRefresh = viewModel::refresh,
                     onOpenAnime = onOpenAnime,
                     onOpenSearch = onOpenSearch,
+                    onOpenDownloads = onOpenDownloads,
                     onOpenDrawer = onOpenDrawer,
                     onOpenLibrary = onOpenLibrary,
                     onOpenBrowse = onOpenBrowse,
@@ -193,6 +200,7 @@ private fun HomePlaceholder(
     counts: CatalogueCounts,
     onOpenDrawer: () -> Unit,
     onOpenSearch: () -> Unit,
+    onOpenDownloads: () -> Unit = {},
     onOpenBrowse: () -> Unit,
     content: @Composable () -> Unit,
 ) {
@@ -201,6 +209,7 @@ private fun HomePlaceholder(
             counts = counts,
             onOpenDrawer = onOpenDrawer,
             onOpenSearch = onOpenSearch,
+            onOpenDownloads = onOpenDownloads,
             onOpenBrowse = onOpenBrowse,
             modifier = Modifier.padding(start = GridGutter, end = GridGutter),
         )
@@ -216,6 +225,7 @@ private fun HomeContent(
     onRefresh: () -> Unit,
     onOpenAnime: (Int) -> Unit,
     onOpenSearch: () -> Unit,
+    onOpenDownloads: () -> Unit = {},
     onOpenDrawer: () -> Unit,
     onOpenLibrary: () -> Unit,
     onOpenBrowse: () -> Unit,
@@ -256,6 +266,7 @@ private fun HomeContent(
                     counts = counts,
                     onOpenDrawer = onOpenDrawer,
                     onOpenSearch = onOpenSearch,
+                    onOpenDownloads = onOpenDownloads,
                     onOpenBrowse = onOpenBrowse,
                 )
             }
@@ -430,6 +441,7 @@ private fun HomeHero(
     counts: CatalogueCounts,
     onOpenDrawer: () -> Unit,
     onOpenSearch: () -> Unit,
+    onOpenDownloads: () -> Unit = {},
     onOpenBrowse: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -455,6 +467,7 @@ private fun HomeHero(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 HeroIconButton(onClick = onOpenDrawer, icon = Icons.Rounded.Menu, label = stringResource(R.string.ui_drawer_open))
                 Spacer(Modifier.weight(1f))
+                HeroIconButton(onClick = onOpenDownloads, icon = Icons.Rounded.Download, label = stringResource(R.string.ui_downloads_title))
                 HeroIconButton(onClick = onOpenSearch, icon = Icons.Rounded.Search, label = stringResource(R.string.ui_home_search))
             }
             Spacer(Modifier.weight(1f))

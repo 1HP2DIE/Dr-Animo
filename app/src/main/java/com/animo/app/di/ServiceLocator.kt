@@ -124,7 +124,24 @@ object ServiceLocator {
         )
     }
 
+    /** What the player resolves through: a downloaded episode first, the network otherwise. */
     val streamRepository: StreamRepository by lazy {
+        com.animo.app.download.OfflineFirstStreamRepository(
+            network = networkStreamRepository,
+            local = { episodeId, audio -> downloads.localStream(episodeId, audio) },
+        )
+    }
+
+    val downloads: com.animo.app.download.DownloadCenter by lazy {
+        com.animo.app.download.DownloadCenter(
+            context = requireContext(),
+            animeRepository = animeRepository,
+            streamRepository = { networkStreamRepository },
+            client = httpClient,
+        )
+    }
+
+    val networkStreamRepository: StreamRepository by lazy {
         RoutingStreamRepository(
             original = StreamRepositoryImpl(
                 resolverProvider = { streamResolver },

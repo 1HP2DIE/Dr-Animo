@@ -15,6 +15,7 @@ import com.animo.app.domain.model.AudioTrack
 import com.animo.app.ui.browse.BrowseScreen
 import com.animo.app.ui.changelog.ChangelogScreen
 import com.animo.app.ui.detail.DetailScreen
+import com.animo.app.ui.downloads.DownloadsScreen
 import com.animo.app.ui.home.HomeScreen
 import com.animo.app.ui.library.LibraryScreen
 import com.animo.app.ui.player.PlayerScreen
@@ -47,7 +48,8 @@ object Routes {
     const val LIBRARY = "library"
     const val SETTINGS = "settings"
     const val CHANGELOG = "changelog"
-    const val DETAIL = "detail/{$ARG_ANIME_ID}"
+    const val DOWNLOADS = "downloads"
+    const val DETAIL = "detail/{$ARG_ANIME_ID}?$ARG_EPISODE_ID={$ARG_EPISODE_ID}&$ARG_AUDIO={$ARG_AUDIO}"
     const val PLAYER = "player/{$ARG_ANIME_ID}/{$ARG_EPISODE_ID}/{$ARG_AUDIO}"
 
     /**
@@ -67,6 +69,10 @@ object Routes {
     }
 
     fun detail(animeId: Int): String = "detail/$animeId"
+
+    /** The title page with [episodeId] already playing at its top (or full screen, per settings). */
+    fun watch(animeId: Int, episodeId: Long, audio: AudioTrack): String =
+        "detail/$animeId?$ARG_EPISODE_ID=$episodeId&$ARG_AUDIO=${audio.name}"
 
     fun player(animeId: Int, episodeId: Long, audio: AudioTrack): String =
         "player/$animeId/$episodeId/${audio.name}"
@@ -99,6 +105,7 @@ fun AnimoNavHost(
                         HomeScreen(
                             onOpenAnime = { animeId -> navController.navigate(Routes.detail(animeId)) },
                             onOpenSearch = { navController.openTopLevel(Routes.BROWSE_BASE) },
+                            onOpenDownloads = { navController.navigate(Routes.DOWNLOADS) },
                             onOpenDrawer = openDrawer,
                             onOpenLibrary = { navController.openTopLevel(Routes.LIBRARY) },
                             onOpenBrowse = { navController.openTopLevel(Routes.BROWSE_BASE) },
@@ -140,7 +147,7 @@ fun AnimoNavHost(
                             modifier = Modifier.fillMaxSize(),
                             onOpenAnime = { animeId -> navController.navigate(Routes.detail(animeId)) },
                             onResume = { animeId, episodeId, audio ->
-                                navController.navigate(Routes.player(animeId, episodeId, audio))
+                                navController.navigate(Routes.watch(animeId, episodeId, audio))
                             },
                             onBrowse = { navController.openTopLevel(Routes.BROWSE_BASE) },
                         )
@@ -154,6 +161,16 @@ fun AnimoNavHost(
                         )
                     }
 
+                    composable(Routes.DOWNLOADS) {
+                        DownloadsScreen(
+                            onBack = { navController.popBackStack() },
+                            onPlay = { animeId, episodeId, audio ->
+                                navController.navigate(Routes.watch(animeId, episodeId, audio))
+                            },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+
                     composable(Routes.CHANGELOG) {
                         ChangelogScreen(
                             onBack = { navController.popBackStack() },
@@ -163,15 +180,27 @@ fun AnimoNavHost(
 
                     composable(
                         route = Routes.DETAIL,
-                        arguments = listOf(navArgument(ARG_ANIME_ID) { type = NavType.IntType }),
+                        arguments = listOf(
+                            navArgument(ARG_ANIME_ID) { type = NavType.IntType },
+                            navArgument(ARG_EPISODE_ID) {
+                                type = NavType.LongType
+                                defaultValue = -1L
+                            },
+                            navArgument(ARG_AUDIO) {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                        ),
                     ) { entry ->
-                        val animeId = entry.arguments?.getInt(ARG_ANIME_ID) ?: return@composable
+                        val arguments = entry.arguments ?: return@composable
+                        val animeId = arguments.getInt(ARG_ANIME_ID)
                         DetailScreen(
                             animeId = animeId,
                             onBack = { navController.popBackStack() },
-                            onPlayEpisode = { episode, audio ->
-                                navController.navigate(Routes.player(animeId, episode.id, audio))
-                            },
+                            onOpenDownloads = { navController.navigate(Routes.DOWNLOADS) },
+                            autoplayEpisodeId = arguments.getLong(ARG_EPISODE_ID).takeIf { it > 0L },
+                            autoplayAudio = AudioTrack.entries.firstOrNull { it.name == arguments.getString(ARG_AUDIO) },
                         )
                     }
 

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Settings -->
+    <string name="ui_settings_auto_fullscreen">Auto full screen</string>
+    <string name="ui_settings_auto_fullscreen_body">Open episodes straight in full screen instead of at the top of the title page</string>
+    <string name="ui_settings_download_quality">Download quality</string>
+    <string name="ui_settings_download_quality_body">Used when you tap download; you can still pick another quality from the list</string>
+    <string name="ui_download_quality_hd">HD 720p</string>
+    <string name="ui_download_quality_highest">Highest</string>
+
+    <!-- Inline player -->
+    <string name="ui_player_fullscreen">Full screen</string>
+    <string name="ui_player_exit_fullscreen">Exit full screen</string>
+    <string name="ui_player_close">Close player</string>
+
+    <!-- Downloads -->
+    <string name="ui_downloads_title">Downloads</string>
+    <string name="ui_downloads_running">Downloading</string>
+    <string name="ui_downloads_done">Downloaded · ready to watch offline</string>
+    <string name="ui_downloads_failed">Download failed</string>
+    <string name="ui_downloads_queued">Waiting</string>
+    <string name="ui_downloads_empty_title">No downloads yet</string>
+    <string name="ui_downloads_empty_body">Tap the download button on any episode to watch it offline</string>
+    <string name="ui_downloads_play">Play</string>
+    <string name="ui_downloads_open_with">Open with…</string>
+    <string name="ui_downloads_open_with_title">Play in another app</string>
+    <string name="ui_downloads_no_player">No other video player is installed</string>
+    <string name="ui_downloads_delete">Delete</string>
+    <string name="ui_downloads_cancel">Cancel</string>
+    <string name="ui_downloads_retry">Retry</string>
+    <string name="ui_downloads_storage">%1$s on this phone</string>
+
+    <!-- Quality sheet -->
+    <string name="ui_download_episode">Download E%1$d</string>
+    <string name="ui_download_episode_desc">Download episode %1$d</string>
+    <string name="ui_download_auto">Auto · %1$s</string>
+    <string name="ui_download_auto_hint">Your default from Settings</string>
+    <string name="ui_download_loading">Checking available qualities…</string>
+    <string name="ui_download_error">Could not reach this episode: %1$s</string>
+    <string name="ui_download_started">Downloading E%1$d</string>
+    <string name="ui_download_downloaded">Downloaded</string>
+    <string name="ui_download_language">Language</string>
+    <string name="ui_download_language_hint">Pick more than one to download each, e.g. SUB and DUB together</string>
+    <string name="ui_download_loading_languages">Checking languages on every server…</string>
+    <string name="ui_download_quality">Quality</string>
+    <string name="ui_download_subtitles">Subtitles (CC)</string>
+    <string name="ui_download_subtitles_auto">Auto</string>
+    <string name="ui_download_subtitles_none">None</string>
+    <string name="ui_download_error_none">No server could open this episode right now</string>
+    <string name="ui_download_button">Download</string>
+    <string name="ui_download_button_many">Download %1$d languages</string>
+</resources>

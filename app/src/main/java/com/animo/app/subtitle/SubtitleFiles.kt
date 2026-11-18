@@ -44,6 +44,11 @@ object SubtitleFiles {
         /** Extra request headers; a stream's own subtitle host gates on its referer. */
         headers: Map<String, String> = emptyMap(),
     ): SubtitleFile = withContext(Dispatchers.IO) {
+        // A downloaded episode keeps its subtitle next to the video.
+        if (url.startsWith("file:")) {
+            val file = java.io.File(java.net.URI(url))
+            return@withContext SubtitleFile(name = file.name, content = decode(file.inputStream().use { it.readCapped(MAX_BYTES) }))
+        }
         val request = Request.Builder()
             .url(url.trim())
             .header("Accept", "text/plain, */*")

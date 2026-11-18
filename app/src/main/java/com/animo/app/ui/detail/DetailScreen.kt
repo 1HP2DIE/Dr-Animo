@@ -37,6 +37,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.material3.Button
@@ -49,7 +50,18 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import com.animo.app.di.ServiceLocator
+import com.animo.app.download.DownloadEntry
+import com.animo.app.download.DownloadStatus
+import com.animo.app.ui.settings.DownloadQuality
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -73,6 +85,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.animo.app.ui.player.PlayerScreen
+import com.animo.app.ui.player.PlayerScreenViewModel
+import com.animo.app.ui.player.playerViewModelFactory
 import coil3.compose.AsyncImage
 import com.animo.app.R
 import com.animo.app.domain.model.Anime
@@ -122,8 +137,11 @@ private data class EpisodeCell(
 fun DetailScreen(
     animeId: Int,
     onBack: () -> Unit,
-    onPlayEpisode: (Episode, AudioTrack) -> Unit,
     modifier: Modifier = Modifier,
+    onOpenDownloads: () -> Unit = {},
+    /** Start this episode as soon as the page opens (resume from Home/Library). */
+    autoplayEpisodeId: Long? = null,
+    autoplayAudio: AudioTrack? = null,
 ) {
     val container = LocalAppContainer.current
     val context = LocalContext.current.applicationContext
@@ -138,12 +156,84 @@ fun DetailScreen(
         )
     }
     val viewModel: DetailViewModel = viewModel(factory = factory)
-    DetailScreen(
-        viewModel = viewModel,
-        onBack = onBack,
-        onPlayEpisode = onPlayEpisode,
-        modifier = modifier,
-    )
+    val autoFullscreen by preferences.autoFullscreen.collectAsStateWithLifecycle(initialValue = false)
+
+    // What the page is playing: (episode id, audio name). Saveable, so a rotation or process death
+    // brings the video back instead of dropping the viewer onto the bare page.
+    var playing by rememberSaveable { mutableStateOf<Pair<Long, String>?>(null) }
+    var fullscreen by rememberSaveable { mutableStateOf(false) }
+    var autoplayConsumed by rememberSaveable { mutableStateOf(false) }
+
+    val play: (Episode, AudioTrack) -> Unit = { episode, audio ->
+        playing = episode.id to audio.name
+        fullscreen = autoFullscreen
+    }
+    LaunchedEffect(autoplayEpisodeId, autoFullscreen) {
+        if (autoplayConsumed || autoplayEpisodeId == null) return@LaunchedEffect
+        autoplayConsumed = true
+        playing = autoplayEpisodeId to (autoplayAudio ?: AudioTrack.SUB).name
+        fullscreen = autoFullscreen
+    }
+    val closePlayer: () -> Unit = {
+        playing = null
+        fullscreen = false
+    }
+
+    Column(
+        Modifier
+            .then(modifier)
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+    ) {
+        // First child in both modes, so switching to full screen only changes its size: the same
+        // ExoPlayer keeps playing instead of being rebuilt and re-buffered.
+        playing?.let { (episodeId, audioName) ->
+            val audio = AudioTrack.entries.firstOrNull { it.name == audioName } ?: AudioTrack.SUB
+            val playerFactory = remember(container, animeId, episodeId, audio) {
+                playerViewModelFactory(
+                    animeId = animeId,
+                    episodeId = episodeId,
+                    audio = audio,
+                    animeRepository = container.animeRepository,
+                    streamRepository = container.streamRepository,
+                )
+            }
+            val playerViewModel: PlayerScreenViewModel = viewModel(
+                key = "player-$animeId-$episodeId-$audioName",
+                factory = playerFactory,
+            )
+            PlayerScreen(
+                viewModel = playerViewModel,
+                // Full screen: back leaves full screen, or closes the player when the viewer chose
+                // to always watch full screen. Inline: the close button.
+                onBack = {
+                    if (fullscreen && !autoFullscreen) fullscreen = false else closePlayer()
+                },
+                fullscreen = fullscreen,
+                onToggleFullscreen = { fullscreen = !fullscreen },
+                modifier = if (fullscreen) {
+                    Modifier.fillMaxSize()
+                } else {
+                    Modifier
+                        .background(AnimoPalette.videoBlack)
+                        .statusBarsPadding()
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                },
+            )
+        }
+        // Stays composed under a full-screen video (it just gets no height), so leaving full screen
+        // lands on the same scroll position.
+        DetailScreen(
+            viewModel = viewModel,
+            onBack = onBack,
+            onPlayEpisode = play,
+            playerActive = playing != null,
+            playingEpisodeId = playing?.first,
+            onOpenDownloads = onOpenDownloads,
+            modifier = Modifier.weight(1f),
+        )
+    }
 }
 
 @Composable
@@ -152,6 +242,10 @@ fun DetailScreen(
     onBack: () -> Unit,
     onPlayEpisode: (Episode, AudioTrack) -> Unit,
     modifier: Modifier = Modifier,
+    /** The video sits above the page: no hero, no status-bar inset, no floating back row. */
+    playerActive: Boolean = false,
+    playingEpisodeId: Long? = null,
+    onOpenDownloads: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     Box(
@@ -178,6 +272,9 @@ fun DetailScreen(
                 onRefreshEpisodes = viewModel::refreshEpisodes,
                 onBack = onBack,
                 onPlayEpisode = onPlayEpisode,
+                playerActive = playerActive,
+                playingEpisodeId = playingEpisodeId,
+                onOpenDownloads = onOpenDownloads,
             )
         }
 
@@ -205,6 +302,9 @@ private fun DetailContent(
     onRefreshEpisodes: () -> Unit,
     onBack: () -> Unit,
     onPlayEpisode: (Episode, AudioTrack) -> Unit,
+    playerActive: Boolean = false,
+    playingEpisodeId: Long? = null,
+    onOpenDownloads: () -> Unit = {},
 ) {
     val anime = model.anime
     val snackbarHostState = remember { SnackbarHostState() }
@@ -232,8 +332,19 @@ private fun DetailContent(
         label = "detail-title-alpha",
     )
 
+    // ---- downloads ----
+    val context = LocalContext.current
+    val downloadEntries by ServiceLocator.downloads.entries.collectAsStateWithLifecycle()
+    val downloadsById = remember(downloadEntries) { downloadEntries.associateBy { it.id } }
+    val settings = remember(context) { SettingsPreferences(context.applicationContext) }
+    val defaultDownloadQuality by settings.downloadQuality.collectAsStateWithLifecycle(initialValue = DownloadQuality.HD)
+    var downloadEpisode by remember { mutableStateOf<Episode?>(null) }
+    val notificationPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { /* the download runs either way; the permission only makes its progress visible */ }
+
     val sortedEpisodes = remember(model.episodes) { model.episodes.sortedBy { it.number } }
-    val resumeEpisode = model.resume?.episode
+    val resumeEpisode = sortedEpisodes.firstOrNull { it.id == playingEpisodeId } ?: model.resume?.episode
     val headerTarget = resumeEpisode ?: sortedEpisodes.firstOrNull()
 
     // Derived once per emission, never per cell: the grid only reads these values.
@@ -273,14 +384,26 @@ private fun DetailContent(
             state = gridState,
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
+                .then(if (playerActive) Modifier else Modifier.statusBarsPadding())
                 .navigationBarsPadding(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            item(key = "hero", span = FullSpan, contentType = "hero") {
-                DetailHero(anime = anime)
+            if (!playerActive) {
+                item(key = "hero", span = FullSpan, contentType = "hero") {
+                    DetailHero(anime = anime)
+                }
+            } else {
+                item(key = "now-playing-title", span = FullSpan, contentType = "title") {
+                    Text(
+                        text = anime.title,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
 
             item(key = "meta", span = FullSpan, contentType = "meta") {
@@ -355,18 +478,27 @@ private fun DetailContent(
                     contentType = { "episode" },
                 ) { cell ->
                     val onClick = remember(cell.episode, onEpisodeTap) { { onEpisodeTap(cell.episode) } }
+                    val audio = cell.episode.pickAudio(selectedAudio)
+                    // The picked audio's download first; otherwise any language of this episode.
+                    val entry = downloadsById[DownloadEntry.idOf(cell.episode.id, audio.name)]
+                        ?: downloadEntries.firstOrNull { it.episodeId == cell.episode.id }
                     EpisodeTile(
                         episode = cell.episode,
                         progress = cell.progress,
                         isCurrent = cell.isCurrent,
                         showHindi = anime.isHindi,
                         onClick = onClick,
+                        download = entry,
+                        onDownload = {
+                            // Always the sheet: a finished SUB still leaves DUB, Hindi… to download.
+                            downloadEpisode = cell.episode
+                        },
                     )
                 }
             }
         }
 
-        Row(
+        if (!playerActive) Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
@@ -391,6 +523,13 @@ private fun DetailContent(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            IconButton(onClick = onOpenDownloads) {
+                Icon(
+                    imageVector = Icons.Rounded.Download,
+                    contentDescription = stringResource(R.string.ui_downloads_title),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
             if (model.isRefreshingEpisodes) {
                 Icon(
                     imageVector = Icons.Rounded.Refresh,
@@ -401,6 +540,34 @@ private fun DetailContent(
                         .size(16.dp),
                 )
             }
+        }
+
+        downloadEpisode?.let { episode ->
+            val startedMessage = stringResource(R.string.ui_download_started, episode.number)
+            DownloadOptionsSheet(
+                animeId = anime.id,
+                episode = episode,
+                preferredAudio = episode.pickAudio(selectedAudio),
+                defaultQuality = defaultDownloadQuality,
+                downloadedKeys = downloadEntries
+                    .filter { it.episodeId == episode.id && it.status != DownloadStatus.FAILED }
+                    .map { it.id.substringAfter(':') }
+                    .toSet(),
+                onDownload = { requests ->
+                    downloadEpisode = null
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+                        PackageManager.PERMISSION_GRANTED
+                    ) {
+                        notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                    scope.launch {
+                        requests.forEach { ServiceLocator.downloads.enqueue(anime, episode, it) }
+                        snackbarHostState.showSnackbar(startedMessage)
+                    }
+                },
+                onDismiss = { downloadEpisode = null },
+            )
         }
 
         SnackbarHost(
@@ -499,6 +666,8 @@ private fun EpisodeTile(
     showHindi: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    download: DownloadEntry? = null,
+    onDownload: (() -> Unit)? = null,
 ) {
     val colors = MaterialTheme.colorScheme
     val playable = episode.isPlayable()
@@ -547,6 +716,14 @@ private fun EpisodeTile(
                     contentDescription = null,
                     tint = colors.primary,
                     modifier = Modifier.size(14.dp),
+                )
+            }
+            if (playable && onDownload != null) {
+                EpisodeDownloadButton(
+                    episodeNumber = episode.number,
+                    entry = download,
+                    onClick = onDownload,
+                    modifier = Modifier.padding(start = 2.dp),
                 )
             }
         }

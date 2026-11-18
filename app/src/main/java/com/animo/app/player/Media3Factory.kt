@@ -148,7 +148,12 @@ object Media3Factory {
         /** Language to pick inside a multi-audio file; `null` keeps the file's default. */
         preferredAudioLanguage: String? = null,
     ): ExoPlayer {
-        val dataSourceFactory = dataSourceFactory(referer, userAgent, client)
+        // DefaultDataSource routes file:// (a downloaded episode) to the file system and everything
+        // else to the Referer-bearing OkHttp factory.
+        val dataSourceFactory = androidx.media3.datasource.DefaultDataSource.Factory(
+            context,
+            dataSourceFactory(referer, userAgent, client),
+        )
         val policy = errorPolicy()
         val player = newPlayer(
             context,

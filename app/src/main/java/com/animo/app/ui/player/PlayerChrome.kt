@@ -31,6 +31,9 @@ internal object PlayerChrome {
     val track = Color(0x40FFFFFF)
     val buffered = Color(0x8CFFFFFF)
 
+    /** Even dim over the whole inline frame: too short for the full-screen top/bottom scrims. */
+    val inlineScrim = Color(0x59000000)
+
     /** Double-tap ripple on the side of the frame you tapped. */
     val tapRipple = Color(0x26FFFFFF)
 }
