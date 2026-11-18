@@ -22,8 +22,11 @@ import com.animo.app.domain.model.StreamContainer
 import com.animo.app.domain.model.StreamSubtitle
 import com.animo.app.domain.repo.AnimeRepository
 import com.animo.app.domain.repo.StreamRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
 import okhttp3.OkHttpClient
 import java.io.File
@@ -103,6 +106,8 @@ class DownloadCenter(
         val id = DownloadEntry.idOf(episode.id, request.language.key)
         val previous = store.get(id)
         if (previous != null && (previous.isFinished || previous.status == DownloadStatus.RUNNING)) return
+        // A screen's scope dies on back; a queued row must still reach WorkManager and the disk.
+        withContext(Dispatchers.IO + NonCancellable) {
         store.upsert(
             DownloadEntry(
                 id = id,
@@ -121,6 +126,7 @@ class DownloadCenter(
             ),
         )
         schedule(id)
+        }
     }
 
     /**
@@ -133,14 +139,16 @@ class DownloadCenter(
 
     private val pinned = java.util.concurrent.ConcurrentHashMap<Long, String>()
 
-    suspend fun retry(id: String) {
+    suspend fun retry(id: String) = withContext(Dispatchers.IO + NonCancellable) {
         store.update(id) { it.copy(status = DownloadStatus.QUEUED, error = null) }
         schedule(id, replace = true)
     }
 
     /** Cancels a running download and deletes whatever it wrote. */
-    suspend fun delete(id: String) {
+    suspend fun delete(id: String) = withContext(Dispatchers.IO + NonCancellable) {
         WorkManager.getInstance(context).cancelUniqueWork(workName(id))
+        // Files first, row second: a row that points at deleted files can only be deleted again,
+        // while an orphaned file would never be reachable from the UI.
         store.get(id)?.let(::removeFiles)
         store.remove(id)
     }
@@ -169,14 +177,15 @@ class DownloadCenter(
      * Starts [id] again on another server. Pieces from different servers never mix (each server
      * has its own encode, so byte N or segment N is a different moment), so the old file goes.
      */
-    suspend fun changeServer(id: String, source: LanguageSource) {
+    suspend fun changeServer(id: String, source: LanguageSource) = withContext(Dispatchers.IO + NonCancellable) {
         stopAndWait(id)
-        val entry = store.get(id) ?: return
-        removeFiles(entry)
-        store.update(id) {
-            it.restartOn(source, note = null)
+        store.get(id)?.let { entry ->
+            removeFiles(entry)
+            store.update(id) {
+                it.restartOn(source, note = null)
+            }
+            schedule(id, replace = true)
         }
-        schedule(id, replace = true)
     }
 
     /**
@@ -218,7 +227,13 @@ class DownloadCenter(
         val tried = mutableSetOf<Int>()
         while (true) {
             val token = store.get(id)?.runToken ?: return true
-            if (attempt(id, onProgress)) return true
+            when (attempt(id, onProgress)) {
+                Attempt.DONE -> return true
+                // A full disk, an unmounted card: another server would fail the same way, after
+                // downloading the whole episode again.
+                Attempt.LOCAL_FAILED -> return false
+                Attempt.SERVER_FAILED -> Unit
+            }
             // Cancelled, or another server was picked meanwhile: that run owns the row now.
             if (!kotlinx.coroutines.currentCoroutineContext().isActive) return false
             val failed = store.get(id)?.takeIf { it.runToken == token } ?: return false
@@ -229,14 +244,22 @@ class DownloadCenter(
             AppLog.i("download $id: Server ${failed.server} failed, switching to ${next.server?.label}")
             removeFiles(failed)
             store.update(id) {
-                it.restartOn(next, note = "Server ${failed.server ?: "?"} failed · switched to ${next.server?.label}")
+                // Somebody may have picked another server while this attempt was finishing; that
+                // choice wins over the fallback.
+                if (it.runToken == token) {
+                    it.restartOn(next, note = "Server ${failed.server ?: "?"} failed · switched to ${next.server?.label}")
+                } else {
+                    it
+                }
             }
         }
     }
 
-    private suspend fun attempt(id: String, onProgress: (DownloadEntry) -> Unit): Boolean {
-        val entry = store.get(id) ?: return true
-        if (entry.isFinished) return true
+    private enum class Attempt { DONE, SERVER_FAILED, LOCAL_FAILED }
+
+    private suspend fun attempt(id: String, onProgress: (DownloadEntry) -> Unit): Attempt {
+        val entry = store.get(id) ?: return Attempt.DONE
+        if (entry.isFinished) return Attempt.DONE
         val token = entry.runToken
         // Every write below goes through this, so a superseded job cannot touch the new run's row.
         suspend fun mine(change: (DownloadEntry) -> DownloadEntry) =
@@ -281,7 +304,14 @@ class DownloadCenter(
                         sampleAt = now
                     }
                     mine {
-                        it.copy(bytesDone = done, bytesTotal = total, progress = fraction, speedBps = speed.toLong())
+                        // A range that failed after counting its bytes can report past 100%; the bar
+                        // must never draw beyond its track.
+                        it.copy(
+                            bytesDone = done,
+                            bytesTotal = total,
+                            progress = fraction.coerceIn(0f, 1f),
+                            speedBps = speed.toLong(),
+                        )
                     }
                     store.get(id)?.let(onProgress)
                 },
@@ -298,7 +328,7 @@ class DownloadCenter(
                     bytesTotal = result.file.length(),
                 )
             }
-            true
+            Attempt.DONE
         } catch (cancelled: CancellationException) {
             // Deleted or stopped by the system: WorkManager reschedules a stopped job by itself.
             store.get(id)?.let { current ->
@@ -308,8 +338,30 @@ class DownloadCenter(
         } catch (error: Throwable) {
             AppLog.w("download $id failed", error)
             mine { it.copy(status = DownloadStatus.FAILED, error = describe(error), speedBps = 0L) }
-            false
+            if (error.isServerProblem()) Attempt.SERVER_FAILED else Attempt.LOCAL_FAILED
         }
+    }
+
+    /**
+     * Whether another server has a chance. A refused file, a dead host or a truncated body is the
+     * server's fault; a full disk or a vanished folder is ours, and retrying it elsewhere would only
+     * burn the same traffic again.
+     */
+    private fun Throwable.isServerProblem(): Boolean = when (this) {
+        is DownloadException -> true
+        is java.io.FileNotFoundException -> false
+        is SecurityException -> false
+        is java.net.UnknownHostException,
+        is java.net.ConnectException,
+        is java.net.SocketTimeoutException,
+        is java.net.SocketException,
+        is java.io.InterruptedIOException,
+        is javax.net.ssl.SSLException,
+        -> true
+        is java.io.IOException -> message?.let { text ->
+            text.startsWith("HTTP ") || text.startsWith("short ") || text.startsWith("range ")
+        } ?: false
+        else -> false
     }
 
     /**
