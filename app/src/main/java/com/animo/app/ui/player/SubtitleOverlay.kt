@@ -41,8 +41,11 @@ import kotlin.math.roundToInt
 /** Base subtitle size as a fraction of the video height; 1080p ≈ 25 px ≈ 22 sp on a phone. */
 private const val BASE_HEIGHT_FRACTION = 0.055f
 
-/** How far subtitles rise out of the way while the transport controls are on screen. */
-private val ControlsLift = 112.dp
+/**
+ * Where subtitles sit while the transport controls are on screen: just above the seek bar and
+ * below the centred play/pause row, so neither covers the other.
+ */
+private val ControlsClearance = 100.dp
 
 /**
  * The only subtitle renderer in the app: Media3's built-in `SubtitleView` is hidden, because it
@@ -64,11 +67,11 @@ fun SubtitleOverlay(
     BoxWithConstraints(modifier.fillMaxSize()) {
         val fontSize = (maxHeight.value * BASE_HEIGHT_FRACTION * style.sizeScale).sp
         val sideMargin = maxWidth * (style.horizontalMarginPercent / 100f)
-        val lift by animateDpAsState(
-            targetValue = if (liftForControls) ControlsLift else 0.dp,
+        val resting = maxHeight * (style.bottomPaddingPercent / 100f)
+        val bottom by animateDpAsState(
+            targetValue = if (liftForControls) maxOf(resting, ControlsClearance) else resting,
             label = "subtitle-lift",
         )
-        val bottom = maxHeight * (style.bottomPaddingPercent / 100f) + lift
 
         Box(
             modifier = Modifier

@@ -20,6 +20,11 @@ data class PlayerTuning(
     val speed: Float = 1f,
     /** True once the engine has published at least one real rendition. */
     val hasQualities: Boolean = false,
+    /**
+     * True when the qualities are separate files rather than renditions of one adaptive playlist:
+     * then "Auto" cannot adapt and simply plays the highest one.
+     */
+    val autoIsHighest: Boolean = false,
     /** True when the container has more than one audio track worth switching between. */
     val hasAudioTracks: Boolean = false,
     /** Stream servers and the languages each offers for this episode. */

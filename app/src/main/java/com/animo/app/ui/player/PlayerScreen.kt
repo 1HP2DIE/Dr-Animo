@@ -77,6 +77,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.animo.app.R
 import com.animo.app.domain.model.AudioTrack
 import com.animo.app.domain.model.StreamServer
+import com.animo.app.domain.model.StreamContainer
 import com.animo.app.domain.model.PlayableStream
 import com.animo.app.di.ServiceLocator
 import com.animo.app.player.PlayerController
@@ -920,6 +921,7 @@ private fun PlayerStage(
                         ?: if (fileActive) TrackRow.FILE_ID else selectedTextId,
                     speed = speed,
                     hasQualities = qualities.size > 1,
+                    autoIsHighest = surfaceState.stream?.container == StreamContainer.PROGRESSIVE,
                     hasAudioTracks = audios.size > 1,
                     servers = model.servers.map { option ->
                         ServerRow(
@@ -1073,6 +1075,56 @@ private fun PlayerControlsOverlay(
             )
         }
 
+        // Exactly centred: ±10 s either side of play/pause is the whole transport. Episode
+        // navigation lives under the seek bar with the rest of the metadata. The row sits in the
+        // true middle of the screen, where the thumb rests, not on top of the seek bar.
+        Row(
+            modifier = Modifier.align(Alignment.Center),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(28.dp),
+        ) {
+            PlayerGlyph(
+                icon = Icons.Rounded.Replay10,
+                description = null,
+                onClick = { surfaceState.skipBy(-SKIP_MS) },
+                size = 30.dp,
+            )
+            IconButton(
+                onClick = { surfaceState.togglePlayPause() },
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(CircleShape)
+                    .background(PlayerControlScrim),
+            ) {
+                if (surfaceState.isBuffering) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(26.dp),
+                        color = PlayerForeground,
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Icon(
+                        imageVector = if (surfaceState.isPlaying) {
+                            Icons.Rounded.Pause
+                        } else {
+                            Icons.Rounded.PlayArrow
+                        },
+                        contentDescription = stringResource(
+                            if (surfaceState.isPlaying) R.string.ui_player_pause else R.string.ui_player_play,
+                        ),
+                        tint = PlayerForeground,
+                        modifier = Modifier.size(34.dp),
+                    )
+                }
+            }
+            PlayerGlyph(
+                icon = Icons.Rounded.Forward10,
+                description = null,
+                onClick = { surfaceState.skipBy(SKIP_MS) },
+                size = 30.dp,
+            )
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1081,57 +1133,6 @@ private fun PlayerControlsOverlay(
                 .padding(horizontal = 16.dp, vertical = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // Exactly centred: ±10 s either side of play/pause is the whole transport. Episode
-            // navigation lives under the seek bar with the rest of the metadata, so the middle of
-            // the screen stays symmetrical.
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(28.dp),
-            ) {
-                PlayerGlyph(
-                    icon = Icons.Rounded.Replay10,
-                    description = null,
-                    onClick = { surfaceState.skipBy(-SKIP_MS) },
-                    size = 30.dp,
-                )
-                IconButton(
-                    onClick = { surfaceState.togglePlayPause() },
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .background(PlayerControlScrim),
-                ) {
-                    if (surfaceState.isBuffering) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(26.dp),
-                            color = PlayerForeground,
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
-                        Icon(
-                            imageVector = if (surfaceState.isPlaying) {
-                                Icons.Rounded.Pause
-                            } else {
-                                Icons.Rounded.PlayArrow
-                            },
-                            contentDescription = stringResource(
-                                if (surfaceState.isPlaying) R.string.ui_player_pause else R.string.ui_player_play,
-                            ),
-                            tint = PlayerForeground,
-                            modifier = Modifier.size(34.dp),
-                        )
-                    }
-                }
-                PlayerGlyph(
-                    icon = Icons.Rounded.Forward10,
-                    description = null,
-                    onClick = { surfaceState.skipBy(SKIP_MS) },
-                    size = 30.dp,
-                )
-            }
-
-            Spacer(Modifier.height(10.dp))
-
             PlayerSeekBar(
                 positionMs = position,
                 bufferedMs = surfaceState.bufferedMs,

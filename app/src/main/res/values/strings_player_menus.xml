@@ -20,6 +20,7 @@
     <!-- Quality -->
     <string name="ui_player_menu_auto">Auto</string>
     <string name="ui_player_menu_auto_hint">Adaptive — the master playlist decides</string>
+    <string name="ui_player_menu_auto_hint_highest">Highest available</string>
     <string name="ui_player_menu_quality_hint">%1$dp · %2$s Mbps</string>
     <string name="ui_player_menu_quality_hint_bitrate_only">%1$s Mbps</string>
     <string name="ui_player_menu_quality_hint_plain">%1$dp</string>

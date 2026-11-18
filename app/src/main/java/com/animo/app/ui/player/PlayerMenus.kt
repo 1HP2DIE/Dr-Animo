@@ -307,7 +307,9 @@ private fun QualityPane(tuning: PlayerTuning, onSelect: (String) -> Unit) {
     val autoSelected = tuning.activeQualityId == PlayerController.AUTO_QUALITY_ID
     SettingCard(
         title = stringResource(R.string.ui_player_menu_auto),
-        hint = stringResource(R.string.ui_player_menu_auto_hint),
+        hint = stringResource(
+            if (tuning.autoIsHighest) R.string.ui_player_menu_auto_hint_highest else R.string.ui_player_menu_auto_hint,
+        ),
         selected = autoSelected,
         glyph = Icons.Rounded.HighQuality,
         highlighted = true,
