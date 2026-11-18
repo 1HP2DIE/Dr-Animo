@@ -21,3 +21,4 @@ secrets/vault.key
 secrets/animo-release.jks
 secrets/signing.properties
 release/
+promo/
