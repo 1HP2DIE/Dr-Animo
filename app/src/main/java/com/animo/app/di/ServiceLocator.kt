@@ -98,6 +98,10 @@ object ServiceLocator {
 
     val progressDao: ProgressDao by lazy { database.progressDao() }
 
+    val favorites: com.animo.app.data.repo.FavoritesRepository by lazy {
+        com.animo.app.data.repo.FavoritesRepository(database.favoriteDao())
+    }
+
     // ---------------------------------------------------------------- data layer
 
     val seriesFetcher: SeriesFetcher by lazy {
@@ -109,7 +113,7 @@ object ServiceLocator {
     }
 
     val episodeBackfill: EpisodeBackfill by lazy {
-        EpisodeBackfill(seriesFetcher = seriesFetcher, animeDao = animeDao)
+        EpisodeBackfill(seriesFetcher = seriesFetcher, animeDao = animeDao, favoriteDao = database.favoriteDao())
     }
 
     val animeRepository: AnimeRepository by lazy {

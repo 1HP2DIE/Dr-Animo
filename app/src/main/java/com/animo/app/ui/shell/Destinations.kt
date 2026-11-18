@@ -53,9 +53,28 @@ object Destinations {
         selectedIcon = TabIconsFilled.settings,
     )
 
-    /** Bottom bar order: Home, Browse, Library, Settings. */
-    val tabs: List<TopLevelDestination> = listOf(home, browse, library, settings)
+    val schedule = TopLevelDestination(
+        route = Routes.SCHEDULE,
+        matchRoute = Routes.SCHEDULE,
+        labelRes = R.string.ui_tab_schedule,
+        icon = TabIconsOutlined.schedule,
+        selectedIcon = TabIconsFilled.schedule,
+    )
+
+    val favorites = TopLevelDestination(
+        route = Routes.FAVORITES,
+        matchRoute = Routes.FAVORITES,
+        labelRes = R.string.ui_tab_favorites,
+        icon = TabIconsOutlined.favorites,
+        selectedIcon = TabIconsFilled.favorites,
+    )
+
+    /** Bottom bar order: Home, Browse, Schedule, Favourites, Library. Settings lives in the drawer. */
+    val tabs: List<TopLevelDestination> = listOf(home, browse, schedule, favorites, library)
+
+    /** Everything the drawer lists at the top, and every page that keeps the shell chrome. */
+    val shell: List<TopLevelDestination> = tabs + settings
 
     fun tabForRoute(route: String?): TopLevelDestination? =
-        tabs.firstOrNull { it.matchRoute == route }
+        shell.firstOrNull { it.matchRoute == route }
 }

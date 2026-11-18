@@ -19,6 +19,8 @@ data class AnimeStamp(
     val updatedAtEpoch: Long,
     val detailFetchedAt: Long?,
     val episodeCount: Int,
+    /** Last known air time (epoch seconds); kept when a later answer drops it. */
+    val nextAirAt: Long? = null,
 )
 
 /** Projection for the sync policy — never inflates a whole row just to read four columns. */
@@ -110,7 +112,7 @@ interface AnimeDao {
     // ---------------------------------------------------------------- sync support
 
     /** Non-empty [ids] only — an empty `IN ()` is invalid SQL. */
-    @Query("SELECT id, updatedAtEpoch, detailFetchedAt, episodeCount FROM anime WHERE id IN (:ids)")
+    @Query("SELECT id, updatedAtEpoch, detailFetchedAt, episodeCount, nextAirAt FROM anime WHERE id IN (:ids)")
     suspend fun stampsFor(ids: List<Int>): List<AnimeStamp>
 
     @Query("SELECT updatedAtEpoch FROM anime WHERE id = :id")

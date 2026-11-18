@@ -41,6 +41,15 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
     }
 }
 
+/** v3 → v4: the `favorite` table. Purely additive, nothing existing is touched. */
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `favorite` (`animeId` INTEGER NOT NULL, `addedAtMs` INTEGER NOT NULL, PRIMARY KEY(`animeId`))",
+        )
+    }
+}
+
 /**
  * Reads `id, title` first and writes afterwards: executing the `UPDATE` while the cursor is still
  * open on `anime` would reset it. Each write also fires Room's external-content FTS trigger, which

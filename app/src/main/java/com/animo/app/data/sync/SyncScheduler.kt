@@ -46,6 +46,24 @@ object SyncScheduler {
         AppLog.d("catalog sync scheduled (every $SYNC_INTERVAL_HOURS h, network-constrained)")
     }
 
+    /**
+     * The silent per-title sync after an app start: airing titles whose episode just aired, and
+     * favourites. Delayed so it never competes with the first screen, `KEEP` so reopening the app
+     * repeatedly queues it once.
+     */
+    fun syncAiredSoon(context: Context) {
+        val request = androidx.work.OneTimeWorkRequestBuilder<AiredSyncWorker>()
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .setInitialDelay(20, TimeUnit.SECONDS)
+            .addTag(TAG)
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "animo-aired-sync",
+            androidx.work.ExistingWorkPolicy.KEEP,
+            request,
+        )
+    }
+
     /** Four cheap delta passes a day (~12 requests) beat one 95-page walk. */
     private const val SYNC_INTERVAL_HOURS = 6L
 

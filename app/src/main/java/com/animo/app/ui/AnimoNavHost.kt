@@ -49,6 +49,8 @@ object Routes {
     const val SETTINGS = "settings"
     const val CHANGELOG = "changelog"
     const val DOWNLOADS = "downloads"
+    const val FAVORITES = "favorites"
+    const val SCHEDULE = "schedule"
     const val DETAIL = "detail/{$ARG_ANIME_ID}?$ARG_EPISODE_ID={$ARG_EPISODE_ID}&$ARG_AUDIO={$ARG_AUDIO}"
     const val PLAYER = "player/{$ARG_ANIME_ID}/{$ARG_EPISODE_ID}/{$ARG_AUDIO}"
 
@@ -100,6 +102,10 @@ fun AnimoNavHost(
                     navController = navController,
                     startDestination = startDestination,
                     modifier = Modifier.fillMaxSize(),
+                    enterTransition = { NavMotion.enter(initialState.destination.route, targetState.destination.route) },
+                    exitTransition = { NavMotion.exit(initialState.destination.route, targetState.destination.route) },
+                    popEnterTransition = { NavMotion.popEnter(initialState.destination.route, targetState.destination.route) },
+                    popExitTransition = { NavMotion.popExit(initialState.destination.route, targetState.destination.route) },
                 ) {
                     composable(Routes.HOME) {
                         HomeScreen(
@@ -110,6 +116,8 @@ fun AnimoNavHost(
                             onOpenLibrary = { navController.openTopLevel(Routes.LIBRARY) },
                             onOpenBrowse = { navController.openTopLevel(Routes.BROWSE_BASE) },
                             onOpenHindi = { navController.openTopLevel(Routes.browse(hindi = true)) },
+                            onOpenSchedule = { navController.openTopLevel(Routes.SCHEDULE) },
+                            onOpenFavorites = { navController.openTopLevel(Routes.FAVORITES) },
                         )
                     }
 
@@ -158,6 +166,21 @@ fun AnimoNavHost(
                             onOpenDrawer = openDrawer,
                             onOpenChangelog = { navController.navigate(Routes.CHANGELOG) },
                             modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+
+                    composable(Routes.FAVORITES) {
+                        com.animo.app.ui.favorites.FavoritesScreen(
+                            onOpenDrawer = openDrawer,
+                            onOpenAnime = { animeId -> navController.navigate(Routes.detail(animeId)) },
+                            onBrowse = { navController.openTopLevel(Routes.BROWSE_BASE) },
+                        )
+                    }
+
+                    composable(Routes.SCHEDULE) {
+                        com.animo.app.ui.schedule.ScheduleScreen(
+                            onOpenDrawer = openDrawer,
+                            onOpenAnime = { animeId -> navController.navigate(Routes.detail(animeId)) },
                         )
                     }
 

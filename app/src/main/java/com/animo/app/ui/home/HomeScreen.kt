@@ -43,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -57,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.animo.app.R
+import com.animo.app.di.ServiceLocator
 import com.animo.app.domain.model.CatalogueCounts
 import com.animo.app.domain.model.SyncProgress
 import com.animo.app.domain.model.SyncState
@@ -88,6 +90,8 @@ fun HomeScreen(
     onOpenLibrary: () -> Unit = {},
     onOpenBrowse: () -> Unit = {},
     onOpenHindi: () -> Unit = {},
+    onOpenSchedule: () -> Unit = {},
+    onOpenFavorites: () -> Unit = {},
 ) {
     val container = LocalAppContainer.current
     val factory = remember(container) { homeViewModelFactory(container.animeRepository) }
@@ -101,6 +105,8 @@ fun HomeScreen(
         onOpenLibrary = onOpenLibrary,
         onOpenBrowse = onOpenBrowse,
         onOpenHindi = onOpenHindi,
+        onOpenSchedule = onOpenSchedule,
+        onOpenFavorites = onOpenFavorites,
         modifier = modifier,
     )
 }
@@ -116,6 +122,8 @@ fun HomeScreen(
     onOpenLibrary: () -> Unit = {},
     onOpenBrowse: () -> Unit = {},
     onOpenHindi: () -> Unit = {},
+    onOpenSchedule: () -> Unit = {},
+    onOpenFavorites: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -188,6 +196,8 @@ fun HomeScreen(
                     onOpenLibrary = onOpenLibrary,
                     onOpenBrowse = onOpenBrowse,
                     onOpenHindi = onOpenHindi,
+                    onOpenSchedule = onOpenSchedule,
+                    onOpenFavorites = onOpenFavorites,
                 )
             }
         }
@@ -230,7 +240,17 @@ private fun HomeContent(
     onOpenLibrary: () -> Unit,
     onOpenBrowse: () -> Unit,
     onOpenHindi: () -> Unit,
+    onOpenSchedule: () -> Unit = {},
+    onOpenFavorites: () -> Unit = {},
 ) {
+    val favoritesFlow = remember { ServiceLocator.favorites.observeFavorites() }
+    val favorites by favoritesFlow.collectAsState(initial = emptyList())
+    val scheduleFlow = remember { ServiceLocator.favorites.observeSchedule() }
+    val week by scheduleFlow.collectAsState(initial = emptyList())
+    val today = week.firstOrNull()?.slots.orEmpty()
+    val airingTodayLabel = stringResource(R.string.ui_home_airing_today)
+    val weekLabel = stringResource(R.string.ui_home_week)
+    val favoritesLabel = stringResource(R.string.ui_home_favorites)
     val seeAll = stringResource(R.string.ui_home_see_all)
     val continueLabel = stringResource(R.string.ui_home_continue)
     val hindiLabel = stringResource(R.string.ui_home_hindi)
@@ -296,6 +316,50 @@ private fun HomeContent(
                         modifier = Modifier.width(ContinueRailWidth),
                         episodeNumber = item.episodeNumber,
                         progress = item.fraction,
+                    )
+                }
+            }
+
+            if (today.isNotEmpty()) {
+                shelfHeader(
+                    key = "airing-header",
+                    title = airingTodayLabel,
+                    subtitle = today.size.toString(),
+                    actionLabel = weekLabel,
+                    onAction = onOpenSchedule,
+                )
+                shelfRail(
+                    key = "airing-rail",
+                    items = today,
+                    contentType = "airing",
+                    itemKey = { "airing-${it.anime.id}-${it.airAtSec}" },
+                ) { slot ->
+                    AiringCard(
+                        slot = slot,
+                        onClick = rememberAnimeClick(slot.anime.id, onOpenAnime),
+                        modifier = Modifier.width(PosterRailWidth),
+                    )
+                }
+            }
+
+            if (favorites.isNotEmpty()) {
+                shelfHeader(
+                    key = "favorites-header",
+                    title = favoritesLabel,
+                    actionLabel = seeAll,
+                    onAction = onOpenFavorites,
+                )
+                shelfRail(
+                    key = "favorites-rail",
+                    items = favorites.take(20),
+                    contentType = "poster",
+                    itemKey = { "favorite-${it.id}" },
+                ) { anime ->
+                    AnimeCard(
+                        anime = anime,
+                        onClick = rememberAnimeClick(anime.id, onOpenAnime),
+                        modifier = Modifier.width(PosterRailWidth),
+                        titleLines = 2,
                     )
                 }
             }
@@ -388,6 +452,38 @@ private fun HomeContent(
 
 // ---------------------------------------------------------------- shelf helpers
 
+private val AiringTime = java.time.format.DateTimeFormatter.ofPattern("h:mm a")
+
+/** Poster plus its air time today; an episode already out shows the accent "Out" label. */
+@Composable
+private fun AiringCard(
+    slot: com.animo.app.domain.model.AiringSlot,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val time = java.time.Instant.ofEpochSecond(slot.airAtSec)
+        .atZone(java.time.ZoneId.systemDefault())
+        .format(AiringTime)
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        AnimeCard(anime = slot.anime, onClick = onClick, titleLines = 2)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = if (slot.aired) stringResource(R.string.ui_schedule_aired) else time,
+                style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                color = if (slot.aired) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+            )
+            slot.episode?.let {
+                Text(
+                    text = "EP $it",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
 private fun androidx.compose.foundation.lazy.grid.LazyGridScope.shelfHeader(
     key: String,
     title: String,
@@ -422,7 +518,9 @@ private fun <T> androidx.compose.foundation.lazy.grid.LazyGridScope.shelfRail(
                 items = items,
                 key = itemKey,
                 contentType = { contentType },
-            ) { item -> card(item) }
+            ) { item ->
+                Box(Modifier.animateItem()) { card(item) }
+            }
         }
     }
 }

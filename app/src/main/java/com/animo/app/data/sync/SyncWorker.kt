@@ -38,6 +38,7 @@ class SyncWorker(
         }
 
         val backfill = ServiceLocator.episodeBackfill
+        backfill.refreshAired()
         val due = backfill.dueCount()
         if (due == 0) {
             AppLog.i("nightly sync finished: nothing due")

@@ -120,7 +120,7 @@ fun AnimoDrawerContent(
                 .weight(1f)
                 .verticalScroll(rememberScrollState()),
         ) {
-            Destinations.tabs.forEach { tab ->
+            Destinations.shell.forEach { tab ->
                 val selected = currentRoute == tab.matchRoute
                 DrawerItem(
                     icon = if (selected) tab.selectedIcon else tab.icon,
@@ -160,8 +160,8 @@ fun AnimoDrawerContent(
             DrawerItem(
                 icon = Icons.Outlined.Info,
                 label = stringResource(R.string.ui_drawer_about),
-                selected = false,
-                onClick = { onNavigate(Routes.SETTINGS) },
+                selected = currentRoute == Routes.CHANGELOG,
+                onClick = { onNavigate(Routes.CHANGELOG) },
             )
 
             if (genres.isNotEmpty()) {

@@ -57,7 +57,10 @@ fun AnimeDto.toEntity(previous: AnimeStamp? = null): AnimeEntity {
         updatedAt = updatedAt,
         updatedAtEpoch = Normalize.parseUtcSeconds(updatedAt),
         // Frequently in the past even for "Currently Airing" -> only kept when still in the future.
-        nextAirAt = Normalize.sanitizeNextAirEpoch(nextAirAt),
+        // The API drops the time once an episode is out. Keep the last one we saw for a title that
+        // is still airing: the schedule projects it forward a week at a time.
+        nextAirAt = Normalize.sanitizeNextAirEpoch(nextAirAt)
+            ?: previous?.nextAirAt?.takeIf { Normalize.normalizeStatus(status) != "finished_airing" },
         nextAirEp = nextAirEp,
         detailFetchedAt = previous?.detailFetchedAt,
     )

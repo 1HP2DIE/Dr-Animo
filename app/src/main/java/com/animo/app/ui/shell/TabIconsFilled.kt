@@ -2,6 +2,9 @@ package com.animo.app.ui.shell
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
@@ -17,4 +20,6 @@ internal object TabIconsFilled {
     val browse: ImageVector = Icons.Filled.Explore
     val library: ImageVector = Icons.Filled.VideoLibrary
     val settings: ImageVector = Icons.Filled.Settings
+    val schedule: ImageVector = Icons.Filled.CalendarMonth
+    val favorites: ImageVector = Icons.Filled.Favorite
 }

@@ -54,5 +54,6 @@ class AnimoApp : Application() {
         )
 
         SyncScheduler.ensureScheduled(this)
+        SyncScheduler.syncAiredSoon(this)
     }
 }

@@ -396,13 +396,17 @@ private fun DetailContent(
                 }
             } else {
                 item(key = "now-playing-title", span = FullSpan, contentType = "title") {
-                    Text(
-                        text = anime.title,
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = anime.title,
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        com.animo.app.ui.common.FavoriteButton(animeId = anime.id)
+                    }
                 }
             }
 
@@ -523,6 +527,7 @@ private fun DetailContent(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            com.animo.app.ui.common.FavoriteButton(animeId = anime.id)
             IconButton(onClick = onOpenDownloads) {
                 Icon(
                     imageVector = Icons.Rounded.Download,

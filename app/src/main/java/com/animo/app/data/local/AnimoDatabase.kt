@@ -6,10 +6,12 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.animo.app.data.local.dao.AnimeDao
 import com.animo.app.data.local.dao.EpisodeDao
+import com.animo.app.data.local.dao.FavoriteDao
 import com.animo.app.data.local.dao.ProgressDao
 import com.animo.app.data.local.entity.AnimeEntity
 import com.animo.app.data.local.entity.AnimeFtsEntity
 import com.animo.app.data.local.entity.EpisodeEntity
+import com.animo.app.data.local.entity.FavoriteEntity
 import com.animo.app.data.local.entity.ProgressEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -28,8 +30,9 @@ import kotlinx.coroutines.withContext
         EpisodeEntity::class,
         ProgressEntity::class,
         AnimeFtsEntity::class,
+        FavoriteEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class AnimoDatabase : RoomDatabase() {
@@ -39,6 +42,8 @@ abstract class AnimoDatabase : RoomDatabase() {
     abstract fun episodeDao(): EpisodeDao
 
     abstract fun progressDao(): ProgressDao
+
+    abstract fun favoriteDao(): FavoriteDao
 
     /**
      * `INSERT INTO anime_fts(anime_fts) VALUES('rebuild')` — the external-content FTS4 maintenance
@@ -57,7 +62,7 @@ abstract class AnimoDatabase : RoomDatabase() {
         fun build(context: Context): AnimoDatabase =
             Room.databaseBuilder(context.applicationContext, AnimoDatabase::class.java, DB_NAME)
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
     }
 }

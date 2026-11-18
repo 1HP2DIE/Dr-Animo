@@ -3,6 +3,7 @@ package com.animo.app.data.sync
 import android.os.SystemClock
 import com.animo.app.AppLog
 import com.animo.app.data.local.dao.AnimeDao
+import com.animo.app.data.local.dao.FavoriteDao
 import com.animo.app.data.remote.ApiException
 
 /**
@@ -18,8 +19,37 @@ import com.animo.app.data.remote.ApiException
 class EpisodeBackfill(
     private val seriesFetcher: SeriesFetcher,
     private val animeDao: AnimeDao,
+    private val favoriteDao: FavoriteDao? = null,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
+
+    /**
+     * The silent per-title sync: refreshes airing titles whose recorded air time has passed since
+     * their last fetch (a new episode is out), favourites first, then any hearted title not seen
+     * for a day. Small and cheap, so it runs on every app start as well as in the periodic job.
+     *
+     * @return how many series were refreshed.
+     */
+    suspend fun refreshAired(budget: Int = AIRED_BUDGET): Int {
+        val dao = favoriteDao ?: return 0
+        val current = now()
+        val ids = (dao.idsAiredSinceFetch(current, budget) + dao.favoriteIdsDue(current - FAVORITE_INTERVAL_MS, budget))
+            .distinct()
+            .take(budget)
+        if (ids.isEmpty()) return 0
+        var done = 0
+        for (animeId in ids) {
+            val result = seriesFetcher.fetch(animeId)
+            if (result.isSuccess) {
+                done++
+                continue
+            }
+            val error = result.exceptionOrNull()
+            if (error is ApiException && error.code in QUOTA_CODES) break
+        }
+        AppLog.i("silent sync refreshed $done/${ids.size} aired or favourite series")
+        return done
+    }
 
     /**
      * Fetches only when [SyncPolicy] says the row is due, or when the catalog row itself moved after
@@ -120,5 +150,7 @@ class EpisodeBackfill(
 
     private companion object {
         val QUOTA_CODES = setOf(403, 429)
+        const val AIRED_BUDGET = 24
+        const val FAVORITE_INTERVAL_MS = 24L * 60 * 60 * 1000
     }
 }
