@@ -17,11 +17,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Sync
+import androidx.compose.material.icons.outlined.VolunteerActivism
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -159,7 +159,8 @@ fun AnimoDrawerContent(
                 trailing = { SyncProgressLabel(syncing = syncing, sync = sync) },
             )
             DrawerItem(
-                icon = Icons.Outlined.FavoriteBorder,
+                // A heart here read as "Favourites" in the same list; giving is a different thing.
+                icon = Icons.Outlined.VolunteerActivism,
                 label = stringResource(R.string.ui_support_title),
                 selected = currentRoute == Routes.SUPPORT,
                 onClick = { onNavigate(Routes.SUPPORT) },

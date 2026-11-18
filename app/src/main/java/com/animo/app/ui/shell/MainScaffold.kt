@@ -28,8 +28,8 @@ import kotlinx.coroutines.launch
 /**
  * App chrome: drawer + bottom bar around the nav host.
  *
- * The bottom bar only exists on the four top-level destinations. Detail and the player are
- * immersive: no bar, no edge-swipe drawer, and the content owns the whole window.
+ * The bottom bar only exists on the tab destinations; Settings keeps the drawer but not the bar, and
+ * detail/player are immersive: no bar, no edge-swipe drawer, and the content owns the window.
  *
  * Insets: the outer Scaffold contributes only the bottom bar height, and it consumes exactly that,
  * so the per-screen Scaffolds inside the NavHost keep handling the status bar without
@@ -52,6 +52,8 @@ fun MainScaffold(
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val currentTab = Destinations.tabForRoute(currentRoute)
+    // Settings is in [Destinations.shell] but has no tab: the bar would show with nothing selected.
+    val barTab = Destinations.barTabForRoute(currentRoute)
 
     val closeDrawer: () -> Unit = { scope.launch { drawerState.close() } }
     val openDrawer: () -> Unit = { scope.launch { drawerState.open() } }
@@ -88,7 +90,7 @@ fun MainScaffold(
             containerColor = MaterialTheme.colorScheme.background,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             bottomBar = {
-                if (currentTab != null) {
+                if (barTab != null) {
                     AnimoBottomBar(
                         currentRoute = currentRoute,
                         onSelect = { route -> navController.openTopLevel(route) },

@@ -77,4 +77,13 @@ object Destinations {
 
     fun tabForRoute(route: String?): TopLevelDestination? =
         shell.firstOrNull { it.matchRoute == route }
+
+    /**
+     * The tab the bottom bar should highlight, or `null` when no bar belongs on this page.
+     *
+     * Settings keeps the shell (so the drawer stays reachable) but has no tab of its own: showing
+     * the bar there left every item unselected, which reads as a bug.
+     */
+    fun barTabForRoute(route: String?): TopLevelDestination? =
+        tabs.firstOrNull { it.matchRoute == route }
 }
