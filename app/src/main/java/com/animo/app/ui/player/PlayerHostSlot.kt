@@ -100,6 +100,7 @@ internal fun PlayerHostSlot(
                     active.seekTo((active.currentPosition + deltaMs).coerceAtLeast(0L))
                 },
                 pause = { active.pause() },
+                stop = { active.stop() },
                 setSpeed = { value -> active.setPlaybackSpeed(value) },
             )
         }

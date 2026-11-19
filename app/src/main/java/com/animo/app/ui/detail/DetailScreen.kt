@@ -213,6 +213,9 @@ fun DetailScreen(
                 },
                 fullscreen = fullscreen,
                 onToggleFullscreen = { fullscreen = !fullscreen },
+                // Asleep: the video is already stopped; closing the inline player drops the last
+                // thing holding the screen awake.
+                onSleepTimerEnded = closePlayer,
                 modifier = if (fullscreen) {
                     Modifier.fillMaxSize()
                 } else {

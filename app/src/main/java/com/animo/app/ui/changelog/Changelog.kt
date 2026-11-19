@@ -30,14 +30,15 @@ object Changelog {
         Release(
             version = "1.8.0",
             date = "19 Nov 2026",
-            headline = "Every genre on a title page is now a shortcut, and a sleep timer that keeps its word.",
+            headline = "Every genre on a title page is now a shortcut, and a sleep timer that puts the phone to sleep.",
             changes = listOf(
                 Change(ChangeKind.NEW, "Tap a genre on any title page to see everything else in it, already filtered"),
                 Change(ChangeKind.IMPROVED, "Back from a genre returns to the title you came from, not to the top of the app"),
+                Change(ChangeKind.IMPROVED, "The sleep timer runs on the clock: pausing the video no longer pauses the countdown"),
+                Change(ChangeKind.IMPROVED, "When the timer runs out the episode is stopped, not paused, and the phone is left free to go to sleep"),
                 Change(ChangeKind.FIXED, "The sleep timer keeps running through a rotation or a trip to picture-in-picture; it used to vanish while the episode kept playing"),
                 Change(ChangeKind.FIXED, "The sleep menu shows the real time left instead of the time you picked"),
                 Change(ChangeKind.FIXED, "Tapping the same length again restarts the countdown instead of doing nothing"),
-                Change(ChangeKind.FIXED, "The timer counts only while the episode is actually playing, and says so when it stops the video"),
                 Change(ChangeKind.FIXED, "Stop at end of episode no longer stays armed after the episode has finished"),
             ),
         ),

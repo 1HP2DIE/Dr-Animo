@@ -258,6 +258,9 @@ fun AnimoNavHost(
                             episodeId = episodeId,
                             initialAudio = audio,
                             onBack = { navController.backIfResumed() },
+                            // The timer stopped playback and let the screen go; leaving the player
+                            // is what stops the app holding the display awake.
+                            onSleepTimerEnded = { navController.backIfResumed() },
                         )
                     }
                 }

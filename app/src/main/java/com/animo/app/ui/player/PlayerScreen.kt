@@ -99,6 +99,7 @@ import com.animo.app.subtitle.online.SubtitleResult
 import com.animo.app.ui.LocalAppContainer
 import com.animo.app.ui.UiState
 import com.animo.app.ui.common.LoadingState
+import com.animo.app.ui.common.findActivity
 import com.animo.app.ui.common.ErrorState
 import com.animo.app.ui.common.displayTitle
 import com.animo.app.ui.common.formatClock
@@ -115,8 +116,11 @@ private const val CONTROLS_AUTO_HIDE_MS = 3_000L
 /** "End of episode" sleep mode pauses this close to the end instead of waiting for a state change. */
 private const val END_OF_EPISODE_GRACE_MS = 700L
 
-/** How often the sleep countdown is stepped. It only decides how fine-grained the pause is. */
+/** How often the sleep countdown is stepped. It only decides how fine-grained the stop is. */
 private const val SLEEP_TICK_MS = 500L
+
+/** Long enough for the "Sleep timer ended" line to be read, short enough not to hold the screen. */
+private const val SLEEP_EXIT_DELAY_MS = 900L
 private const val SKIP_MS = 10_000L
 
 /** How long the up-next card counts down before it starts the next episode on its own. */
@@ -138,6 +142,8 @@ fun PlayerScreen(
     initialAudio: AudioTrack,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    /** The sleep timer ran out: everything is stopped and the player should leave the screen. */
+    onSleepTimerEnded: () -> Unit = onBack,
 ) {
     val container = LocalAppContainer.current
     val factory = remember(container, animeId, episodeId, initialAudio) {
@@ -153,7 +159,12 @@ fun PlayerScreen(
         key = "player-$animeId-$episodeId-${initialAudio.name}",
         factory = factory,
     )
-    PlayerScreen(viewModel = viewModel, onBack = onBack, modifier = modifier)
+    PlayerScreen(
+        viewModel = viewModel,
+        onBack = onBack,
+        modifier = modifier,
+        onSleepTimerEnded = onSleepTimerEnded,
+    )
 }
 
 @Composable
@@ -165,6 +176,8 @@ fun PlayerScreen(
     fullscreen: Boolean = true,
     /** Present when the player can switch between inline and full screen. */
     onToggleFullscreen: (() -> Unit)? = null,
+    /** Called once the sleep timer has stopped playback and let go of the screen. */
+    onSleepTimerEnded: () -> Unit = onBack,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     ImmersiveVideoEffect(enabled = state is UiState.Content, immersive = fullscreen)
@@ -195,6 +208,7 @@ fun PlayerScreen(
                 onBack = onBack,
                 inline = !fullscreen,
                 onToggleFullscreen = onToggleFullscreen,
+                onSleepTimerEnded = onSleepTimerEnded,
             )
         }
     }
@@ -207,6 +221,7 @@ private fun PlayerStage(
     onBack: () -> Unit,
     inline: Boolean = false,
     onToggleFullscreen: (() -> Unit)? = null,
+    onSleepTimerEnded: () -> Unit = onBack,
 ) {
     // One surface state per playback instance: re-keying on episode/audio/reload gives the host a
     // clean slate instead of asking it to hot-swap sources.
@@ -259,6 +274,10 @@ private fun PlayerStage(
 
     // Sleep timer: saveable, so a rotation or a PiP round trip does not silently cancel it.
     val sleep = rememberSaveable(saver = SleepTimerState.Saver) { SleepTimerState() }
+    // Bumped when the timer runs out. The work below hangs off this rather than off the choice,
+    // because disarming the timer changes the choice and would cancel a "then leave the screen"
+    // step that lived inside the same effect.
+    var sleepFired by rememberSaveable { mutableIntStateOf(0) }
 
     // One controller per route, not per source: PlayerHost attaches/detaches it on every rebuild,
     // which is what keeps the chosen quality and subtitle preference across an episode change.
@@ -629,11 +648,7 @@ private fun PlayerStage(
                         surfaceState.positionMs >= duration - END_OF_EPISODE_GRACE_MS
                     ) {
                         sleep.disarm()
-                        surfaceState.pause()
-                        flashMessage(
-                            context.getString(R.string.ui_player_sleep_ended),
-                            Icons.Rounded.Bedtime,
-                        )
+                        sleepFired++
                         break
                     }
                 }
@@ -645,18 +660,40 @@ private fun PlayerStage(
                     val now = android.os.SystemClock.elapsedRealtime()
                     val elapsed = now - last
                     last = now
-                    // Paused and buffering both mean "not yet": the clock waits with the video.
-                    if (sleep.tick(elapsed, surfaceState.isPlaying && !surfaceState.isBuffering)) {
-                        surfaceState.pause()
-                        flashMessage(
-                            context.getString(R.string.ui_player_sleep_ended),
-                            Icons.Rounded.Bedtime,
-                        )
+                    // Wall clock, playing or paused: "30 minutes" has to mean 30 minutes of the
+                    // phone being on, not 30 minutes of footage.
+                    if (sleep.tick(elapsed)) {
+                        sleepFired++
                         break
                     }
                 }
             }
         }
+    }
+
+    /**
+     * The timer ran out: stop everything and let the phone sleep.
+     *
+     * An ordinary app cannot switch the display off — that needs a system permission — so this does
+     * what is actually available: stops the decoder instead of pausing it, drops the flag that kept
+     * the screen awake, and leaves the player, after which the display times out on the system's own
+     * schedule with nothing of ours holding it.
+     */
+    LaunchedEffect(sleepFired) {
+        if (sleepFired == 0) return@LaunchedEffect
+        surfaceState.stop()
+        // Nothing may keep decoding behind the timer, including the media session service should
+        // background playback ever own the stream.
+        context.stopService(android.content.Intent(context, com.animo.app.player.PlaybackService::class.java))
+        context.findActivity()?.window?.clearFlags(
+            android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+        )
+        flashMessage(
+            context.getString(R.string.ui_player_sleep_ended),
+            Icons.Rounded.Bedtime,
+        )
+        delay(SLEEP_EXIT_DELAY_MS)
+        onSleepTimerEnded()
     }
 
     // A finger on the seek bar holds the chrome: hiding it mid-drag would drop the scrub and its

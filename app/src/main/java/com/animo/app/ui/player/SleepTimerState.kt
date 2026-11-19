@@ -17,8 +17,12 @@ import androidx.compose.runtime.setValue
  * wake up to episode twelve at 3 a.m.
  *
  * [minutes] is the choice — `null` off, `0` stop when *this* episode ends, anything else a preset.
- * Time is consumed only while playback actually runs, so pausing to answer the door pauses the
- * clock as well; that is what the viewer asked for when they paused.
+ *
+ * The countdown is wall-clock: pausing the video does *not* pause the timer. A viewer who sets
+ * "30 minutes" is going to sleep, and the phone has to be quiet in 30 minutes whether they left the
+ * episode running or paused it to answer the door. That is also the only reading that survives an
+ * app which is buffering, paused by the system in picture-in-picture, or simply sitting on a frozen
+ * frame.
  */
 @Stable
 class SleepTimerState(
@@ -31,8 +35,9 @@ class SleepTimerState(
         private set
 
     /**
-     * Playing time left in milliseconds. Written about once a second while a preset runs, and read
-     * only by the sheet pane that shows it — the player stage never touches it.
+     * Time left in milliseconds, counted down in real time. Written about once a second while a
+     * preset runs, and read only by the sheet pane that shows it — the player stage never touches
+     * it, so the once-a-second update cannot recompose the video.
      */
     var remainingMs by mutableLongStateOf(initialRemainingMs)
         private set
@@ -56,7 +61,7 @@ class SleepTimerState(
      * Whole minutes still to go, rounded up.
      *
      * Rounded up, not down: a timer with 40 seconds left reads "1 min left", never "0 min left"
-     * while the screen is still playing.
+     * while the phone is still awake.
      */
     val minutesLeft: Int
         get() = ((remainingMs + MINUTE_MS - 1) / MINUTE_MS).toInt()
@@ -68,22 +73,22 @@ class SleepTimerState(
     }
 
     /**
-     * Consumes [elapsedMs] of playback time.
+     * Consumes [elapsedMs] of real time, playing or not.
      *
      * Returns true on the tick that runs the preset out; the timer has disarmed itself by then, so
-     * the caller only has to pause. [elapsedMs] is real elapsed time rather than an assumed second,
-     * so a stalled main thread cannot stretch a 30-minute timer into 40.
+     * the caller only has to stop the video and let the phone sleep. [elapsedMs] is measured rather
+     * than assumed, so a stalled main thread cannot stretch a 30-minute timer into 40.
      */
-    fun tick(elapsedMs: Long, playing: Boolean): Boolean {
+    fun tick(elapsedMs: Long): Boolean {
         val mode = minutes ?: return false
         if (mode == 0) return false
-        if (playing && elapsedMs > 0L) remainingMs = (remainingMs - elapsedMs).coerceAtLeast(0L)
+        if (elapsedMs > 0L) remainingMs = (remainingMs - elapsedMs).coerceAtLeast(0L)
         if (remainingMs > 0L) return false
         disarm()
         return true
     }
 
-    /** Turns the timer off without pausing anything — also used when the episode ends first. */
+    /** Turns the timer off without stopping anything — also used when the episode ends first. */
     fun disarm() {
         minutes = null
         remainingMs = 0L

@@ -46,6 +46,7 @@ class PlayerSurfaceState(initialSpeed: Float = 1f) {
     private var seekToCommand: ((Long) -> Unit)? = null
     private var skipByCommand: ((Long) -> Unit)? = null
     private var pauseCommand: (() -> Unit)? = null
+    private var stopCommand: (() -> Unit)? = null
     private var speedCommand: ((Float) -> Unit)? = null
 
     /** When [update] last ran — the base for [clockPositionMs]'s interpolation. */
@@ -124,12 +125,14 @@ class PlayerSurfaceState(initialSpeed: Float = 1f) {
         seekTo: (Long) -> Unit,
         skipBy: (Long) -> Unit,
         pause: () -> Unit = {},
+        stop: () -> Unit = {},
         setSpeed: (Float) -> Unit = {},
     ) {
         togglePlayPauseCommand = togglePlayPause
         seekToCommand = seekTo
         skipByCommand = skipBy
         pauseCommand = pause
+        stopCommand = stop
         speedCommand = setSpeed
     }
 
@@ -138,6 +141,7 @@ class PlayerSurfaceState(initialSpeed: Float = 1f) {
         seekToCommand = null
         skipByCommand = null
         pauseCommand = null
+        stopCommand = null
         speedCommand = null
         buffering.value = false
     }
@@ -162,6 +166,14 @@ class PlayerSurfaceState(initialSpeed: Float = 1f) {
     /** Used by the sleep timer: pause without toggling (a timer must never resume playback). */
     fun pause() {
         pauseCommand?.invoke()
+    }
+
+    /**
+     * Stop, not pause: the sleep timer is done with this episode and nothing may keep decoding (or
+     * keep a surface alive) while the phone is supposed to go to sleep.
+     */
+    fun stop() {
+        stopCommand?.invoke()
     }
 
     fun setSpeed(value: Float) {
