@@ -28,6 +28,20 @@ object Changelog {
 
     val releases: List<Release> = listOf(
         Release(
+            version = "1.8.0",
+            date = "19 Nov 2026",
+            headline = "Every genre on a title page is now a shortcut, and a sleep timer that keeps its word.",
+            changes = listOf(
+                Change(ChangeKind.NEW, "Tap a genre on any title page to see everything else in it, already filtered"),
+                Change(ChangeKind.IMPROVED, "Back from a genre returns to the title you came from, not to the top of the app"),
+                Change(ChangeKind.FIXED, "The sleep timer keeps running through a rotation or a trip to picture-in-picture; it used to vanish while the episode kept playing"),
+                Change(ChangeKind.FIXED, "The sleep menu shows the real time left instead of the time you picked"),
+                Change(ChangeKind.FIXED, "Tapping the same length again restarts the countdown instead of doing nothing"),
+                Change(ChangeKind.FIXED, "The timer counts only while the episode is actually playing, and says so when it stops the video"),
+                Change(ChangeKind.FIXED, "Stop at end of episode no longer stays armed after the episode has finished"),
+            ),
+        ),
+        Release(
             version = "1.7.2",
             date = "19 Nov 2026",
             headline = "A polish pass: downloads that tell the truth, a player that stays put, a schedule that keeps up.",
