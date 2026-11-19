@@ -28,6 +28,19 @@ object Changelog {
 
     val releases: List<Release> = listOf(
         Release(
+            version = "1.9.0",
+            date = "19 Nov 2026",
+            headline = "Smoother everywhere, and SUB/DUB that tells the truth on every episode.",
+            changes = listOf(
+                Change(ChangeKind.IMPROVED, "Screen changes glide instead of sliding: a little spring, a little depth"),
+                Change(ChangeKind.IMPROVED, "The video opens on a title page with a smooth grow instead of the page jumping down"),
+                Change(ChangeKind.IMPROVED, "Episode rows move into place instead of snapping when progress and new episodes arrive"),
+                Change(ChangeKind.IMPROVED, "SUB/DUB is shown on every episode row, accented on the track that row will really play"),
+                Change(ChangeKind.FIXED, "The SUB/DUB choice now follows the player, so a series with only some dubs stops claiming one everywhere"),
+                Change(ChangeKind.FIXED, "Changing episode no longer carries a language the new episode does not have, which could start it in the wrong audio or not at all"),
+            ),
+        ),
+        Release(
             version = "1.8.0",
             date = "19 Nov 2026",
             headline = "Every genre on a title page is now a shortcut, and a sleep timer that puts the phone to sleep.",
