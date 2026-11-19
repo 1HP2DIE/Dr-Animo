@@ -107,7 +107,7 @@ class StreamRepositoryImpl(
                         // The primary only has the original and the English dub. Falling back to it
                         // for a language it does not carry (Hindi, Tamil, …) would silently switch
                         // the audio, which is worse than saying the episode is unavailable there.
-                        val primaryAudio = primaryAudioFor(languageId)
+                        val primaryAudio = primaryAudioFor(audio, languageId)
                         if (primaryAudio == null) {
                             Result.failure(
                                 ResolveException.NotFound("that language is not on this server"),
@@ -243,12 +243,6 @@ class StreamRepositoryImpl(
      * Which primary track can satisfy a requested language: the original track speaks for `sub`/`ja`,
      * the English dub for `dub`/`en`. Anything else has no equivalent on that server.
      */
-    private fun primaryAudioFor(languageId: String?): AudioTrack? = when (languageId) {
-        null, "sub", "ja" -> AudioTrack.SUB
-        "dub", "en" -> AudioTrack.DUB
-        else -> null
-    }
-
     private suspend fun seasonHintOf(animeId: Int): Int? =
         runCatching { com.animo.app.player.AltStreamProtocol.seasonFromTitle(animeTitlesOf(animeId)) }
             .getOrNull()
@@ -346,4 +340,20 @@ class StreamRepositoryImpl(
         const val INITIAL_CAPACITY = 16
         const val PROBE_TIMEOUT_MS = 10_000L
     }
+}
+
+
+/**
+ * Which track the primary server should be asked for.
+ *
+ * The language id is the explicit choice from the server chip and wins when it is there; when it is
+ * not, the *audio* is the request — this used to default to SUB, which is why DUB on the title page
+ * quietly played the original Japanese and nobody could tell why. Hindi and Tamil have no track on
+ * this server, so they return null and the caller moves on instead of silently switching audio.
+ */
+internal fun primaryAudioFor(audio: AudioTrack, languageId: String?): AudioTrack? = when (languageId) {
+    null -> audio
+    "sub", "ja" -> AudioTrack.SUB
+    "dub", "en" -> AudioTrack.DUB
+    else -> null
 }

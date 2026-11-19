@@ -28,6 +28,15 @@ object Changelog {
 
     val releases: List<Release> = listOf(
         Release(
+            version = "1.9.1",
+            date = "19 Nov 2026",
+            headline = "DUB now means DUB.",
+            changes = listOf(
+                Change(ChangeKind.FIXED, "Choosing DUB played the original Japanese: the first server ignored the SUB/DUB choice and always opened the sub track"),
+                Change(ChangeKind.FIXED, "Tapping SUB or DUB on a playing episode switches the audio in place and keeps your place"),
+            ),
+        ),
+        Release(
             version = "1.9.0",
             date = "19 Nov 2026",
             headline = "Smoother everywhere, and SUB/DUB that tells the truth on every episode.",
