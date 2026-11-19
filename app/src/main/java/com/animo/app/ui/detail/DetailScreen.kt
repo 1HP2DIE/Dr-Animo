@@ -202,9 +202,17 @@ fun DetailScreen(
         // The height is animated open: the page used to jump down by a whole video the instant play
         // was tapped. Closing is immediate on purpose — a shrinking exit would keep the audio
         // running under a video that is on its way out.
-        // First child in both modes, so switching to full screen only changes its size: the same
-        // ExoPlayer keeps playing instead of being rebuilt and re-buffered.
-        playing?.let { (episodeId, audioName) ->
+        val playerVisible = remember { MutableTransitionState(false) }
+        playerVisible.targetState = playing != null
+        AnimatedVisibility(
+            visibleState = playerVisible,
+            enter = expandVertically(
+                animationSpec = tween(280, easing = FastOutSlowInEasing),
+                expandFrom = Alignment.Top,
+            ) + fadeIn(tween(220)),
+            exit = ExitTransition.None,
+        ) {
+            playing?.let { (episodeId, audioName) ->
             val audio = AudioTrack.entries.firstOrNull { it.name == audioName } ?: AudioTrack.SUB
             val playerFactory = remember(container, animeId, episodeId, audio) {
                 playerViewModelFactory(
@@ -219,29 +227,30 @@ fun DetailScreen(
                 key = "player-$animeId-$episodeId-$audioName",
                 factory = playerFactory,
             )
-            PlayerScreen(
-                viewModel = playerViewModel,
-                // Full screen: back leaves full screen, or closes the player when the viewer chose
-                // to always watch full screen. Inline: the close button.
-                onBack = {
-                    if (fullscreen && !autoFullscreen) fullscreen = false else closePlayer()
-                },
-                fullscreen = fullscreen,
-                onToggleFullscreen = { fullscreen = !fullscreen },
-                // Asleep: the video is already stopped; closing the inline player drops the last
-                // thing holding the screen awake.
-                onSleepTimerEnded = closePlayer,
-                onAudioChanged = { audio -> pickedAudio = audio },
-                modifier = if (fullscreen) {
-                    Modifier.fillMaxSize()
-                } else {
-                    Modifier
-                        .background(AnimoPalette.videoBlack)
-                        .statusBarsPadding()
-                        .fillMaxWidth()
-                        .aspectRatio(16f / 9f)
-                },
-            )
+                PlayerScreen(
+                    viewModel = playerViewModel,
+                    // Full screen: back leaves full screen, or closes the player when the viewer
+                    // chose to always watch full screen. Inline: the close button.
+                    onBack = {
+                        if (fullscreen && !autoFullscreen) fullscreen = false else closePlayer()
+                    },
+                    fullscreen = fullscreen,
+                    onToggleFullscreen = { fullscreen = !fullscreen },
+                    // Asleep: the video is already stopped; closing the inline player drops the
+                    // last thing holding the screen awake.
+                    onSleepTimerEnded = closePlayer,
+                    onAudioChanged = { audio -> pickedAudio = audio },
+                    modifier = if (fullscreen) {
+                        Modifier.fillMaxSize()
+                    } else {
+                        Modifier
+                            .background(AnimoPalette.videoBlack)
+                            .statusBarsPadding()
+                            .fillMaxWidth()
+                            .aspectRatio(16f / 9f)
+                    },
+                )
+            }
         }
         // Stays composed under a full-screen video (it just gets no height), so leaving full screen
         // lands on the same scroll position.
@@ -517,6 +526,7 @@ private fun DetailContent(
                     val entry = downloadsById[DownloadEntry.idOf(cell.episode.id, audio.name)]
                         ?: downloadEntries.firstOrNull { it.episodeId == cell.episode.id }
                     EpisodeTile(
+                        modifier = Modifier.animateItem(),
                         episode = cell.episode,
                         progress = cell.progress,
                         isCurrent = cell.isCurrent,

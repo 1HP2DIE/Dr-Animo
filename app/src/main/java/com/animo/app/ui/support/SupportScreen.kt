@@ -6,9 +6,17 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -57,7 +65,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -128,42 +142,67 @@ fun SupportScreen(
                 .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Intro()
+            // One flag, one stagger: the page assembles instead of appearing all at once, and the
+            // donation cards land last, which is where the eye should go.
+            var shown by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) { shown = true }
 
-            SectionLabel(stringResource(R.string.ui_support_community))
-            TelegramCard(
-                onOpen = {
-                    runCatching {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SupportLinks.TELEGRAM_URL)))
-                    }
-                },
-                onCopy = { copy(context.getString(R.string.ui_support_telegram), SupportLinks.TELEGRAM_URL) },
-            )
+            Staggered(shown, order = 0) { Intro() }
 
-            SectionLabel(stringResource(R.string.ui_support_crypto))
-            CopyCard(
-                title = stringResource(R.string.ui_support_bep20_title),
-                badge = "BEP20",
-                hint = stringResource(R.string.ui_support_bep20_hint),
-                value = SupportLinks.BEP20_ADDRESS,
-                mono = true,
-                warning = stringResource(R.string.ui_support_bep20_warning),
-                onCopy = { copy(context.getString(R.string.ui_support_bep20_title), SupportLinks.BEP20_ADDRESS) },
-                onShare = {
-                    val send = Intent(Intent.ACTION_SEND)
-                        .setType("text/plain")
-                        .putExtra(Intent.EXTRA_TEXT, SupportLinks.BEP20_ADDRESS)
-                    runCatching { context.startActivity(Intent.createChooser(send, null)) }
-                },
-            )
-            CopyCard(
-                title = stringResource(R.string.ui_support_binance_title),
-                badge = "Pay ID",
-                hint = stringResource(R.string.ui_support_binance_hint),
-                value = SupportLinks.BINANCE_PAY_ID,
-                mono = true,
-                onCopy = { copy(context.getString(R.string.ui_support_binance_title), SupportLinks.BINANCE_PAY_ID) },
-            )
+            Staggered(shown, order = 1) {
+                SectionLabel(stringResource(R.string.ui_support_community))
+            }
+            Staggered(shown, order = 2) {
+                TelegramCard(
+                    onOpen = {
+                        runCatching {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse(SupportLinks.TELEGRAM_URL)),
+                            )
+                        }
+                    },
+                    onCopy = {
+                        copy(context.getString(R.string.ui_support_telegram), SupportLinks.TELEGRAM_URL)
+                    },
+                )
+            }
+
+            Staggered(shown, order = 3) {
+                SectionLabel(stringResource(R.string.ui_support_crypto))
+            }
+            Staggered(shown, order = 4) {
+                CopyCard(
+                    glow = true,
+                    title = stringResource(R.string.ui_support_bep20_title),
+                    badge = "BEP20",
+                    hint = stringResource(R.string.ui_support_bep20_hint),
+                    value = SupportLinks.BEP20_ADDRESS,
+                    mono = true,
+                    warning = stringResource(R.string.ui_support_bep20_warning),
+                    onCopy = {
+                        copy(context.getString(R.string.ui_support_bep20_title), SupportLinks.BEP20_ADDRESS)
+                    },
+                    onShare = {
+                        val send = Intent(Intent.ACTION_SEND)
+                            .setType("text/plain")
+                            .putExtra(Intent.EXTRA_TEXT, SupportLinks.BEP20_ADDRESS)
+                        runCatching { context.startActivity(Intent.createChooser(send, null)) }
+                    },
+                )
+            }
+            Staggered(shown, order = 5) {
+                CopyCard(
+                    glow = true,
+                    title = stringResource(R.string.ui_support_binance_title),
+                    badge = "Pay ID",
+                    hint = stringResource(R.string.ui_support_binance_hint),
+                    value = SupportLinks.BINANCE_PAY_ID,
+                    mono = true,
+                    onCopy = {
+                        copy(context.getString(R.string.ui_support_binance_title), SupportLinks.BINANCE_PAY_ID)
+                    },
+                )
+            }
 
             Text(
                 text = stringResource(R.string.ui_support_footer),
@@ -172,6 +211,34 @@ fun SupportScreen(
                 modifier = Modifier.padding(top = 4.dp, bottom = 24.dp),
             )
         }
+    }
+}
+
+/**
+ * Fades and lifts a section in, a beat after the one above it.
+ *
+ * The space is reserved up front (alpha + offset only, never `AnimatedVisibility`), so the page
+ * never reflows while it is assembling — a list that shifts under a thumb that is already moving is
+ * worse than no animation at all.
+ */
+@Composable
+private fun Staggered(shown: Boolean, order: Int, content: @Composable () -> Unit) {
+    val progress by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (shown) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = 320,
+            delayMillis = order * 55,
+            easing = FastOutSlowInEasing,
+        ),
+        label = "support-stagger-$order",
+    )
+    Box(
+        Modifier.graphicsLayer {
+            alpha = progress
+            translationY = (1f - progress) * 14.dp.toPx()
+        },
+    ) {
+        content()
     }
 }
 
@@ -223,10 +290,16 @@ private fun SectionLabel(text: String) {
 }
 
 @Composable
-private fun Card(content: @Composable () -> Unit) {
+private fun Card(glow: Boolean = false, content: @Composable () -> Unit) {
+    val shape = MaterialTheme.shapes.large
+    var frame = Modifier.fillMaxWidth()
+    if (glow) {
+        val pulse = rememberDonationPulse()
+        val halo = MaterialTheme.colorScheme.primary
+        frame = frame.drawBehind { drawHalo(pulse, halo, shape) }
+    }
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = frame
             .clip(MaterialTheme.shapes.large)
             .background(MaterialTheme.colorScheme.surfaceContainer)
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.large)
@@ -273,9 +346,11 @@ private fun CopyCard(
     onCopy: () -> Unit,
     warning: String? = null,
     onShare: (() -> Unit)? = null,
+    /** Donation cards breathe a little: they are the one thing on this page worth finding. */
+    glow: Boolean = false,
 ) {
     val colors = MaterialTheme.colorScheme
-    Card {
+    Card(glow = glow) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
                 text = title,
@@ -359,5 +434,50 @@ private fun CopyButton(onCopy: () -> Unit) {
                 modifier = Modifier.size(20.dp),
             )
         }
+    }
+}
+
+
+/**
+ * The donation halo's slow breath, shared by both cards.
+ *
+ * One infinite transition per card, two values, no blur: a `Modifier.blur` here would allocate a
+ * render layer every frame for a ring that only needs three strokes.
+ */
+@Composable
+private fun rememberDonationPulse(): Float {
+    val transition = rememberInfiniteTransition(label = "donation-glow")
+    val pulse by transition.animateFloat(
+        initialValue = 0.30f,
+        targetValue = 0.95f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2_600, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "donation-pulse",
+    )
+    return pulse
+}
+
+/** Three stacked strokes fading outwards, which reads as a glow at card size. */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawHalo(
+    pulse: Float,
+    color: Color,
+    shape: androidx.compose.ui.graphics.Shape,
+) {
+    val corner = (shape as? androidx.compose.foundation.shape.RoundedCornerShape)
+        ?.topStart
+        ?.toPx(size, this)
+        ?: 0f
+    val stroke = 1.2.dp.toPx()
+    for (ring in 1..3) {
+        val grow = stroke * ring
+        drawRoundRect(
+            color = color.copy(alpha = pulse * 0.20f / ring),
+            topLeft = Offset(-grow, -grow),
+            size = Size(size.width + grow * 2f, size.height + grow * 2f),
+            cornerRadius = CornerRadius(corner + grow),
+            style = Stroke(width = stroke),
+        )
     }
 }
