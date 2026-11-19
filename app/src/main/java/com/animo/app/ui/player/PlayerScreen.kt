@@ -144,6 +144,12 @@ fun PlayerScreen(
     modifier: Modifier = Modifier,
     /** The sleep timer ran out: everything is stopped and the player should leave the screen. */
     onSleepTimerEnded: () -> Unit = onBack,
+    /**
+     * The audio actually playing. A title page shows SUB/DUB for the whole list, so it has to know
+     * when playback fell back (an episode without a dub) or the list would keep promising a track
+     * that is not on screen.
+     */
+    onAudioChanged: (AudioTrack) -> Unit = {},
 ) {
     val container = LocalAppContainer.current
     val factory = remember(container, animeId, episodeId, initialAudio) {
@@ -164,6 +170,7 @@ fun PlayerScreen(
         onBack = onBack,
         modifier = modifier,
         onSleepTimerEnded = onSleepTimerEnded,
+        onAudioChanged = onAudioChanged,
     )
 }
 
@@ -178,6 +185,8 @@ fun PlayerScreen(
     onToggleFullscreen: (() -> Unit)? = null,
     /** Called once the sleep timer has stopped playback and let go of the screen. */
     onSleepTimerEnded: () -> Unit = onBack,
+    /** Playback audio, so a host list can follow a fallback instead of guessing. */
+    onAudioChanged: (AudioTrack) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     ImmersiveVideoEffect(enabled = state is UiState.Content, immersive = fullscreen)
@@ -209,6 +218,7 @@ fun PlayerScreen(
                 inline = !fullscreen,
                 onToggleFullscreen = onToggleFullscreen,
                 onSleepTimerEnded = onSleepTimerEnded,
+                onAudioChanged = onAudioChanged,
             )
         }
     }
@@ -222,6 +232,7 @@ private fun PlayerStage(
     inline: Boolean = false,
     onToggleFullscreen: (() -> Unit)? = null,
     onSleepTimerEnded: () -> Unit = onBack,
+    onAudioChanged: (AudioTrack) -> Unit = {},
 ) {
     // One surface state per playback instance: re-keying on episode/audio/reload gives the host a
     // clean slate instead of asking it to hot-swap sources.
@@ -274,6 +285,10 @@ private fun PlayerStage(
 
     // Sleep timer: saveable, so a rotation or a PiP round trip does not silently cancel it.
     val sleep = rememberSaveable(saver = SleepTimerState.Saver) { SleepTimerState() }
+    // The page that opened this player keeps its own SUB/DUB choice; tell it what is really playing,
+    // including a silent fallback to the other track.
+    LaunchedEffect(model.audio) { onAudioChanged(model.audio) }
+
     // Bumped when the timer runs out. The work below hangs off this rather than off the choice,
     // because disarming the timer changes the choice and would cancel a "then leave the screen"
     // step that lived inside the same effect.
@@ -996,6 +1011,7 @@ private fun PlayerStage(
             visible = episodesVisible && !inPip,
             episodes = model.episodes,
             currentEpisodeId = model.episode.id,
+            currentAudio = model.audio,
             onSelect = { episode ->
                 episodesVisible = false
                 viewModel.selectEpisode(episode)
@@ -1596,6 +1612,7 @@ private fun EpisodeDrawerSlot(
     visible: Boolean,
     episodes: List<com.animo.app.domain.model.Episode>,
     currentEpisodeId: Long,
+    currentAudio: AudioTrack,
     onSelect: (com.animo.app.domain.model.Episode) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -1603,6 +1620,7 @@ private fun EpisodeDrawerSlot(
         visible = visible,
         episodes = episodes,
         currentEpisodeId = currentEpisodeId,
+        currentAudio = currentAudio,
         progress = progress.value.mapNotNull { (id, entry) -> entry.fraction?.let { id to it } }.toMap(),
         onSelect = onSelect,
         onDismiss = onDismiss,

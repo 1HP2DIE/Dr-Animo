@@ -1,6 +1,12 @@
 package com.animo.app.ui.detail
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -162,6 +168,9 @@ fun DetailScreen(
 
     // What the page is playing: (episode id, audio name). Saveable, so a rotation or process death
     // brings the video back instead of dropping the viewer onto the bare page.
+    // The SUB/DUB choice belongs to this screen, not to the grid below it: the inline player lives
+    // here, and it is the player that knows when an episode only has one of the two tracks.
+    var pickedAudio by rememberSaveable(animeId) { mutableStateOf<AudioTrack?>(null) }
     var playing by rememberSaveable { mutableStateOf<Pair<Long, String>?>(null) }
     var fullscreen by rememberSaveable { mutableStateOf(false) }
     var autoplayConsumed by rememberSaveable { mutableStateOf(false) }
@@ -187,6 +196,12 @@ fun DetailScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
+        // First child in both modes, so switching to full screen only changes its size: the same
+        // ExoPlayer keeps playing instead of being rebuilt and re-buffered.
+        //
+        // The height is animated open: the page used to jump down by a whole video the instant play
+        // was tapped. Closing is immediate on purpose — a shrinking exit would keep the audio
+        // running under a video that is on its way out.
         // First child in both modes, so switching to full screen only changes its size: the same
         // ExoPlayer keeps playing instead of being rebuilt and re-buffered.
         playing?.let { (episodeId, audioName) ->
@@ -216,6 +231,7 @@ fun DetailScreen(
                 // Asleep: the video is already stopped; closing the inline player drops the last
                 // thing holding the screen awake.
                 onSleepTimerEnded = closePlayer,
+                onAudioChanged = { audio -> pickedAudio = audio },
                 modifier = if (fullscreen) {
                     Modifier.fillMaxSize()
                 } else {
@@ -237,6 +253,8 @@ fun DetailScreen(
             playingEpisodeId = playing?.first,
             onOpenDownloads = onOpenDownloads,
             onOpenGenre = onOpenGenre,
+            pickedAudio = pickedAudio,
+            onPickAudio = { audio -> pickedAudio = audio },
             modifier = Modifier.weight(1f),
         )
     }
@@ -253,6 +271,9 @@ fun DetailScreen(
     playingEpisodeId: Long? = null,
     onOpenDownloads: () -> Unit = {},
     onOpenGenre: (String) -> Unit = {},
+    /** Chosen SUB/DUB, owned by the screen that also owns the player. `null` = follow the default. */
+    pickedAudio: AudioTrack? = null,
+    onPickAudio: (AudioTrack) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     Box(
@@ -283,6 +304,8 @@ fun DetailScreen(
                 playingEpisodeId = playingEpisodeId,
                 onOpenDownloads = onOpenDownloads,
                 onOpenGenre = onOpenGenre,
+                pickedAudio = pickedAudio,
+                onPickAudio = onPickAudio,
             )
         }
 
@@ -314,6 +337,8 @@ private fun DetailContent(
     playingEpisodeId: Long? = null,
     onOpenDownloads: () -> Unit = {},
     onOpenGenre: (String) -> Unit = {},
+    pickedAudio: AudioTrack? = null,
+    onPickAudio: (AudioTrack) -> Unit = {},
 ) {
     val anime = model.anime
     val snackbarHostState = remember { SnackbarHostState() }
@@ -323,11 +348,9 @@ private fun DetailContent(
 
     // Two remembered flags instead of one nullable value: `rememberSaveable` can only store bundle
     // types, and a null supplier would throw on the first configuration change.
-    var pickedAudio by rememberSaveable(anime.id) { mutableStateOf(AudioTrack.SUB) }
-    var audioWasPicked by rememberSaveable(anime.id) { mutableStateOf(false) }
-    // The persisted default is only the *initial* choice: once the viewer taps a chip, their pick
-    // wins and later preference emissions must not overwrite it.
-    val selectedAudio = if (audioWasPicked) pickedAudio else model.initialAudio
+    // The persisted default is only the *initial* choice: once the viewer taps a chip — or the
+    // player reports what it is actually playing — that wins.
+    val selectedAudio = pickedAudio ?: model.initialAudio
     var synopsisExpanded by rememberSaveable(anime.id) { mutableStateOf(false) }
 
     val collapsed by remember {
@@ -423,10 +446,7 @@ private fun DetailContent(
                 MetaSection(
                     model = model,
                     selectedAudio = selectedAudio,
-                    onSelectAudio = { audio ->
-                        pickedAudio = audio
-                        audioWasPicked = true
-                    },
+                    onSelectAudio = onPickAudio,
                     onPlayEpisode = onEpisodeTap,
                     onOpenGenre = onOpenGenre,
                 )
@@ -501,6 +521,8 @@ private fun DetailContent(
                         progress = cell.progress,
                         isCurrent = cell.isCurrent,
                         showHindi = anime.isHindi,
+                        // Which track this row will really start with, after any fallback.
+                        playingAudio = audio,
                         onClick = onClick,
                         download = entry,
                         onDownload = {
@@ -680,6 +702,8 @@ private fun EpisodeTile(
     isCurrent: Boolean,
     showHindi: Boolean,
     onClick: () -> Unit,
+    /** The track this row plays. The other badge stays muted so the list shows the choice. */
+    playingAudio: AudioTrack = AudioTrack.SUB,
     modifier: Modifier = Modifier,
     download: DownloadEntry? = null,
     onDownload: (() -> Unit)? = null,
@@ -760,10 +784,16 @@ private fun EpisodeTile(
             verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             if (!episode.subUrl.isNullOrBlank()) {
-                PillBadge(text = stringResource(R.string.label_sub), tone = BadgeTone.Accent)
+                PillBadge(
+                    text = stringResource(R.string.label_sub),
+                    tone = if (playingAudio == AudioTrack.SUB) BadgeTone.Accent else BadgeTone.Muted,
+                )
             }
             if (episode.dubUrl != null) {
-                PillBadge(text = stringResource(R.string.label_dub), tone = BadgeTone.Muted)
+                PillBadge(
+                    text = stringResource(R.string.label_dub),
+                    tone = if (playingAudio == AudioTrack.DUB) BadgeTone.Accent else BadgeTone.Muted,
+                )
             }
             if (showHindi) {
                 PillBadge(text = stringResource(R.string.ui_detail_episodes_hindi), tone = BadgeTone.Amber)

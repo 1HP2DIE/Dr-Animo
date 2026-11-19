@@ -58,6 +58,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.animo.app.R
+import com.animo.app.domain.model.AudioTrack
 import com.animo.app.domain.model.Episode
 import com.animo.app.ui.common.BadgeTone
 import com.animo.app.ui.common.PillBadge
@@ -111,6 +112,8 @@ fun EpisodeDrawer(
     episodes: List<Episode>,
     currentEpisodeId: Long,
     progress: Map<Long, Float>,
+    /** Audio the player is on, so each row's badge shows the track it would start with. */
+    currentAudio: AudioTrack,
     onSelect: (Episode) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -214,6 +217,7 @@ fun EpisodeDrawer(
                                 episode = episode,
                                 isCurrent = episode.id == currentEpisodeId,
                                 watchedFraction = progress[episode.id],
+                                currentAudio = currentAudio,
                                 onSelect = { onSelect(episode) },
                             )
                         }
@@ -267,6 +271,7 @@ private fun EpisodeDrawerRow(
     episode: Episode,
     isCurrent: Boolean,
     watchedFraction: Float?,
+    currentAudio: AudioTrack,
     onSelect: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -308,13 +313,13 @@ private fun EpisodeDrawerRow(
                     if (hasSub) {
                         PillBadge(
                             text = stringResource(R.string.label_sub),
-                            tone = BadgeTone.Accent,
+                            tone = if (currentAudio == AudioTrack.SUB) BadgeTone.Accent else BadgeTone.Muted,
                         )
                     }
                     if (hasDub) {
                         PillBadge(
                             text = stringResource(R.string.label_dub),
-                            tone = BadgeTone.Muted,
+                            tone = if (currentAudio == AudioTrack.DUB) BadgeTone.Accent else BadgeTone.Muted,
                         )
                     }
                 }
@@ -389,6 +394,7 @@ private fun EpisodeDrawerPreview() {
                 visible = true,
                 episodes = episodes,
                 currentEpisodeId = 700_002L,
+                currentAudio = AudioTrack.DUB,
                 progress = mapOf(700_000L to 0.62f, 700_001L to 0.18f),
                 onSelect = {},
                 onDismiss = {},

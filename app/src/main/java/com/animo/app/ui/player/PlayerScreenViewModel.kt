@@ -273,22 +273,25 @@ class PlayerScreenViewModel(
                 val position = startPositionMs ?: runCatching { repository.progressFor(episode.id) }
                     .getOrDefault(0L)
                 val index = episodes.indexOfFirst { it.id == episode.id }
+                val audio = episode.pickAudio(preferredAudio)
+                // A language id belongs to one episode's server row; see [carriedLanguageId].
+                val language = carriedLanguageId(languageId, preferredAudio, audio)
                 _state.value = UiState.Content(
                     PlayerUiModel(
                         anime = loadedAnime,
                         episode = episode,
                         episodes = episodes,
                         index = if (index >= 0) index else 0,
-                        audio = episode.pickAudio(preferredAudio),
+                        audio = audio,
                         startPositionMs = if (position > MIN_RESUME_MS) position else 0L,
                         reloadToken = reloadToken,
                         server = server,
-                        languageId = languageId,
+                        languageId = language,
                     ),
                 )
                 // The primary answers instantly; the alternative costs one probe. Filling it in
                 // afterwards keeps the player start fast and the server list honest.
-                refreshServers(episode, reloadToken, server, languageId)
+                refreshServers(episode, reloadToken, server, language)
             } finally {
                 opening = false
             }
@@ -348,3 +351,17 @@ class PlayerScreenViewModel(
         const val NO_EPISODES = "this series has no episodes yet"
     }
 }
+
+/**
+ * The language id worth carrying onto a new episode.
+ *
+ * A language id belongs to one episode's server row, so moving to the next episode with "dub" still
+ * attached asks the server for a track that episode may not have — the switch then either fails or
+ * comes back in the wrong language. When the track is not there, the id goes with it and the
+ * resolver picks from the audio alone.
+ */
+internal fun carriedLanguageId(
+    languageId: String?,
+    requested: AudioTrack,
+    resolved: AudioTrack,
+): String? = languageId.takeIf { resolved == requested }
