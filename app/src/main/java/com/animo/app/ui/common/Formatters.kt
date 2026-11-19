@@ -48,6 +48,12 @@ fun Episode.isPlayable(): Boolean = !subUrl.isNullOrBlank() || !dubUrl.isNullOrB
  * The audio the player should start with: the user's preference when it exists for this episode,
  * otherwise whichever track the episode actually has. Never returns an unavailable track.
  */
+/** True when this episode actually ships the requested track. */
+fun Episode.supportsAudio(audio: AudioTrack): Boolean = when (audio) {
+    AudioTrack.SUB -> !subUrl.isNullOrBlank()
+    AudioTrack.DUB -> !dubUrl.isNullOrBlank()
+}
+
 fun Episode.pickAudio(preferred: AudioTrack): AudioTrack {
     val subAvailable = !subUrl.isNullOrBlank()
     val dubAvailable = !dubUrl.isNullOrBlank()

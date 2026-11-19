@@ -116,6 +116,7 @@ import com.animo.app.ui.common.formatScore
 import com.animo.app.ui.common.initials
 import com.animo.app.ui.common.isPlayable
 import com.animo.app.ui.common.pickAudio
+import com.animo.app.ui.common.supportsAudio
 import com.animo.app.ui.settings.SettingsPreferences
 import com.animo.app.ui.theme.AnimoPalette
 import com.animo.app.ui.theme.AnimoTheme
@@ -171,6 +172,20 @@ fun DetailScreen(
     // The SUB/DUB choice belongs to this screen, not to the grid below it: the inline player lives
     // here, and it is the player that knows when an episode only has one of the two tracks.
     var pickedAudio by rememberSaveable(animeId) { mutableStateOf<AudioTrack?>(null) }
+    // A chip tap while the video is already up has to change what is on screen — the player is the
+    // only thing that can do that, so the page keeps a handle on it.
+    var inlinePlayer by remember { mutableStateOf<PlayerScreenViewModel?>(null) }
+    val pickAudio: (AudioTrack) -> Unit = { audio ->
+        val player = inlinePlayer
+        if (player == null) {
+            pickedAudio = audio
+        } else if (player.selectAudio(audio)) {
+            pickedAudio = audio
+        } else {
+            // That track is not in this episode: stay on the one that is actually playing.
+            pickedAudio = player.playingAudio() ?: pickedAudio
+        }
+    }
     var playing by rememberSaveable { mutableStateOf<Pair<Long, String>?>(null) }
     var fullscreen by rememberSaveable { mutableStateOf(false) }
     var autoplayConsumed by rememberSaveable { mutableStateOf(false) }
@@ -263,7 +278,7 @@ fun DetailScreen(
             onOpenDownloads = onOpenDownloads,
             onOpenGenre = onOpenGenre,
             pickedAudio = pickedAudio,
-            onPickAudio = { audio -> pickedAudio = audio },
+            onPickAudio = pickAudio,
             modifier = Modifier.weight(1f),
         )
     }
@@ -357,9 +372,6 @@ private fun DetailContent(
 
     // Two remembered flags instead of one nullable value: `rememberSaveable` can only store bundle
     // types, and a null supplier would throw on the first configuration change.
-    // The persisted default is only the *initial* choice: once the viewer taps a chip — or the
-    // player reports what it is actually playing — that wins.
-    val selectedAudio = pickedAudio ?: model.initialAudio
     var synopsisExpanded by rememberSaveable(anime.id) { mutableStateOf(false) }
 
     val collapsed by remember {
@@ -387,6 +399,24 @@ private fun DetailContent(
     val sortedEpisodes = remember(model.episodes) { model.episodes.sortedBy { it.number } }
     val resumeEpisode = sortedEpisodes.firstOrNull { it.id == playingEpisodeId } ?: model.resume?.episode
     val headerTarget = resumeEpisode ?: sortedEpisodes.firstOrNull()
+    // Availability is a fact about one episode, not about the series: a show can ship a dub for its
+    // first five episodes and nothing after, and the chips have to say so instead of offering a
+    // track the current episode cannot start.
+    val focusEpisode = resumeEpisode ?: sortedEpisodes.firstOrNull()
+    val canSub = focusEpisode?.supportsAudio(AudioTrack.SUB) ?: model.hasSub
+    val canDub = focusEpisode?.supportsAudio(AudioTrack.DUB) ?: model.hasDub
+
+    // The persisted default is only the *initial* choice: once the viewer taps a chip — or the
+    // player reports what it is actually playing — that wins. Always clamped to a track this
+    // episode has, so a page whose focus moved to an older episode cannot show a dead chip.
+    val selectedAudio = (pickedAudio ?: model.initialAudio).let { preferred ->
+        when {
+            focusEpisode == null || focusEpisode.supportsAudio(preferred) -> preferred
+            canSub -> AudioTrack.SUB
+            canDub -> AudioTrack.DUB
+            else -> preferred
+        }
+    }
 
     // Derived once per emission, never per cell: the grid only reads these values.
     val episodeCells = remember(sortedEpisodes, model.progress, resumeEpisode) {
@@ -454,6 +484,8 @@ private fun DetailContent(
             item(key = "meta", span = FullSpan, contentType = "meta") {
                 MetaSection(
                     model = model,
+                    canSub = canSub,
+                    canDub = canDub,
                     selectedAudio = selectedAudio,
                     onSelectAudio = onPickAudio,
                     onPlayEpisode = onEpisodeTap,
@@ -948,13 +980,14 @@ private fun DetailHero(anime: Anime) {
 @Composable
 private fun MetaSection(
     model: DetailUiModel,
+    canSub: Boolean,
+    canDub: Boolean,
     selectedAudio: AudioTrack,
     onSelectAudio: (AudioTrack) -> Unit,
     onPlayEpisode: (Episode) -> Unit,
     onOpenGenre: (String) -> Unit = {},
 ) {
     val anime = model.anime
-    val columns = MaterialTheme.colorScheme
     val episodesLabel = stringResource(R.string.label_episodes_count, model.episodes.size)
     val metaChips = buildList {
         formatScore(anime.score)?.let { add(it to BadgeTone.Amber) }
@@ -1022,28 +1055,26 @@ private fun MetaSection(
                 }
             }
 
-            if (model.hasSub && model.hasDub) {
+            // Only what this episode can actually start: a chip that cannot be honoured is worse
+            // than no chip at all.
+            if (canSub || canDub) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    AudioChip(
-                        label = stringResource(R.string.label_sub),
-                        selected = selectedAudio == AudioTrack.SUB,
-                        onClick = { onSelectAudio(AudioTrack.SUB) },
-                    )
-                    AudioChip(
-                        label = stringResource(R.string.label_dub),
-                        selected = selectedAudio == AudioTrack.DUB,
-                        onClick = { onSelectAudio(AudioTrack.DUB) },
-                    )
+                    if (canSub) {
+                        AudioChip(
+                            label = stringResource(R.string.label_sub),
+                            selected = selectedAudio == AudioTrack.SUB,
+                            onClick = { onSelectAudio(AudioTrack.SUB) },
+                        )
+                    }
+                    if (canDub) {
+                        AudioChip(
+                            label = stringResource(R.string.label_dub),
+                            selected = selectedAudio == AudioTrack.DUB,
+                            onClick = { onSelectAudio(AudioTrack.DUB) },
+                        )
+                    }
                 }
             }
-        }
-
-        if (model.hasDub && !model.hasSub) {
-            Text(
-                text = stringResource(R.string.ui_detail_audio) + ": " + stringResource(R.string.label_dub),
-                style = MaterialTheme.typography.bodySmall,
-                color = columns.onSurfaceVariant,
-            )
         }
     }
 }

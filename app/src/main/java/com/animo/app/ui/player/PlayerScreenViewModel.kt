@@ -15,6 +15,7 @@ import com.animo.app.domain.repo.AnimeRepository
 import com.animo.app.domain.repo.StreamRepository
 import com.animo.app.ui.UiState
 import com.animo.app.ui.common.pickAudio
+import com.animo.app.ui.common.supportsAudio
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -193,20 +194,29 @@ class PlayerScreenViewModel(
         )
     }
 
-    fun selectAudio(audio: AudioTrack) {
-        val current = current() ?: return
-        if (audio == current.audio) return
-        val available = when (audio) {
-            AudioTrack.SUB -> current.hasSub
-            AudioTrack.DUB -> current.hasDub
-        }
-        if (!available) return
+    /** The track the player is on, or null before anything is open. */
+    fun playingAudio(): AudioTrack? = current()?.audio
+
+    /**
+     * Switches SUB/DUB on the episode that is already playing, from the resume position.
+     *
+     * Returns false when this episode has no such track, so the caller can keep its chip on what is
+     * really on screen instead of promising a track the player cannot start.
+     */
+    fun selectAudio(audio: AudioTrack): Boolean {
+        val current = current() ?: return false
+        if (audio == current.audio) return true
+        if (!current.episode.supportsAudio(audio)) return false
         open(
             episode = current.episode,
             preferredAudio = audio,
             reloadToken = current.reloadToken + 1,
             startPositionMs = resumePosition(current.startPositionMs),
+            // Keep the server the viewer picked; the language id named the track just left.
+            server = current.server,
+            languageId = null,
         )
+        return true
     }
 
     fun retry() {
