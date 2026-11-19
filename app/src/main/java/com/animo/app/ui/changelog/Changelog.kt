@@ -28,26 +28,17 @@ object Changelog {
 
     val releases: List<Release> = listOf(
         Release(
-            version = "1.9.1",
-            date = "19 Nov 2026",
-            headline = "DUB now means DUB.",
-            changes = listOf(
-                Change(ChangeKind.FIXED, "Choosing DUB played the original Japanese: the first server ignored the SUB/DUB choice and always opened the sub track"),
-                Change(ChangeKind.FIXED, "Tapping SUB or DUB on a playing episode switches the audio in place and keeps your place"),
-            ),
-        ),
-        Release(
             version = "1.9.0",
             date = "19 Nov 2026",
-            headline = "Smoother everywhere, and SUB/DUB that tells the truth on every episode.",
+            headline = "Smoother everywhere, and SUB/DUB that finally switches what you are watching.",
             changes = listOf(
                 Change(ChangeKind.IMPROVED, "Screen changes glide instead of sliding: a little spring, a little depth"),
                 Change(ChangeKind.IMPROVED, "The video opens on a title page with a smooth grow instead of the page jumping down"),
                 Change(ChangeKind.IMPROVED, "Episode rows move into place instead of snapping when progress and new episodes arrive"),
                 Change(ChangeKind.IMPROVED, "SUB/DUB is shown on every episode row, accented on the track that row will really play"),
-                Change(ChangeKind.FIXED, "The SUB/DUB buttons only appear when that episode actually has that audio"),
-                Change(ChangeKind.FIXED, "Tapping SUB or DUB now switches the episode that is already playing, without losing your place"),
-                Change(ChangeKind.FIXED, "The SUB/DUB choice follows the player, so a series with only some dubs stops claiming one everywhere"),
+                Change(ChangeKind.FIXED, "With a video already playing on the title page, tapping SUB or DUB only moved the chip; it now switches the audio and keeps your place"),
+                Change(ChangeKind.FIXED, "DUB really plays the English track: the first server ignored the choice and always opened the original audio"),
+                Change(ChangeKind.FIXED, "The buttons only appear for audio the episode actually has, and they follow the player instead of drifting from it"),
                 Change(ChangeKind.FIXED, "Changing episode no longer carries a language the new episode does not have, which could start it in the wrong audio or not at all"),
             ),
         ),
