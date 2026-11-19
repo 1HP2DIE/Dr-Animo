@@ -342,7 +342,6 @@ class StreamRepositoryImpl(
     }
 }
 
-
 /**
  * Which track the primary server should be asked for.
  *

@@ -67,6 +67,7 @@ import com.animo.app.download.DownloadEntry
 import com.animo.app.download.DownloadStatus
 import com.animo.app.ui.settings.DownloadQuality
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -178,6 +179,7 @@ fun DetailScreen(
     val pickAudio: (AudioTrack) -> Unit = { audio ->
         val player = inlinePlayer
         if (player == null) {
+            // Nothing is playing: this sets the track the next tap will start with.
             pickedAudio = audio
         } else if (player.selectAudio(audio)) {
             pickedAudio = audio
@@ -228,20 +230,26 @@ fun DetailScreen(
             exit = ExitTransition.None,
         ) {
             playing?.let { (episodeId, audioName) ->
-            val audio = AudioTrack.entries.firstOrNull { it.name == audioName } ?: AudioTrack.SUB
-            val playerFactory = remember(container, animeId, episodeId, audio) {
-                playerViewModelFactory(
-                    animeId = animeId,
-                    episodeId = episodeId,
-                    audio = audio,
-                    animeRepository = container.animeRepository,
-                    streamRepository = container.streamRepository,
+                val audio = AudioTrack.entries.firstOrNull { it.name == audioName } ?: AudioTrack.SUB
+                val playerFactory = remember(container, animeId, episodeId, audio) {
+                    playerViewModelFactory(
+                        animeId = animeId,
+                        episodeId = episodeId,
+                        audio = audio,
+                        animeRepository = container.animeRepository,
+                        streamRepository = container.streamRepository,
+                    )
+                }
+                val playerViewModel: PlayerScreenViewModel = viewModel(
+                    key = "player-$animeId-$episodeId-$audioName",
+                    factory = playerFactory,
                 )
-            }
-            val playerViewModel: PlayerScreenViewModel = viewModel(
-                key = "player-$animeId-$episodeId-$audioName",
-                factory = playerFactory,
-            )
+                // Hand the live player to this screen: a SUB/DUB tap has to switch what is already
+                // playing, and only the player can do that.
+                DisposableEffect(playerViewModel) {
+                    inlinePlayer = playerViewModel
+                    onDispose { if (inlinePlayer === playerViewModel) inlinePlayer = null }
+                }
                 PlayerScreen(
                     viewModel = playerViewModel,
                     // Full screen: back leaves full screen, or closes the player when the viewer
