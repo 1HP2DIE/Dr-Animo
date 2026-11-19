@@ -114,6 +114,9 @@ private const val CONTROLS_AUTO_HIDE_MS = 3_000L
 
 /** "End of episode" sleep mode pauses this close to the end instead of waiting for a state change. */
 private const val END_OF_EPISODE_GRACE_MS = 700L
+
+/** How often the sleep countdown is stepped. It only decides how fine-grained the pause is. */
+private const val SLEEP_TICK_MS = 500L
 private const val SKIP_MS = 10_000L
 
 /** How long the up-next card counts down before it starts the next episode on its own. */
@@ -254,9 +257,8 @@ private fun PlayerStage(
         }
     }
 
-    // Sleep timer: null = off, 0 = "end of episode", else the minutes that were picked.
-    var sleepMinutes by remember { mutableStateOf<Int?>(null) }
-    var sleepRemainingMs by remember { mutableLongStateOf(0L) }
+    // Sleep timer: saveable, so a rotation or a PiP round trip does not silently cancel it.
+    val sleep = rememberSaveable(saver = SleepTimerState.Saver) { SleepTimerState() }
 
     // One controller per route, not per source: PlayerHost attaches/detaches it on every rebuild,
     // which is what keeps the chosen quality and subtitle preference across an episode change.
@@ -610,11 +612,13 @@ private fun PlayerStage(
     }
 
     /**
-     * One effect for both sleep modes, keyed only on the choice. Re-keying on `isPlaying` would reset
-     * the countdown every time the user paused, which is exactly what a sleep timer must not do.
+     * One effect for both sleep modes, keyed on the choice and a token rather than on `isPlaying`:
+     * re-keying on playback state would restart the countdown every time the viewer paused, which
+     * is exactly what a sleep timer must not do. The token exists so re-picking the preset that is
+     * already selected restarts the clock instead of doing nothing.
      */
-    LaunchedEffect(sleepMinutes) {
-        when (val minutes = sleepMinutes) {
+    LaunchedEffect(sleep.minutes, sleep.token) {
+        when (sleep.minutes) {
             null -> Unit
             // "End of episode": poll cheaply; the position only moves while playing anyway.
             0 -> {
@@ -624,20 +628,33 @@ private fun PlayerStage(
                     if (duration > 0 &&
                         surfaceState.positionMs >= duration - END_OF_EPISODE_GRACE_MS
                     ) {
+                        sleep.disarm()
                         surfaceState.pause()
-                        sleepMinutes = null
+                        flashMessage(
+                            context.getString(R.string.ui_player_sleep_ended),
+                            Icons.Rounded.Bedtime,
+                        )
                         break
                     }
                 }
             }
             else -> {
-                sleepRemainingMs = minutes * 60_000L
-                while (sleepRemainingMs > 0L) {
-                    delay(1_000L)
-                    if (surfaceState.isPlaying) sleepRemainingMs -= 1_000L
+                var last = android.os.SystemClock.elapsedRealtime()
+                while (true) {
+                    delay(SLEEP_TICK_MS)
+                    val now = android.os.SystemClock.elapsedRealtime()
+                    val elapsed = now - last
+                    last = now
+                    // Paused and buffering both mean "not yet": the clock waits with the video.
+                    if (sleep.tick(elapsed, surfaceState.isPlaying && !surfaceState.isBuffering)) {
+                        surfaceState.pause()
+                        flashMessage(
+                            context.getString(R.string.ui_player_sleep_ended),
+                            Icons.Rounded.Bedtime,
+                        )
+                        break
+                    }
                 }
-                surfaceState.pause()
-                sleepMinutes = null
             }
         }
     }
@@ -716,7 +733,7 @@ private fun PlayerStage(
         model.errorMessage == null
     val upNextVisible = overlaysAllowed && model.hasNext && nearEnd && !upNextDismissed
     // "End of episode" sleep means the viewer asked to stop here; the countdown must not override it.
-    val countdownArmed = autoplayNext && sleepMinutes != 0
+    val countdownArmed = autoplayNext && !sleep.stopsAtEndOfEpisode
     var countdownLeftMs by remember(model.episode.id) { mutableLongStateOf(UP_NEXT_COUNTDOWN_MS) }
     LaunchedEffect(upNextVisible, countdownArmed) {
         countdownLeftMs = UP_NEXT_COUNTDOWN_MS
@@ -755,7 +772,10 @@ private fun PlayerStage(
                 modifier = Modifier.fillMaxSize(),
                 controller = controller,
                 onEnded = {
-                    if (autoplayNext && sleepMinutes != 0) advanceOnce()
+                    // The natural end satisfies "stop after this episode" on its own; leaving the
+                    // timer armed would keep claiming it still has an episode to wait for.
+                    if (sleep.stopsAtEndOfEpisode) sleep.disarm()
+                    else if (autoplayNext) advanceOnce()
                 },
                 onCues = { lines -> containerLines = lines },
                 videoFit = videoFit,
@@ -857,7 +877,7 @@ private fun PlayerStage(
                     episodesVisible = true
                     controlsVisible = true
                 },
-                sleepActive = sleepMinutes != null,
+                sleepActive = sleep.isArmed,
                 onNext = viewModel::next,
                 onPrevious = viewModel::previous,
                 onEnterPip = enterPip,
@@ -974,7 +994,7 @@ private fun PlayerStage(
                     activeServer = surfaceState.stream?.server?.number ?: model.server?.number,
                     activeLanguageId = model.displayedLanguageId,
                 ),
-                sleepMinutesLeft = sleepMinutes,
+                sleepTimer = sleep,
                 initialTab = settingsTab ?: PlayerMenuTab.QUALITY,
                 subtitle = SubtitlePanelState(
                     style = subtitleStyle,
@@ -1000,10 +1020,7 @@ private fun PlayerStage(
                     speed = value
                     surfaceState.setSpeed(value)
                 },
-                onSelectSleep = { minutes ->
-                    sleepMinutes = minutes
-                    sleepRemainingMs = (minutes ?: 0) * 60_000L
-                },
+                onSelectSleep = sleep::select,
             )
         }
     }

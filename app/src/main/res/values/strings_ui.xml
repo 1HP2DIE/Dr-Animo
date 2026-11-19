@@ -75,6 +75,8 @@
     <string name="ui_player_play">Play</string>
     <string name="ui_player_pause">Pause</string>
     <string name="ui_player_sleep_armed">Sleep timer armed</string>
+    <!-- HUD line shown when the countdown reaches zero and playback stops. -->
+    <string name="ui_player_sleep_ended">Sleep timer ended</string>
     <string name="ui_player_quality_auto">Auto</string>
     <string name="ui_player_quality_auto_hint">Adaptive — taken from the master playlist</string>
     <string name="ui_player_error_title">Playback failed</string>

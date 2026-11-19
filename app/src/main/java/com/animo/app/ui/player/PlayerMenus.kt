@@ -102,7 +102,8 @@ private val WideLayoutBreakpoint = 600.dp
 @Composable
 fun PlayerSettingsSheet(
     tuning: PlayerTuning,
-    sleepMinutesLeft: Int?,
+    /** The timer object itself: the pane reads the countdown, so the sheet does not re-time the stage. */
+    sleepTimer: SleepTimerState,
     onDismiss: () -> Unit,
     onSelectQuality: (String) -> Unit,
     onSelectAudio: (String) -> Unit,
@@ -184,7 +185,7 @@ fun PlayerSettingsSheet(
                         PlayerMenuTab.AUDIO -> AudioPane(tuning, onSelectAudio, onSelectLanguage)
                         PlayerMenuTab.SUBTITLE -> SubtitlePane(tuning, subtitle, subtitleActions)
                         PlayerMenuTab.SPEED -> SpeedPane(tuning, onSelectSpeed)
-                        PlayerMenuTab.SLEEP -> SleepPane(sleepMinutesLeft, onSelectSleep)
+                        PlayerMenuTab.SLEEP -> SleepPane(sleepTimer, onSelectSleep)
                     }
                 }
             }
@@ -419,39 +420,42 @@ private fun SpeedPane(tuning: PlayerTuning, onSelect: (Float) -> Unit) {
 // ---------------------------------------------------------------- sleep
 
 @Composable
-private fun SleepPane(sleepMinutesLeft: Int?, onSelect: (Int?) -> Unit) {
+private fun SleepPane(sleepTimer: SleepTimerState, onSelect: (Int?) -> Unit) {
+    // Read here, not in the player stage: the countdown updates about once a second, and only the
+    // pane that is showing those minutes should recompose for it.
+    val chosen = sleepTimer.minutes
+    val minutesLeft = sleepTimer.minutesLeft
+
     SettingCard(
         title = stringResource(R.string.ui_player_menu_sleep_off),
         hint = null,
-        selected = sleepMinutesLeft == null,
+        selected = chosen == null,
         glyph = Icons.Rounded.Bedtime,
         onClick = { onSelect(null) },
     )
 
     SectionLabel(stringResource(R.string.ui_player_menu_tab_sleep))
-    val presets = PlayerSleepMinutes
-    presets.chunked(2).forEach { pair ->
+    PlayerSleepMinutes.chunked(2).forEach { pair ->
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             pair.forEach { minutes ->
+                val selected = chosen == minutes
                 val label = if (minutes == 0) {
                     stringResource(R.string.ui_player_menu_sleep_end_of_episode)
                 } else {
                     stringResource(R.string.ui_player_menu_sleep_minutes, minutes)
                 }
                 SettingCard(
+                    // The countdown belongs to the card that was actually picked, not to whichever
+                    // preset happens to sit closest to the time left.
+                    hint = when {
+                        !selected -> null
+                        minutes == 0 -> stringResource(R.string.ui_player_menu_sleep_left_end_of_episode)
+                        minutesLeft > 0 ->
+                            stringResource(R.string.ui_player_menu_sleep_left_minutes, minutesLeft)
+                        else -> null
+                    },
                     title = label,
-                    hint = if (minutes != 0 && sleepMinutesLeft != null && sleepMinutesLeft > 0 &&
-                        minutes == nearestPreset(sleepMinutesLeft)
-                    ) {
-                        stringResource(R.string.ui_player_menu_sleep_left_minutes, sleepMinutesLeft)
-                    } else {
-                        null
-                    },
-                    selected = when {
-                        sleepMinutesLeft == null -> false
-                        sleepMinutesLeft == 0 -> minutes == 0
-                        else -> minutes == nearestPreset(sleepMinutesLeft)
-                    },
+                    selected = selected,
                     onClick = { onSelect(minutes) },
                     modifier = Modifier.weight(1f),
                 )
@@ -620,10 +624,6 @@ private fun formatMbps(bitrate: Int): String {
     return "${tenths / 10}.${tenths % 10}"
 }
 
-/** The preset a running countdown belongs to (14 min left still reads as the 15-minute card). */
-private fun nearestPreset(minutesLeft: Int): Int =
-    PlayerSleepMinutes.filter { it > 0 }.minByOrNull { abs(it - minutesLeft) } ?: minutesLeft
-
 // ---------------------------------------------------------------- previews
 
 private val PreviewTuning = PlayerTuning(
@@ -649,7 +649,7 @@ private fun PlayerMenuQualityPreview() {
         Box(Modifier.fillMaxSize().background(Color(0xFF07090A))) {
             PlayerSettingsSheet(
                 tuning = PreviewTuning,
-                sleepMinutesLeft = null,
+                sleepTimer = SleepTimerState(),
                 onDismiss = {},
                 onSelectQuality = {},
                 onSelectAudio = {},
@@ -667,7 +667,7 @@ private fun PlayerMenuSleepPreview() {
         Box(Modifier.fillMaxSize().background(Color(0xFF07090A))) {
             PlayerSettingsSheet(
                 tuning = PreviewTuning,
-                sleepMinutesLeft = 14,
+                sleepTimer = SleepTimerState(initialMinutes = 15, initialRemainingMs = 14 * 60_000L),
                 onDismiss = {},
                 onSelectQuality = {},
                 onSelectAudio = {},
