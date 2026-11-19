@@ -129,3 +129,17 @@ internal fun NavHostController.openBrowse(genre: String? = null, letter: Char? =
         launchSingleTop = true
     }
 }
+
+
+/**
+ * A genre tapped on a title page.
+ *
+ * Unlike [openBrowse] this keeps the page it was tapped on: back from the filtered list returns to
+ * the title, which is where the viewer just was. Nothing is popped either, so a genre tap never
+ * throws away the page underneath.
+ */
+internal fun NavHostController.openGenre(genre: String) {
+    navigate(Routes.browse(genre = genre)) {
+        launchSingleTop = true
+    }
+}

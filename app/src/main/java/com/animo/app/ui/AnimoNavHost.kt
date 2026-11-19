@@ -22,6 +22,7 @@ import com.animo.app.ui.library.LibraryScreen
 import com.animo.app.ui.player.PlayerScreen
 import com.animo.app.ui.settings.SettingsScreen
 import com.animo.app.ui.shell.MainScaffold
+import com.animo.app.ui.shell.openGenre
 import com.animo.app.ui.shell.openTopLevel
 import com.animo.app.ui.theme.AnimoAppTheme
 import com.animo.app.ui.theme.LocalThemePreference
@@ -232,6 +233,7 @@ fun AnimoNavHost(
                             animeId = animeId,
                             onBack = { navController.backIfResumed() },
                             onOpenDownloads = { navController.navigate(Routes.DOWNLOADS) },
+                            onOpenGenre = { genre -> navController.openGenre(genre) },
                             autoplayEpisodeId = arguments.getLong(ARG_EPISODE_ID).takeIf { it > 0L },
                             autoplayAudio = AudioTrack.entries.firstOrNull { it.name == arguments.getString(ARG_AUDIO) },
                         )

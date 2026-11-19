@@ -139,6 +139,8 @@ fun DetailScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     onOpenDownloads: () -> Unit = {},
+    /** A genre chip is a search: Browse opens with that genre already applied. */
+    onOpenGenre: (String) -> Unit = {},
     /** Start this episode as soon as the page opens (resume from Home/Library). */
     autoplayEpisodeId: Long? = null,
     autoplayAudio: AudioTrack? = null,
@@ -231,6 +233,7 @@ fun DetailScreen(
             playerActive = playing != null,
             playingEpisodeId = playing?.first,
             onOpenDownloads = onOpenDownloads,
+            onOpenGenre = onOpenGenre,
             modifier = Modifier.weight(1f),
         )
     }
@@ -246,6 +249,7 @@ fun DetailScreen(
     playerActive: Boolean = false,
     playingEpisodeId: Long? = null,
     onOpenDownloads: () -> Unit = {},
+    onOpenGenre: (String) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     Box(
@@ -275,6 +279,7 @@ fun DetailScreen(
                 playerActive = playerActive,
                 playingEpisodeId = playingEpisodeId,
                 onOpenDownloads = onOpenDownloads,
+                onOpenGenre = onOpenGenre,
             )
         }
 
@@ -305,6 +310,7 @@ private fun DetailContent(
     playerActive: Boolean = false,
     playingEpisodeId: Long? = null,
     onOpenDownloads: () -> Unit = {},
+    onOpenGenre: (String) -> Unit = {},
 ) {
     val anime = model.anime
     val snackbarHostState = remember { SnackbarHostState() }
@@ -419,6 +425,7 @@ private fun DetailContent(
                         audioWasPicked = true
                     },
                     onPlayEpisode = onEpisodeTap,
+                    onOpenGenre = onOpenGenre,
                 )
             }
 
@@ -901,6 +908,7 @@ private fun MetaSection(
     selectedAudio: AudioTrack,
     onSelectAudio: (AudioTrack) -> Unit,
     onPlayEpisode: (Episode) -> Unit,
+    onOpenGenre: (String) -> Unit = {},
 ) {
     val anime = model.anime
     val columns = MaterialTheme.colorScheme
@@ -931,7 +939,11 @@ private fun MetaSection(
             val genres = remember(anime.genres) { anime.genres.distinct() }
             LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(items = genres, key = { it }) { genre ->
-                    PillBadge(text = genre, tone = BadgeTone.Outlined)
+                    PillBadge(
+                        text = genre,
+                        tone = BadgeTone.Outlined,
+                        onClick = { onOpenGenre(genre) },
+                    )
                 }
             }
         }
