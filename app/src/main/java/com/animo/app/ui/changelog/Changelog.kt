@@ -28,6 +28,26 @@ object Changelog {
 
     val releases: List<Release> = listOf(
         Release(
+            version = "1.7.2",
+            date = "19 Nov 2026",
+            headline = "A polish pass: downloads that tell the truth, a player that stays put, a schedule that keeps up.",
+            changes = listOf(
+                Change(ChangeKind.FIXED, "A download whose file was deleted from the phone now says so and offers retry, instead of doing nothing"),
+                Change(ChangeKind.FIXED, "A phone that is out of space no longer makes the app try the same episode on every server in turn"),
+                Change(ChangeKind.FIXED, "Long episodes no longer stop halfway through and start over"),
+                Change(ChangeKind.FIXED, "An episode no longer looks finished when half of it was never downloaded"),
+                Change(ChangeKind.FIXED, "Downloaded subtitles keep their own file type, so they open in other players too"),
+                Change(ChangeKind.FIXED, "Screen brightness stays where you set it after locking the player"),
+                Change(ChangeKind.FIXED, "Playback speed stays put when you change episode"),
+                Change(ChangeKind.FIXED, "Subtitles keep time with the picture instead of stuttering the video"),
+                Change(ChangeKind.FIXED, "An episode turns to Out the moment it airs, and the schedule follows midnight and your phone's 12/24-hour setting"),
+                Change(ChangeKind.FIXED, "A quick double tap on the heart no longer loses a favourite"),
+                Change(ChangeKind.FIXED, "Back closes the player on the first press, and a stray second tap no longer closes the app"),
+                Change(ChangeKind.IMPROVED, "Downloads save their progress far less often, so they are lighter on the battery"),
+                Change(ChangeKind.IMPROVED, "Settings no longer shows a bottom bar with nothing selected, and Support has its own icon"),
+            ),
+        ),
+        Release(
             version = "1.7.1",
             date = "18 Nov 2026",
             headline = "Our Telegram channel moved.",
