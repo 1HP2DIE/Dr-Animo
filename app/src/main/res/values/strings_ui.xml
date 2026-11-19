@@ -62,7 +62,6 @@
     <string name="ui_detail_episodes_failed">Could not load episodes: %1$s</string>
     <string name="ui_detail_not_found">This series is not in the local catalog</string>
     <string name="ui_detail_no_source">No playable source for this episode</string>
-    <string name="ui_detail_audio">Audio</string>
 
     <!-- Player -->
     <string name="ui_player_quality">Quality</string>
