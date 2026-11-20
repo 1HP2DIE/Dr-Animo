@@ -24,7 +24,15 @@ import kotlinx.serialization.json.contentOrNull
 internal object MovieLinkPd2 {
 
     /** One playable entry: the top-level config or one `episodes[]` element. */
-    data class Source(val label: String?, val masterUrl: String?, val mp4Url: String?)
+    data class Source(
+        val label: String?,
+        val masterUrl: String?,
+        val mp4Url: String?,
+        /** The provider's own episode number, e.g. `1221`. Null on older payloads. */
+        val number: Int? = null,
+        /** Last number of a batch entry (`num_end`), equal to [number] for a single episode. */
+        val numEnd: Int? = null,
+    )
 
     data class Payload(val topLevel: Source, val episodes: List<Source>)
 
@@ -99,7 +107,15 @@ internal object MovieLinkPd2 {
         label = (element["label"] as? JsonPrimitive)?.contentOrNull,
         masterUrl = (element["master"] as? JsonPrimitive)?.contentOrNull,
         mp4Url = (element["mp4"] as? JsonPrimitive)?.contentOrNull,
+        number = intOf(element["number"]),
+        numEnd = intOf(element["num_end"]),
     )
+
+    /** The payload writes numbers as JSON numbers; a string is tolerated rather than dropped. */
+    private fun intOf(element: kotlinx.serialization.json.JsonElement?): Int? = when (element) {
+        is JsonPrimitive -> element.contentOrNull?.toIntOrNull()
+        else -> null
+    }
 
     /**
      * Returns the `{…}` that follows `__PD2 =`, using a string-aware brace match.

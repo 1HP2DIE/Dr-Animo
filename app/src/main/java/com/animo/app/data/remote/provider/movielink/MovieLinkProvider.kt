@@ -10,6 +10,7 @@ import com.animo.app.data.remote.provider.ProviderResolveException
 import com.animo.app.domain.model.AudioTrack
 import com.animo.app.domain.model.StreamContainer
 import com.animo.app.player.StreamResolver
+import com.animo.app.player.movielink.MovieLinkPd2
 import java.io.IOException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -119,9 +120,16 @@ class MovieLinkProvider(
     }
 
     /**
-     * Episode rows — which for this index means one of two shapes:
+     * Episode rows — which for this index means one of three shapes:
      * - **film**: the single `/p/<token>` of the page, numbered 1 and titled with the quality label;
-     * - **series/drama/anime**: one row per button of the `#mlbdEpisodeDownloads` grid.
+     * - **series/drama/anime with a rendered grid**: one row per button of the
+     *   `#mlbdEpisodeDownloads` grid (the older layout);
+     * - **series/drama/anime where the grid carries only download links**: one row per `episodes[]`
+     *   entry of the `/p/<token>` shell, which is where the playable stream of every episode lives.
+     *
+     * The third shape is the one this index uses today: the visible cards hold `data-dl` download
+     * payloads and no player token at all, so the grid parse returns nothing and the whole series
+     * used to collapse into a single film-shaped row titled by its quality.
      *
      * A failure is reported as an empty list (the interface has no Result), with the reason logged;
      * [detail] is the typed entry point for a caller that needs to tell "blocked" from "no episodes".
@@ -132,9 +140,90 @@ class MovieLinkProvider(
             return emptyList()
         }
 
-        val entries = entriesOf(detail)
-        if (entries.isEmpty()) log("$seriesId published no playable entry")
-        return entries
+        val grid = entriesOf(detail)
+        if (grid.isNotEmpty()) return grid
+
+        val shell = playerEntries(detail)
+        if (shell.isNotEmpty()) return shell
+
+        log("$seriesId published no playable entry")
+        return emptyList()
+    }
+
+    /**
+     * Expands the `/p/<token>` shell, which for a series lists **every** episode under one token.
+     *
+     * Numbering is positional (1…N), not the provider's own: the episode primary key is
+     * `-(|animeId|*1000 + number)` with the number clamped to 999, so an absolute `1221` would
+     * collide with every other row above 999. The real number stays readable in the title, and
+     * [?ep=] — which is what the resolver reads — is the 1-based index this list is built in.
+     */
+    private suspend fun playerEntries(detail: MovieLinkDetail): List<ProviderEpisode> {
+        val path = detail.playerUrl.trim()
+        if (path.isEmpty()) return emptyList()
+
+        val shell = get(relativePathOf(path)).getOrElse { error ->
+            log("${detail.seriesId}: player shell failed: ${error.message}")
+            return emptyList()
+        }
+        val payload = MovieLinkPd2.extract(shell) ?: return filmEntry(detail, path)
+        // A film's shell holds one entry; nothing to expand.
+        if (payload.episodes.size <= 1) return filmEntry(detail, path)
+
+        val base = absolute(path)
+        return payload.episodes.mapIndexed { index, source ->
+            ProviderEpisode(
+                providerId = PROVIDER_ID,
+                seriesId = detail.seriesId,
+                number = index + 1,
+                title = playerEntryTitle(source),
+                subUrl = withEpisodeParameter(base, index + 1),
+                dubUrl = null,
+                remoteId = source.number?.toString(),
+            )
+        }
+    }
+
+    /** The pre-existing single-row shape, kept for films and for a shell that cannot be parsed. */
+    private fun filmEntry(detail: MovieLinkDetail, playerPath: String): List<ProviderEpisode> {
+        val player = absolute(playerPath)
+        if (player.isEmpty()) return emptyList()
+        return listOf(
+            ProviderEpisode(
+                providerId = PROVIDER_ID,
+                seriesId = detail.seriesId,
+                number = 1,
+                title = movieLabel(detail),
+                subUrl = player,
+                dubUrl = null,
+                remoteId = tokenOf(player),
+            ),
+        )
+    }
+
+    /**
+     * `Episode 1263` for a single entry, `Episode 1263–1268` for a batch one — a pack is one file,
+     * and hiding its range would make the numbering look broken.
+     */
+    private fun playerEntryTitle(source: MovieLinkPd2.Source): String {
+        val start = source.number
+        val end = source.numEnd
+        // Built from the numbers, not by editing the label: the label of a batch entry is already
+        // "Episode 1227-1228", and replacing inside it produced "Episode 1227–1228-1228".
+        if (start != null && end != null && end > start) return "Episode $start–$end"
+        return source.label?.trim().orEmpty().ifEmpty { start?.let { "Episode $it" }.orEmpty() }
+    }
+
+    /** `?ep=N`, or `&ep=N` when the shell URL already has a query. */
+    private fun withEpisodeParameter(url: String, index: Int): String =
+        if (url.contains('?')) "$url&ep=$index" else "$url?ep=$index"
+
+    /** The shell link is host-relative; [get] prepends the base, so strip an absolute prefix. */
+    private fun relativePathOf(path: String): String {
+        if (!path.startsWith("http://", true) && !path.startsWith("https://", true)) return path
+        val afterScheme = path.substringAfter("://")
+        val slash = afterScheme.indexOf('/')
+        return if (slash < 0) "/" else afterScheme.substring(slash)
     }
 
     override suspend fun resolve(episode: ProviderEpisode, audio: AudioTrack): PlaybackSource {
@@ -215,22 +304,13 @@ class MovieLinkProvider(
         )
     }
 
+    /**
+     * Rows from the rendered grid, and nothing else. An empty result is the caller's signal to look
+     * at the player shell instead: the current layout renders the cards with `data-dl` download
+     * payloads only, so they produce no rows even though the series has dozens of episodes.
+     */
     private fun entriesOf(detail: MovieLinkDetail): List<ProviderEpisode> {
-        if (detail.episodes.isEmpty()) {
-            val player = absolute(detail.playerUrl)
-            if (player.isEmpty()) return emptyList()
-            return listOf(
-                ProviderEpisode(
-                    providerId = PROVIDER_ID,
-                    seriesId = detail.seriesId,
-                    number = 1,
-                    title = movieLabel(detail),
-                    subUrl = player,
-                    dubUrl = null,
-                    remoteId = tokenOf(player),
-                ),
-            )
-        }
+        if (detail.episodes.isEmpty()) return emptyList()
 
         // A season grid resets its numbering at 1, and `ProviderEpisode.number` is the only ordering
         // key the model has: renumbering positionally keeps the list monotonic, and the true
