@@ -28,6 +28,19 @@ object Changelog {
 
     val releases: List<Release> = listOf(
         Release(
+            version = "1.10.0",
+            date = "20 Nov 2026",
+            headline = "A second catalogue: films and series that were never in the anime list.",
+            changes = listOf(
+                Change(ChangeKind.NEW, "A second catalogue of films and series — Tamil, Telugu, Hindi and more — searchable and filterable with everything else"),
+                Change(ChangeKind.NEW, "Its titles play in the same player, with resume, subtitles and downloads"),
+                Change(ChangeKind.NEW, "Settings shows how many titles it has, with its own Sync button and a live page counter"),
+                Change(ChangeKind.IMPROVED, "Hindi sync now shows its progress from the first second instead of looking stuck"),
+                Change(ChangeKind.IMPROVED, "When a site refuses to answer, the app tries the browser route before giving up, and says which route failed"),
+                Change(ChangeKind.FIXED, "Last sync is now recorded for every sync — from the drawer, pull-to-refresh or the nightly job — not only while Settings was open"),
+            ),
+        ),
+        Release(
             version = "1.9.0",
             date = "19 Nov 2026",
             headline = "Smoother everywhere, and SUB/DUB that finally switches what you are watching.",
