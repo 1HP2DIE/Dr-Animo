@@ -17,6 +17,12 @@ episode embed URL ──► StreamResolver (AES) ──► master.m3u8 ──►
 | Device smoke test | Emulator API 36: catalog sync → home grid → detail → **video playing** (verified frame + subtitle) |
 | APK | `app/build/outputs/apk/debug/app-debug.apk` (~24 MB debug) |
 
+## Download
+
+Signed APK: [Releases](https://github.com/1HP2DIE/Dr-Animo/releases) — grab the latest
+`Animo-<version>.apk` and sideload it (`adb install -r Animo-<version>.apk`). Requires Android 7.0+
+(minSdk 24).
+
 ## Install
 
 ```bash
