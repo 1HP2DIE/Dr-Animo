@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
 import android.view.View
+import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.JsPromptResult
 import android.webkit.JsResult
@@ -28,8 +29,11 @@ import kotlinx.serialization.json.jsonPrimitive
  * Loads one URL in a throw-away [WebView] so an edge challenge can solve itself.
  *
  * The WebView is acceptable here only because of how little of it is used:
- * - it is **never attached to a window**, never visible, and never renders any app UI — the app
- *   stays Compose-only and no Activity/Fragment is involved;
+ * - it is never visible and renders no app UI — the app stays Compose-only and no
+ *   Activity/Fragment/`AndroidView` is involved. It *is* parked as a 1 px, transparent child of the
+ *   resumed Activity's `decorView` while it loads (see [DecorWindowHost]): unattached WebViews are
+ *   not laid out on several ROMs and then never run the challenge script at all. With no resumed
+ *   Activity it falls back to the old unattached path;
  * - it exists for a single page load, then `destroy()` runs in a `finally` and the reference is
  *   dropped (a live WebView holds tens of megabytes and a renderer process);
  * - no JavaScript bridge is registered: the page talks to its own origin, nothing talks back;
@@ -48,8 +52,9 @@ internal class AndroidBrowserWarmup(
 ) : BrowserWarmup {
 
     /**
-     * Application context, not an Activity: the WebView outlives no Activity and must not keep
-     * one alive. Without a window, `alert()` has nowhere to go, which is what we want.
+     * Application context, not an Activity: the WebView outlives no Activity and must not keep one
+     * alive through a context reference. When a window exists it comes from [AppWindowRef] as a weak
+     * reference, used for one `addView`/`removeView` pair and never stored.
      */
     private val appContext: Context = context.applicationContext ?: context
 
@@ -68,7 +73,10 @@ internal class AndroidBrowserWarmup(
 
             val signal = CompletableDeferred<WarmupResult>()
             val client = WarmupClient(signal)
+            // Attachment is decided per call: the Activity can appear or go away between warm-ups.
+            val slot = WindowSlot(webView)
             try {
+                attachToWindow(slot)
                 webView.webViewClient = client
                 webView.loadUrl(url)
                 withTimeoutOrNull(timeoutMs) { signal.await() }
@@ -76,10 +84,31 @@ internal class AndroidBrowserWarmup(
             } catch (error: Throwable) {
                 WarmupResult.Failed("warm-up failed", fatal = false, cause = error)
             } finally {
+                // Order matters: a WebView must leave the hierarchy before `destroy()`. A failure
+                // here is not worth a crash either — `release` removes it again as a backstop.
+                runCatching { slot.detach() }
+                    .onFailure { AppLog.w("webview: detach failed", it) }
                 release(webView)
                 cookies.flush()
             }
         }
+
+    /**
+     * Parks [webView] in the current Activity's window when one exists, so the page is laid out and
+     * its JavaScript runs. Every failure mode — no Activity, a dead decor, a ROM that refuses the
+     * add — ends as "warm up unattached", never as an error: the unattached path is what shipped
+     * before and still works on most devices.
+     */
+    private fun attachToWindow(slot: WindowSlot<WebView>) {
+        val attached = try {
+            slot.attach(currentWindowHost())
+        } catch (error: Throwable) {
+            // No host in the message: this line can end up in a bug report.
+            AppLog.w("webview: window attach failed, warming unattached", error)
+            false
+        }
+        if (attached) AppLog.d("webview: warming attached to the activity window")
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun newWebView(): WebView {
@@ -107,8 +136,12 @@ internal class AndroidBrowserWarmup(
         runCatching { CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true) }
 
         webView.setBackgroundColor(Color.TRANSPARENT)
+        // Unattached and GONE is the fallback shape. The window path flips this back to VISIBLE:
+        // a GONE child is never laid out, and a WebView that is never laid out may never run its
+        // page JavaScript.
         webView.visibility = View.GONE
         webView.isFocusable = false
+        webView.isClickable = false
         // A page that calls alert()/confirm()/prompt() would otherwise wait on a dialog that has
         // no window to appear in. Consuming the call lets the script continue.
         webView.webChromeClient = object : WebChromeClient() {
@@ -137,6 +170,9 @@ internal class AndroidBrowserWarmup(
         runCatching {
             webView.stopLoading()
             webView.webViewClient = WebViewClient()
+            // Backstop for a detach that failed above: destroying an attached view leaves the
+            // decor holding a dead WebView.
+            (webView.parent as? ViewGroup)?.removeView(webView)
             webView.removeAllViews()
             webView.destroy()
         }

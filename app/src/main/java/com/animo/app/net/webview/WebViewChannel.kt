@@ -14,9 +14,12 @@ import okhttp3.OkHttpClient
  * ## Why a WebView is acceptable in a Compose-only app
  * - **Zero APK cost.** The System WebView ships with the device; this adds no dependency, no
  *   bundled browser and no extra application size.
- * - **It is never seen.** No Activity, no Fragment, no `AndroidView`, no window: the WebView is
- *   constructed off-screen, put in `GONE` state, loaded once, and destroyed. It renders no app
- *   UI, so the Compose-only rule holds.
+ * - **It is never seen.** No Fragment, no `AndroidView`, no visible surface: the WebView is
+ *   constructed off-screen, loaded once, and destroyed. While it loads it is parked as a 1 px,
+ *   fully transparent child of the resumed Activity's `decorView` — an unattached WebView is not
+ *   laid out on several ROMs and then never runs the challenge script, which used to turn every
+ *   warm-up into a timeout. With no resumed Activity the old unattached path is used. No app UI is
+ *   rendered, so the Compose-only rule holds.
  * - **No bridge.** No `addJavascriptInterface`; the page can only talk to its own origin.
  * - **Bounded.** One WebView at a time (a process-wide lock), a hard timeout (15 s by default),
  *   `destroy()` in a `finally`, and a process-wide flag that stops retrying a device or host that

@@ -13,6 +13,7 @@ import com.animo.app.domain.repo.StreamRepository
 import com.animo.app.ui.AnimoNavHost
 import com.animo.app.ui.AppContainer
 import com.animo.app.ui.LocalAppContainer
+import com.animo.app.ui.common.AppWindowRef
 import com.animo.app.ui.player.PipState
 import com.animo.app.ui.theme.AnimoTheme
 
@@ -48,6 +49,27 @@ class MainActivity : ComponentActivity() {
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         PipState.inPip.value = isInPictureInPictureMode
+    }
+
+    /**
+     * Publishes this Activity for the one caller that needs a window: the WebView warm-up in
+     * `net.webview` parks its throw-away WebView in the decor for the length of one page load.
+     * The reference is weak and dropped again in [onPause]/[onDestroy], so nothing outlives the
+     * Activity.
+     */
+    override fun onResume() {
+        super.onResume()
+        AppWindowRef.register(this)
+    }
+
+    override fun onPause() {
+        AppWindowRef.clear(this)
+        super.onPause()
+    }
+
+    override fun onDestroy() {
+        AppWindowRef.clear(this)
+        super.onDestroy()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
