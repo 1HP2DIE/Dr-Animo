@@ -171,8 +171,8 @@ class OkHttpTransportChannel(
 
     /** okhttp keeps repeated names; the app only ever reads the last one per name. */
     private fun Headers.asMap(): Map<String, String> {
-        val map = LinkedHashMap<String, String>(size())
-        for (index in 0 until size()) map[name(index)] = value(index)
+        val map = LinkedHashMap<String, String>(size)
+        for (index in 0 until size) map[name(index)] = value(index)
         return map
     }
 
