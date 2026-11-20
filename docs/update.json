@@ -3,40 +3,15 @@
   "generated": "2026-11-20T05:48:50Z",
   "repo": "1HP2DIE/Dr-Animo",
   "latest": {
-    "version": "1.10.0",
-    "versionCode": 14,
-    "date": "20 Nov 2026",
-    "headline": "Probe build to verify the in-app update notice.",
+    "version": "1.9.0",
+    "versionCode": 13,
+    "date": "19 Nov 2026",
+    "headline": "Smoother everywhere, and SUB/DUB that finally switches what you are watching.",
     "apkUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/download/v1.9.0/Animo-1.9.0.apk",
     "sizeBytes": 5334604,
     "releaseUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/tag/v1.9.0"
   },
   "releases": [
-    {
-      "version": "1.10.0",
-      "versionCode": 14,
-      "tag": "v1.10.0",
-      "date": "20 Nov 2026",
-      "publishedAt": "2026-11-20T05:26:52Z",
-      "headline": "Probe build to verify the in-app update notice.",
-      "apkUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/download/v1.9.0/Animo-1.9.0.apk",
-      "sizeBytes": 5334604,
-      "releaseUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/tag/v1.9.0",
-      "changes": [
-        {
-          "kind": "NEW",
-          "text": "In-app update notice: you are told when a newer build exists"
-        },
-        {
-          "kind": "IMPROVED",
-          "text": "What's new ends at the newest release, even on an older APK"
-        },
-        {
-          "kind": "FIXED",
-          "text": "Probe row \u2014 this feed is reverted right after the screenshot"
-        }
-      ]
-    },
     {
       "version": "1.9.0",
       "versionCode": 13,
