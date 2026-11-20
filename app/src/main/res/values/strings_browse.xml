@@ -6,6 +6,9 @@
 -->
 <resources>
 
+    <string name="browse_kind">Kind</string>
+    <string name="browse_language">Language</string>
+
     <!-- Screen chrome -->
     <string name="browse_search_hint">Search title, romaji, native</string>
     <string name="browse_results">%1$d results</string>

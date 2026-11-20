@@ -50,7 +50,10 @@ val Filters.activeFilterCount: Int
         (if (status != null) 1 else 0) +
         (if (letter != null) 1 else 0) +
         (if (hasDub) 1 else 0) +
-        (if (hindiOnly) 1 else 0)
+        (if (hindiOnly) 1 else 0) +
+        kinds.size +
+        languages.size +
+        providers.size
 
 val Filters.hasActiveFilters: Boolean
     get() = activeFilterCount > 0

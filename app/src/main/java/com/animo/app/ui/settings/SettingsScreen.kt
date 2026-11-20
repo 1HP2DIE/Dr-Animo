@@ -77,6 +77,7 @@ fun SettingsScreen(
     onOpenChangelog: () -> Unit,
     modifier: Modifier = Modifier,
     onOpenSupport: () -> Unit = {},
+    onOpenProviders: () -> Unit = {},
 ) {
     val container = LocalAppContainer.current
     val context = LocalContext.current.applicationContext
@@ -110,6 +111,7 @@ fun SettingsScreen(
             onOpenChangelog()
         },
         onOpenSupport = onOpenSupport,
+        onOpenProviders = onOpenProviders,
         modifier = modifier,
     )
 }
@@ -147,6 +149,7 @@ private fun SettingsScreenContent(
     onOpenDrawer: () -> Unit,
     onOpenChangelog: () -> Unit,
     onOpenSupport: () -> Unit = {},
+    onOpenProviders: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -175,6 +178,7 @@ private fun SettingsScreenContent(
                     onSyncNow = onSyncNow,
                     onSyncHindi = onSyncHindi,
                     onSyncMovieLink = onSyncMovieLink,
+                    onOpenProviders = onOpenProviders,
                 )
             }
             item(key = "playback") {
@@ -357,6 +361,7 @@ private fun CatalogueSection(
     onSyncNow: () -> Unit,
     onSyncHindi: () -> Unit,
     onSyncMovieLink: () -> Unit,
+    onOpenProviders: () -> Unit = {},
 ) {
     SettingsSection(title = stringResource(R.string.ui_settings_catalogue)) {
         SettingsValueRow(
@@ -592,6 +597,19 @@ private fun CatalogueSection(
                 )
             }
         }
+
+        // Last row of the block, after every sync row: this is where all of the above is actually
+        // configured per source, so it reads as the block's door rather than a fourth catalogue.
+        HorizontalDivider(
+            thickness = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f),
+            modifier = Modifier.padding(vertical = 12.dp),
+        )
+        SettingsLinkRow(
+            label = "Providers",
+            subtitle = "Auto and manual sync per source",
+            onClick = onOpenProviders,
+        )
 
         Spacer(Modifier.height(8.dp))
     }
@@ -835,6 +853,46 @@ private fun SettingsActionRow(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.width(4.dp))
+        Icon(
+            imageVector = Icons.Rounded.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp),
+        )
+    }
+}
+
+/**
+ * A tappable row with a subtitle — the label/subtitle stack from the Appearance block, plus the
+ * chevron from [SettingsActionRow]. Used where the value column would have to hold a sentence.
+ */
+@Composable
+private fun SettingsLinkRow(
+    label: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.small)
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
         Icon(
             imageVector = Icons.Rounded.ChevronRight,
             contentDescription = null,

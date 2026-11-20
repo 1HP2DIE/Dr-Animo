@@ -20,6 +20,7 @@ import com.animo.app.ui.downloads.DownloadsScreen
 import com.animo.app.ui.home.HomeScreen
 import com.animo.app.ui.library.LibraryScreen
 import com.animo.app.ui.player.PlayerScreen
+import com.animo.app.ui.providers.ProvidersScreen
 import com.animo.app.ui.settings.SettingsScreen
 import com.animo.app.ui.shell.MainScaffold
 import com.animo.app.ui.shell.openGenre
@@ -49,6 +50,9 @@ object Routes {
 
     const val LIBRARY = "library"
     const val SETTINGS = "settings"
+
+    /** Provider page, pushed from Settings — not a drawer tab, so it carries a back arrow. */
+    const val PROVIDERS = "providers"
     const val CHANGELOG = "changelog"
     const val DOWNLOADS = "downloads"
     const val FAVORITES = "favorites"
@@ -169,6 +173,14 @@ fun AnimoNavHost(
                             onOpenDrawer = openDrawer,
                             onOpenChangelog = { navController.navigate(Routes.CHANGELOG) },
                             onOpenSupport = { navController.navigate(Routes.SUPPORT) },
+                            onOpenProviders = { navController.navigate(Routes.PROVIDERS) },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+
+                    composable(Routes.PROVIDERS) {
+                        ProvidersScreen(
+                            onBack = { navController.backIfResumed() },
                             modifier = Modifier.fillMaxSize(),
                         )
                     }

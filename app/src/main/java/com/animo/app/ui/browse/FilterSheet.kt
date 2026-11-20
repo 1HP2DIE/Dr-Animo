@@ -56,6 +56,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.animo.app.R
+import com.animo.app.domain.model.ContentKind
 import com.animo.app.domain.model.FilterFacets
 import com.animo.app.domain.model.Filters
 import com.animo.app.domain.model.SortOrder
@@ -79,6 +80,25 @@ private val Decades = listOf(
     DecadeSpec(R.string.browse_decade_90s, 1990, 1999),
     DecadeSpec(R.string.browse_decade_older, null, 1989),
 )
+
+/**
+ * Readable name for an ISO-639-1 facet code. Deliberately not a string resource: the facet list is
+ * whatever the catalogue holds, so an unlisted code still has to render something stable — itself,
+ * uppercased.
+ */
+internal fun languageLabel(code: String): String = when (code.lowercase()) {
+    "hi" -> "Hindi"
+    "ja" -> "Japanese"
+    "ta" -> "Tamil"
+    "te" -> "Telugu"
+    "bn" -> "Bengali"
+    "ml" -> "Malayalam"
+    "ko" -> "Korean"
+    "zh" -> "Chinese"
+    "en" -> "English"
+    "ar" -> "Arabic"
+    else -> code.uppercase()
+}
 
 /**
  * Filter sheet. Every edit is applied live, so the footer count is the real result count and the
@@ -164,6 +184,30 @@ internal fun FilterSheetBody(
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
+            // Catalogue kind comes first: it is the only axis every provider can be mapped onto,
+            // so "movies" or "series" is a narrower question than any genre.
+            SheetSection(title = stringResource(R.string.browse_kind)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    ContentKind.ALL.forEach { kind ->
+                        FacetChip(
+                            label = kind.label,
+                            selected = kind in filters.kinds,
+                            onClick = {
+                                val next = if (kind in filters.kinds) {
+                                    filters.kinds - kind
+                                } else {
+                                    filters.kinds + kind
+                                }
+                                onFiltersChange(filters.copy(kinds = next))
+                            },
+                        )
+                    }
+                }
+            }
+
             SheetSection(title = stringResource(R.string.browse_genre)) {
                 if (facets.genres.isEmpty()) {
                     FacetHint()
@@ -247,6 +291,37 @@ internal fun FilterSheetBody(
                                 },
                             )
                         }
+                    }
+                }
+            }
+
+            // Language is a catalogue axis, not an audio-track one, so it sits next to the format
+            // chips. Hidden entirely when the catalogue states none — an empty chip row would read
+            // as a broken control rather than "no data".
+            if (facets.languages.isNotEmpty()) {
+                SheetSection(title = stringResource(R.string.browse_language)) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        // Sorted by the rendered label, so the row order is stable whatever order
+                        // the DAO emitted the codes in.
+                        facets.languages
+                            .sortedBy { languageLabel(it) }
+                            .forEach { code ->
+                                FacetChip(
+                                    label = languageLabel(code),
+                                    selected = code in filters.languages,
+                                    onClick = {
+                                        val next = if (code in filters.languages) {
+                                            filters.languages - code
+                                        } else {
+                                            filters.languages + code
+                                        }
+                                        onFiltersChange(filters.copy(languages = next))
+                                    },
+                                )
+                            }
                     }
                 }
             }
@@ -563,6 +638,8 @@ private val PreviewFacets = FilterFacets(
     types = listOf("Movie", "ONA", "OVA", "Special", "TV"),
     statuses = listOf("airing", "finished", "upcoming"),
     letters = ('A'..'Z').toList() + '#',
+    languages = listOf("ja", "hi", "ta", "te", "en"),
+    providers = listOf("anikoto", "hindi", "movielink"),
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -580,6 +657,9 @@ private fun FilterSheetPreview() {
                     letter = 'S',
                     hasDub = true,
                     hindiOnly = true,
+                    kinds = setOf(ContentKind.ANIME),
+                    languages = setOf("hi", "ja"),
+                    providers = setOf("hindi"),
                     sort = SortOrder.SCORE_DESC,
                 ),
                 facets = PreviewFacets,

@@ -59,6 +59,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.animo.app.R
 import com.animo.app.domain.model.Anime
 import com.animo.app.domain.model.Filters
+import com.animo.app.domain.model.Providers
 import com.animo.app.domain.model.SortOrder
 import com.animo.app.ui.LocalAppContainer
 import com.animo.app.ui.UiState
@@ -104,6 +105,13 @@ fun BrowseScreen(
     var sheetOpen by rememberSaveable { mutableStateOf(false) }
     val gridState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
+
+    // Superset of the view model's count: the new catalogue axes still narrow the grid, so an
+    // empty result under them is "no matching filters", never "catalog is empty".
+    val hasAnyFilter = filters.hasActiveFilters ||
+        filters.kinds.isNotEmpty() ||
+        filters.languages.isNotEmpty() ||
+        filters.providers.isNotEmpty()
 
     val items = results.contentOrNull.orEmpty()
     val loadedCount by rememberUpdatedState(items.size)
@@ -167,7 +175,7 @@ fun BrowseScreen(
                 ) {
                     when (val state = results) {
                         UiState.Loading -> PosterGridSkeleton()
-                        UiState.Empty -> if (filters.activeFilterCount == 0 && query.isBlank()) {
+                        UiState.Empty -> if (!hasAnyFilter && query.isBlank()) {
                             EmptyState(
                                 title = stringResource(R.string.browse_empty_catalog_title),
                                 body = stringResource(R.string.browse_empty_catalog_body),
@@ -295,7 +303,14 @@ private fun ActiveFilterRow(
     onChange: (Filters) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (!filters.hasActiveFilters) {
+    // Kinds, languages and providers are counted here as well: a filter part that renders a chip
+    // must not be able to hide the row it lives in.
+    val hasActive = filters.hasActiveFilters ||
+        filters.kinds.isNotEmpty() ||
+        filters.languages.isNotEmpty() ||
+        filters.providers.isNotEmpty()
+
+    if (!hasActive) {
         Spacer(Modifier.height(4.dp))
         return
     }
@@ -307,6 +322,15 @@ private fun ActiveFilterRow(
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        filters.kinds.sortedBy { it.ordinal }.forEach { kind ->
+            item(key = "kind:${kind.name}", contentType = "chip") {
+                RemovableFilterChip(
+                    label = kind.label,
+                    onRemove = { onChange(filters.copy(kinds = filters.kinds - kind)) },
+                )
+            }
+        }
+
         filters.genres.sorted().forEach { genre ->
             item(key = "genre:$genre", contentType = "chip") {
                 RemovableFilterChip(
@@ -346,6 +370,24 @@ private fun ActiveFilterRow(
                 RemovableFilterChip(
                     label = statusLabel(status),
                     onRemove = { onChange(filters.copy(status = null)) },
+                )
+            }
+        }
+
+        filters.languages.sortedBy { languageLabel(it) }.forEach { code ->
+            item(key = "language:$code", contentType = "chip") {
+                RemovableFilterChip(
+                    label = languageLabel(code),
+                    onRemove = { onChange(filters.copy(languages = filters.languages - code)) },
+                )
+            }
+        }
+
+        filters.providers.sorted().forEach { id ->
+            item(key = "provider:$id", contentType = "chip") {
+                RemovableFilterChip(
+                    label = Providers.spec(id)?.displayName ?: id,
+                    onRemove = { onChange(filters.copy(providers = filters.providers - id)) },
                 )
             }
         }
