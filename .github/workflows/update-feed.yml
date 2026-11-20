@@ -1,0 +1,43 @@
+name: update-feed
+
+# Keeps docs/update.json and the "Version history" block in docs/index.html in sync with
+# the GitHub releases. The app polls update.json, so a published release reaches installed
+# builds without shipping a new APK first.
+on:
+  release:
+    types: [published, edited, deleted, unpublished]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-feed
+  cancel-in-progress: true
+
+jobs:
+  feed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Regenerate the feed from releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python3 tools/update_feed.py
+
+      - name: Commit if anything moved
+        run: |
+          if git diff --quiet -- docs/update.json docs/index.html; then
+            echo "feed already current"
+            exit 0
+          fi
+          git config user.name  "dr-animo-bot"
+          git config user.email "bot@1hp2die.invalid"
+          git add docs/update.json docs/index.html
+          git commit -m "chore(feed): sync update.json with the latest release [skip ci]"
+          git push
