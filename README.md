@@ -107,3 +107,30 @@ in Room, native HLS playback on Media3/ExoPlayer, no WebView renderer.
 **Is it on the Play Store?** No — APK-only distribution from this repository's releases.
 
 **Why the tagline?** *Only Dr Animo can be hidden under the black hole.*
+
+## Publishing a release (version tracking)
+
+The app polls `https://1hp2die.github.io/Dr-Animo/update.json`; the landing page renders the same
+document as its version history. Both are generated from GitHub releases, so a release reaches
+installed builds without shipping new code first.
+
+1. Bump `versionCode` / `versionName` in `app/build.gradle.kts` and add a `Release(...)` entry to
+   `app/src/main/java/com/animo/app/ui/changelog/Changelog.kt` (that file is the user-facing copy).
+2. Tag and publish — the release body is generated from the changelog, not retyped:
+
+   ```bash
+   git tag v1.10.0 && git push origin v1.10.0
+   gh release create v1.10.0 release/Animo-1.10.0.apk \
+     --notes-file <(python3 tools/changelog_to_release_notes.py 1.10.0)
+   ```
+
+3. `.github/workflows/update-feed.yml` runs on `release: published`, regenerates
+   `docs/update.json` and the `<!-- versions -->` block in `docs/index.html`, and commits them.
+
+A release body is parsed for `## Headline`, `## Released`, and `- NEW: … / - IMPROVED: … /
+- FIXED: …` bullets; anything else (install snippets, hashes) is ignored. `versionCode` is read from
+  `app/build.gradle.kts` **at the tag**, never guessed from the tag text.
+
+In the app, `UpdateCenter` fetches the feed (6 h cache), compares `versionCode`, and `UpdatePrompt`
+shows the in-app notice once per version: headline, changelog, and a download link. "Later" silences
+that version; the changelog screen merges feed entries above the bundled ones.
