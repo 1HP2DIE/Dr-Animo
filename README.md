@@ -1,6 +1,10 @@
-# Animo
+# Dr Animo — Android anime client (APK)
 
-Native Android anime client — offline-first catalog + **native HLS playback** (no WebView).
+**Dr Animo APK** — a native Android anime client: offline-first catalogue plus **native HLS playback**
+(no WebView). *Only Dr Animo can be hidden under the black hole.*
+
+[**Download the latest APK**](https://github.com/1HP2DIE/Dr-Animo/releases/latest) ·
+[Website](https://1hp2die.github.io/Dr-Animo/) · v1.9.0 · 26.9 MB · Android 7.0+ · MIT
 
 ```
 anikotoapi.site ──► OkHttp (2.2 s throttle) ──► Room (source of truth) ──► Compose UI
@@ -22,6 +26,10 @@ episode embed URL ──► StreamResolver (AES) ──► master.m3u8 ──►
 Signed APK: [Releases](https://github.com/1HP2DIE/Dr-Animo/releases) — grab the latest
 `Animo-<version>.apk` and sideload it (`adb install -r Animo-<version>.apk`). Requires Android 7.0+
 (minSdk 24).
+
+Dr Animo is distributed **APK-only** — there is no Play Store listing, no advertising SDK and no
+telemetry. The package id is `com.animo.app`; the current build is 1.9.0 (versionCode 13),
+SHA-256 `4cb2acfd9beb02bcda8ac23c20c3b00125a3ce25183eec0599ddc98ac4d737e6`.
 
 ## Install
 
@@ -81,3 +89,21 @@ research/                  verified protocol docs, provider matrix, crawler, pro
 - `research/PROVIDER_MATRIX.md` — which scrapers are alive, which to port next
 - `research/EXTRACTOR_SPECS.md` — megaplay/vidtube/streamwish/kwik recipes and traps
 - `research/STACK.md` — locked versions and build traps
+
+## FAQ
+
+**What is Dr Animo APK?** A native Android anime client shipped as an APK — offline-first catalogue
+in Room, native HLS playback on Media3/ExoPlayer, no WebView renderer.
+
+**Is Dr Animo free?** Yes: free APK, MIT-licensed source, no ads and no telemetry.
+
+**Which Android versions?** Android 7.0 (API 24) and newer; the manifest compiles against API 35.
+
+**How do I install it?** Download `Animo-1.9.0.apk` from Releases and sideload it
+(`adb install -r Animo-1.9.0.apk`), or open the APK on the device with "install unknown apps" allowed.
+
+**Does it work offline?** Browsing, search and progress are local; video playback needs a connection.
+
+**Is it on the Play Store?** No — APK-only distribution from this repository's releases.
+
+**Why the tagline?** *Only Dr Animo can be hidden under the black hole.*
