@@ -1,29 +1,39 @@
-# Legal notice
+# Copyright & takedowns
 
-**Dr Animo hosts no content.** It is a free, open-source Android client (player + catalogue view) under
-the MIT licence. It ships with no video, no subtitle files, no artwork library and no catalogue database,
-and it operates no server that stores or relays media. Anything it can play is fetched at runtime,
-directly from a third-party source, over the user's own connection — the same page a browser could open.
+**The content is not ours to remove.** Dr Animo is a free, MIT-licensed Android client — a video player plus
+a local catalogue view. It runs no server that stores, mirrors or streams media, ships with no video or
+subtitles, and has no upload endpoint. Everything it plays is fetched at runtime from a third-party source,
+over the user's own connection.
 
-We are **not affiliated with, endorsed by, sponsored by or licensed by** any studio, distributor,
-streaming service or rights holder, including Cartoon Network, Warner Bros. Discovery and the *Ben 10*
-franchise (the mascot is a fan reference). All titles, characters, logos and artwork remain the property
-of their respective owners.
+So a takedown has to go to the party that actually serves the file.
 
-Full policy, including the DMCA notice and counter-notice procedure, is published at
-**https://1hp2die.github.io/Dr-Animo/dmca.html** and mirrored in [`docs/dmca.html`](docs/dmca.html).
+## Where to send it
 
-## Filing a notice
+1. **Find the host** — `dig +short <domain>`, `whois <domain>`, or the CDN named in the response headers
+   (`server:`, `cf-ray:`, …).
+2. **Contact the hosting provider / CDN** using their abuse or DMCA form. That is the only party that can
+   suspend the material.
+3. **If it is inside this repository or its release files**, it is GitHub's decision:
+   <https://github.com/contact/dmca>. GitHub notifies the account holder and we comply with the outcome.
 
-A notice must satisfy 17 U.S.C. § 512(c)(3): signature, identification of the work, the **exact URL or
-domain** the app would request, your contact details, a good-faith statement, and a statement under
-penalty of perjury that you are the owner or authorised to act for the owner.
+There is **no email address and no takedown desk** for this project. The repository is the only contact
+surface.
 
-Send it to the address published on the DMCA page with the subject `DMCA notice`. Complete notices are
-acknowledged within 5 business days, and the named source is disabled from the app — endpoints are
-configuration, not bundled content, so removal does not require the app to "contain" the material.
+## What we do and do not do
 
-## What this policy cannot do
+- We do **not** host, mirror, transcode, index or proxy any media — there is no copy here to delete.
+- We do **not** forward, investigate or act as an enforcement agent for third parties, and we hold no logs
+  of what anyone watched.
+- We do **not** claim the 17 U.S.C. § 512 safe harbour; we are not a service provider hosting user content.
+- **Voluntarily**, if a rights holder points at one specific endpoint and the claim is straightforward, that
+  endpoint can be dropped from the shipped configuration. Courtesy, not a legal duty.
+- Sources tied to repeated valid complaints are not re-added.
 
-Nothing hosted here can be deleted from a third-party server, and no client can make a site unreachable
-in a browser. What this project can do — and does — is stop requesting that source.
+## Trademarks
+
+Not affiliated with, endorsed by, sponsored by or licensed by any studio, distributor or rights holder —
+including Cartoon Network, Warner Bros. Discovery and the *Ben 10* franchise (the mascot is a fan
+reference). Titles, characters and artwork shown in the app come from third-party catalogues at runtime and
+belong to their owners.
+
+Full page: <https://1hp2die.github.io/Dr-Animo/dmca.html> · [`docs/dmca.html`](docs/dmca.html)

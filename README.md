@@ -83,17 +83,19 @@ research/                  verified protocol docs, provider matrix, crawler, pro
 
 ## Legal
 
-Dr Animo **hosts no content and runs no media server**. The APK ships empty — no video, no subtitle
-files, no catalogue — and every stream is requested at runtime, directly from a third-party source, over
-the user's own connection. There is no analytics SDK, no advertising ID and no account system.
+Dr Animo **hosts no content**: no video, no subtitle files, no catalogue, no media server. The APK ships
+empty and every stream is fetched at runtime from a third-party source, over the user's own connection.
+There is no analytics SDK, no advertising ID and no account system.
 
-It is not affiliated with, endorsed by or licensed by any studio, distributor or rights holder
-(including Cartoon Network / Warner Bros. Discovery — the mascot is a fan reference). Titles, characters
-and artwork belong to their owners.
+It is not affiliated with, endorsed by or licensed by any studio, distributor or rights holder (including
+Cartoon Network / Warner Bros. Discovery — the mascot is a fan reference).
 
-DMCA / takedown procedure, counter-notice and the designated contact:
-[`docs/dmca.html`](docs/dmca.html) · live at https://1hp2die.github.io/Dr-Animo/dmca.html ·
-summary in [`LEGAL.md`](LEGAL.md).
+**Content takedowns belong with the host that serves the file, not with this app.** No email address and no
+takedown desk exist for this project; the repository is the only contact surface, and anything living inside
+it is GitHub's call: <https://github.com/contact/dmca>.
+
+Full position: [`docs/dmca.html`](docs/dmca.html) · https://1hp2die.github.io/Dr-Animo/dmca.html · summary in
+[`LEGAL.md`](LEGAL.md).
 
 ## Docs
 
