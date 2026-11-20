@@ -24,6 +24,7 @@ import com.animo.app.domain.repo.HindiCatalog
 import com.animo.app.domain.repo.StreamRepository
 import com.animo.app.data.repo.MovieLinkStreamRepository
 import com.animo.app.data.sync.MovieLinkSyncer
+import com.animo.app.data.sync.ProviderSync
 import com.animo.app.data.sync.RoomMovieLinkCursorStore
 import com.animo.app.data.sync.RoomMovieLinkStore
 import com.animo.app.domain.model.CatalogIds
@@ -128,6 +129,10 @@ object ServiceLocator {
 
     val animeDao: AnimeDao by lazy { database.animeDao() }
 
+    /** Per-provider sync preference; see `ProviderPrefDao`. */
+    val providerPrefDao: com.animo.app.data.local.dao.ProviderPrefDao
+        get() = database.providerPrefDao()
+
     val episodeDao: EpisodeDao by lazy { database.episodeDao() }
 
     val progressDao: ProgressDao by lazy { database.progressDao() }
@@ -164,6 +169,16 @@ object ServiceLocator {
                 com.animo.app.ui.settings.SettingsPreferences(requireContext()).recordSync(epochMs)
             },
         )
+    }
+
+    /**
+     * The single entry point every sync caller shares: the provider page's Sync button and the
+     * nightly [com.animo.app.data.sync.SyncWorker]. Lazy like the rest — nothing here reads the
+     * preference table until a mode is actually asked for, and each catalogue's syncer is resolved
+     * through its own accessor at call time, so a provider registered later is still reachable.
+     */
+    val providerSync: ProviderSync by lazy {
+        ProviderSync(prefs = providerPrefDao, log = AppLog::d)
     }
 
     /** What the player resolves through: a downloaded episode first, the network otherwise. */
