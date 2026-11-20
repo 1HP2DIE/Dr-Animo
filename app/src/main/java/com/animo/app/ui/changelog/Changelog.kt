@@ -37,6 +37,8 @@ object Changelog {
                 Change(ChangeKind.NEW, "Filter by kind — Anime, Movie or Series — and by language, so a Hindi film and a Japanese series stop looking the same in the grid"),
                 Change(ChangeKind.IMPROVED, "The nightly sync only touches the providers you left on Auto, and one failing no longer stops the rest"),
                 Change(ChangeKind.IMPROVED, "Film and series titles now carry a language, so they can be found by it"),
+                Change(ChangeKind.NEW, "History lists every episode you watched, each with its own progress bar and how long ago — not one row per show"),
+                Change(ChangeKind.FIXED, "A series from the films catalogue showed a single episode: the whole season is listed now, and every episode plays its own stream"),
             ),
         ),
         Release(
