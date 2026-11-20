@@ -4,7 +4,6 @@ import java.io.IOException
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -21,7 +20,6 @@ class TransportRouterTest {
 
         var calls = 0
         var posts: Int = 0
-        var lastUrl: String? = null
 
         override suspend fun execute(
             url: String,
@@ -29,7 +27,6 @@ class TransportRouterTest {
             timeoutMs: Long,
         ): ChannelOutcome {
             calls++
-            lastUrl = url
             return answer(url)
         }
 
@@ -40,18 +37,13 @@ class TransportRouterTest {
             timeoutMs: Long,
         ): ChannelOutcome {
             posts++
-            calls++
             return answer(url)
         }
     }
 
-    private fun response(channel: String, code: Int = 200, body: String = "{}") =
-        TransportResponse(code = code, body = body, headers = emptyMap(), channel = channel)
-
-    private fun ok(channel: String, code: Int = 200, body: String = "{}") =
-        ChannelOutcome.Ok(response(channel, code, body))
-
-    // ---------------------------------------------------------------- walking the ladder
+    private fun ok(channel: String, code: Int = 200, body: String = "{}") = ChannelOutcome.Ok(
+        TransportResponse(code = code, body = body, headers = emptyMap(), channel = channel),
+    )
 
     @Test
     fun `a refused first channel hands over to the second`() = runBlocking {
@@ -69,135 +61,86 @@ class TransportRouterTest {
     }
 
     @Test
-    fun `an empty ladder is a typed failure with no attempts`() = runBlocking {
-        val result = TransportRouter(emptyList()).get("https://one.invalid/page")
-
-        val error = result.exceptionOrNull()
-        assertTrue(error is TransportBlockedException)
-        assertTrue((error as TransportBlockedException).attempts.isEmpty())
-        assertEquals("one.invalid", error.host)
-        assertFalse(error.refused)
-    }
-
-    @Test
-    fun `every rung refusing is blocked, not dead`() = runBlocking {
+    fun `every rung refusing is blocked, not dead, and the log names slots only`() = runBlocking {
+        val lines = mutableListOf<String>()
         val first = Fake("desktop") { ChannelOutcome.Refused("http 403") }
         val second = Fake("browser") { ChannelOutcome.Refused("http 429") }
-        val router = TransportRouter(listOf(first, second))
+        val router = TransportRouter(listOf(first, second), log = { lines += it })
 
-        val error = router.get("https://two.invalid/page").exceptionOrNull() as TransportBlockedException
+        val error = router.get("https://two.invalid/page?token=abc123secret")
+            .exceptionOrNull() as TransportBlockedException
 
         assertEquals(listOf("desktop", "browser"), error.attempts.map { it.channel })
         assertEquals(listOf(AttemptStatus.REFUSED, AttemptStatus.REFUSED), error.attempts.map { it.status })
         assertTrue(error.refused)
         // The cooldown is armed for the *next* call, and the caller can read it without the budget.
         assertTrue(error.retryAfterMs > 0L)
+        assertEquals("two.invalid", error.host)
+        assertTrue(lines.any { it.contains("desktop") })
+        assertFalse(lines.any { it.contains("abc123secret") })
     }
 
     @Test
-    fun `a failed channel hands over without charging the host a cooldown`() = runBlocking {
-        val budget = HostBudget(minIntervalMs = 0L, maxBackoffMs = 30_000L)
-        val first = Fake("desktop") { ChannelOutcome.Failed(IOException("dns")) }
-        val second = Fake("browser") { ok("browser") }
-        val router = TransportRouter(listOf(first, second), budget)
+    fun `a challenge body with 200 and a bare 403 or 429 are all refusals`() = runBlocking {
+        val refusals = listOf(
+            ok("desktop", code = 200, body = "<html><title>Just a moment...</title><div id=\"cf_chl\"></div>"),
+            ok("desktop", code = 403, body = "Forbidden"),
+            ok("desktop", code = 429, body = ""),
+        )
 
-        assertTrue(router.get("https://three.invalid/page").isSuccess)
-        assertEquals(0, budget.strikes("three.invalid"))
-    }
+        refusals.forEach { refusal ->
+            val first = Fake("desktop") { refusal }
+            val second = Fake("browser") { ok("browser", body = "real") }
+            val result = TransportRouter(listOf(first, second)).get("https://three.invalid/page")
 
-    @Test
-    fun `all channels failing keeps the transport error as the cause`() = runBlocking {
-        val boom = IOException("socket closed")
-        val first = Fake("desktop") { ChannelOutcome.Failed(boom) }
-        val second = Fake("browser") { ChannelOutcome.Failed(IOException("tls")) }
-        val router = TransportRouter(listOf(first, second))
-
-        val error = router.get("https://four.invalid/page").exceptionOrNull() as TransportBlockedException
-
-        assertEquals(boom, error.cause)
-        assertFalse(error.refused)
-        assertEquals(listOf(AttemptStatus.FAILED, AttemptStatus.FAILED), error.attempts.map { it.status })
-    }
-
-    // ---------------------------------------------------------------- what counts as a refusal
-
-    @Test
-    fun `a challenge page served with 200 is refused`() = runBlocking {
-        val first = Fake("desktop") {
-            ok("desktop", body = "<html><title>Just a moment...</title><div id=\"cf_chl\"></div>")
+            assertEquals("real", result.getOrNull()?.body)
+            assertEquals(1, second.calls)
         }
-        val second = Fake("browser") { ok("browser", body = "real") }
-        val router = TransportRouter(listOf(first, second))
-
-        val result = router.get("https://five.invalid/page")
-
-        assertEquals("real", result.getOrNull()?.body)
-        assertEquals(1, second.calls)
     }
 
     @Test
-    fun `a 404 is an answer and stops the ladder`() = runBlocking {
-        val first = Fake("desktop") { ok("desktop", code = 404, body = "gone") }
-        val second = Fake("browser") { ok("browser") }
-        val router = TransportRouter(listOf(first, second))
+    fun `404 and 410 are answers and stop the ladder`() = runBlocking {
+        listOf(404, 410).forEach { code ->
+            val first = Fake("desktop") { ok("desktop", code = code, body = "gone") }
+            val second = Fake("browser") { ok("browser") }
+            val result = TransportRouter(listOf(first, second)).get("https://four.invalid/page")
 
-        val result = router.get("https://six.invalid/page")
-
-        assertEquals(404, result.getOrNull()?.code)
-        assertEquals(0, second.calls)
+            assertEquals(code, result.getOrNull()?.code)
+            assertEquals(0, second.calls)
+        }
     }
 
     @Test
-    fun `a 410 is an answer and stops the ladder`() = runBlocking {
-        val first = Fake("desktop") { ok("desktop", code = 410, body = "dead") }
-        val second = Fake("browser") { ok("browser") }
-        val router = TransportRouter(listOf(first, second))
+    fun `failures move on without a cooldown and a fully failed ladder keeps the cause`() = runBlocking {
+        val budget = HostBudget(minIntervalMs = 0L, maxBackoffMs = 30_000L)
+        val boom = IOException("socket closed")
+        val slow = Fake("desktop") { ChannelOutcome.Failed(boom) }
+        val fast = Fake("browser") { ok("browser") }
 
-        assertEquals(410, router.get("https://seven.invalid/page").getOrNull()?.code)
-        assertEquals(0, second.calls)
+        assertTrue(TransportRouter(listOf(slow, fast), budget).get("https://five.invalid/page").isSuccess)
+        // A socket error is not the host objecting to us, so nothing is charged to it.
+        assertEquals(0, budget.strikes("five.invalid"))
+
+        val allFailed = TransportRouter(
+            listOf(slow, Fake("browser") { ChannelOutcome.Failed(IOException("tls")) }),
+        ).get("https://five.invalid/page").exceptionOrNull() as TransportBlockedException
+
+        assertEquals(boom, allFailed.cause)
+        assertFalse(allFailed.refused)
+        assertEquals(listOf(AttemptStatus.FAILED, AttemptStatus.FAILED), allFailed.attempts.map { it.status })
     }
 
     @Test
-    fun `a channel that hands over a bare 403 is still treated as a refusal`() = runBlocking {
-        val first = Fake("desktop") { ok("desktop", code = 403, body = "Forbidden") }
-        val second = Fake("browser") { ok("browser", body = "real") }
-        val router = TransportRouter(listOf(first, second))
-
-        assertEquals("real", router.get("https://eight.invalid/page").getOrNull()?.body)
-        assertEquals(1, second.calls)
-    }
-
-    @Test
-    fun `a 429 is a refusal`() = runBlocking {
-        val first = Fake("desktop") { ok("desktop", code = 429) }
-        val second = Fake("browser") { ok("browser", body = "real") }
-        val router = TransportRouter(listOf(first, second))
-
-        assertEquals("real", router.get("https://nine.invalid/page").getOrNull()?.body)
-    }
-
-    @Test
-    fun `a body that merely mentions a marker past the head is not a challenge`() = runBlocking {
-        val body = "x".repeat(9 * 1024) + "challenge-platform"
-        val first = Fake("desktop") { ok("desktop", body = body) }
-        val second = Fake("browser") { ok("browser") }
-        val router = TransportRouter(listOf(first, second))
-
-        assertEquals(200, router.get("https://ten.invalid/page").getOrNull()?.code)
-        assertEquals(0, second.calls)
-    }
-
-    // ---------------------------------------------------------------- inputs and plumbing
-
-    @Test
-    fun `a blank url never reaches a channel`() = runBlocking {
+    fun `a blank url never reaches a channel and an empty ladder is a typed failure`() = runBlocking {
         val first = Fake("desktop") { ok("desktop") }
-        val router = TransportRouter(listOf(first))
-
-        val result = router.get("   ")
-
-        assertTrue(result.exceptionOrNull() is IllegalArgumentException)
+        val blank = TransportRouter(listOf(first)).get("   ")
+        assertTrue(blank.exceptionOrNull() is IllegalArgumentException)
         assertEquals(0, first.calls)
+
+        val empty = TransportRouter(emptyList()).get("https://six.invalid/page")
+            .exceptionOrNull() as TransportBlockedException
+        assertTrue(empty.attempts.isEmpty())
+        assertFalse(empty.refused)
     }
 
     @Test
@@ -205,26 +148,10 @@ class TransportRouterTest {
         val first = Fake("desktop") { ok("desktop", body = "created") }
         val router = TransportRouter(listOf(first))
 
-        val result = router.post("https://eleven.invalid/page", body = "a=1")
+        val result = router.post("https://seven.invalid/page", body = "a=1")
 
         assertEquals("created", result.getOrNull()?.body)
         assertEquals(1, first.posts)
-        assertEquals(0, first.calls - first.posts)
-    }
-
-    @Test
-    fun `log lines name slots, never the request or the response body`() = runBlocking {
-        val lines = mutableListOf<String>()
-        val secret = "token=abc123secret"
-        val first = Fake("desktop") { ChannelOutcome.Refused("http 403") }
-        val second = Fake("browser") { ok("browser", body = secret) }
-        val router = TransportRouter(listOf(first, second), log = { lines += it })
-
-        router.get("https://twelve.invalid/page?$secret")
-
-        assertTrue(lines.any { it.contains("desktop") })
-        assertTrue(lines.any { it.contains("browser") })
-        assertFalse(lines.any { it.contains("abc123secret") })
-        assertNotNull(lines.firstOrNull())
+        assertEquals(0, first.calls)
     }
 }

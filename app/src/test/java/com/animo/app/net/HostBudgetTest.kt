@@ -2,7 +2,6 @@ package com.animo.app.net
 
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -27,48 +26,33 @@ class HostBudgetTest {
         )
 
     @Test
-    fun `the first call to a host never waits`() = runBlocking {
+    fun `the first call never waits and the second waits out the interval`() = runBlocking {
         val clock = FakeClock()
         val host = budget(clock)
 
         assertEquals(0L, host.await("a.invalid"))
         assertEquals(1_000L, clock.at)
-    }
-
-    @Test
-    fun `a second call inside the interval waits the remainder`() = runBlocking {
-        val clock = FakeClock()
-        val host = budget(clock)
-        host.await("a.invalid")
 
         clock.at += 300L
-
         assertEquals(500L, host.await("a.invalid"))
         assertEquals(1_800L, clock.at)
-    }
-
-    @Test
-    fun `a call after the interval has elapsed does not wait`() = runBlocking {
-        val clock = FakeClock()
-        val host = budget(clock)
-        host.await("a.invalid")
 
         clock.at += 5_000L
-
         assertEquals(0L, host.await("a.invalid"))
     }
 
     @Test
-    fun `a refusal arms a cooldown that the next call has to wait out`() = runBlocking {
+    fun `a refusal arms a cooldown the next call waits out but a later rung skips`() = runBlocking {
         val clock = FakeClock()
         val host = budget(clock)
 
-        val armed = host.onRefused("a.invalid")
-
-        assertEquals(800L, armed)
+        assertEquals(800L, host.onRefused("a.invalid"))
         assertEquals(clock.now() + 800L, host.backoffUntilMs("a.invalid"))
         assertEquals(800L, host.waitForMs("a.invalid"))
         assertEquals(1, host.strikes("a.invalid"))
+
+        // Same call, next rung: pacing still applies, the cooldown it just armed does not.
+        assertEquals(0L, host.waitForMs("a.invalid", honorBackoff = false))
     }
 
     @Test
@@ -105,16 +89,5 @@ class HostBudgetTest {
         assertEquals(800L, host.waitForMs("a.invalid"))
         assertEquals(0L, host.waitForMs("b.invalid"))
         assertEquals(0L, host.await("b.invalid"))
-    }
-
-    @Test
-    fun `a rung after the first ignores the cooldown it just armed`() {
-        val clock = FakeClock()
-        val host = budget(clock)
-        host.onRefused("a.invalid")
-
-        // Same call, next rung: pacing still applies, the 800 ms cooldown does not.
-        assertTrue(host.waitForMs("a.invalid", honorBackoff = true) > 0L)
-        assertEquals(0L, host.waitForMs("a.invalid", honorBackoff = false))
     }
 }

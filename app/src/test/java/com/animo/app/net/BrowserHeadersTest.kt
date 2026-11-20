@@ -11,7 +11,7 @@ import org.junit.Test
 class BrowserHeadersTest {
 
     @Test
-    fun `a top level navigation carries the full chrome set`() {
+    fun `a top level navigation carries the full chrome set and no host of its own`() {
         val headers = BrowserHeaders.forUrl("https://page.invalid/watch/1")
 
         assertEquals(HttpClientFactory.UA_DESKTOP, headers["User-Agent"])
@@ -24,66 +24,48 @@ class BrowserHeadersTest {
         assertEquals("none", headers["sec-fetch-site"])
         assertTrue(headers.getValue("Accept").contains("text/html"))
         assertTrue(headers.getValue("sec-ch-ua").contains("Google Chrome"))
-    }
-
-    @Test
-    fun `no referer means no referer or origin header`() {
-        val headers = BrowserHeaders.forUrl("https://page.invalid/watch/1", referer = "  ")
-
         assertNull(headers["Referer"])
         assertNull(headers["Origin"])
-        assertEquals("none", headers["sec-fetch-site"])
+
+        // Every value is the shared UA, a constant, or derived from the caller's url. A hit here
+        // would mean a real host survived into the APK as a string literal.
+        assertFalse(headers.containsKey("Host"))
+        assertFalse(headers.any { (_, value) -> value.contains(".invalid") })
     }
 
     @Test
-    fun `a same host referer is same-origin`() {
-        val headers = BrowserHeaders.forUrl(
+    fun `a referer adds referer and origin and the right fetch site`() {
+        val sameOrigin = BrowserHeaders.forUrl(
             url = "https://page.invalid/watch/1",
             referer = "https://page.invalid/browse",
         )
+        assertEquals("https://page.invalid/browse", sameOrigin["Referer"])
+        assertEquals("https://page.invalid", sameOrigin["Origin"])
+        assertEquals("same-origin", sameOrigin["sec-fetch-site"])
 
-        assertEquals("https://page.invalid/browse", headers["Referer"])
-        assertEquals("https://page.invalid", headers["Origin"])
-        assertEquals("same-origin", headers["sec-fetch-site"])
-    }
-
-    @Test
-    fun `a sibling subdomain is same-site`() {
-        val headers = BrowserHeaders.forUrl(
-            url = "https://cdn.page.invalid/stream.m3u8",
-            referer = "https://page.invalid/watch/1",
+        // Chrome's "site" is the last two labels, which is the whole public-suffix problem here.
+        assertEquals(
+            "same-site",
+            BrowserHeaders.forUrl(
+                url = "https://cdn.page.invalid/stream.m3u8",
+                referer = "https://page.invalid/watch/1",
+            )["sec-fetch-site"],
+        )
+        assertEquals(
+            "cross-site",
+            BrowserHeaders.forUrl(
+                url = "https://embed.other.invalid/p/1",
+                referer = "https://page.invalid/watch/1",
+            )["sec-fetch-site"],
         )
 
-        assertEquals("same-site", headers["sec-fetch-site"])
-    }
-
-    @Test
-    fun `a different registrable domain is cross-site`() {
-        val headers = BrowserHeaders.forUrl(
-            url = "https://embed.other.invalid/p/1",
-            referer = "https://page.invalid/watch/1",
+        // A non-default port has to survive into the origin or the referer check fails.
+        assertEquals(
+            "https://page.invalid:8443",
+            BrowserHeaders.forUrl(
+                url = "https://page.invalid/watch/1",
+                referer = "https://page.invalid:8443/browse",
+            )["Origin"],
         )
-
-        assertEquals("cross-site", headers["sec-fetch-site"])
-    }
-
-    @Test
-    fun `a non default port is kept in the origin`() {
-        val headers = BrowserHeaders.forUrl(
-            url = "https://page.invalid/watch/1",
-            referer = "https://page.invalid:8443/browse",
-        )
-
-        assertEquals("https://page.invalid:8443", headers["Origin"])
-    }
-
-    @Test
-    fun `the header set names no host of its own`() {
-        val headers = BrowserHeaders.forUrl("https://page.invalid/watch/1")
-
-        // Every value is either the shared UA, a constant, or derived from the caller's url — a
-        // baked-in provider host in this file would mean a host survived into the APK as a string.
-        assertFalse(headers.containsKey("Host"))
-        assertFalse(headers.any { (_, value) -> value.contains(".invalid") })
     }
 }
