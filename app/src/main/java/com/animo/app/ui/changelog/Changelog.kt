@@ -30,7 +30,7 @@ object Changelog {
         Release(
             version = "1.10.0",
             date = "20 Nov 2026",
-            headline = "A second catalogue: films and series that were never in the anime list.",
+            headline = "A second catalogue of films and series — and Hindi that works again.",
             changes = listOf(
                 Change(ChangeKind.NEW, "A second catalogue of films and series — Tamil, Telugu, Hindi and more — searchable and filterable with everything else"),
                 Change(ChangeKind.NEW, "Its titles play in the same player, with resume, subtitles and downloads"),
@@ -38,6 +38,7 @@ object Changelog {
                 Change(ChangeKind.IMPROVED, "Hindi sync now shows its progress from the first second instead of looking stuck"),
                 Change(ChangeKind.IMPROVED, "When a site refuses to answer, the app tries the browser route before giving up, and says which route failed"),
                 Change(ChangeKind.FIXED, "Last sync is now recorded for every sync — from the drawer, pull-to-refresh or the nightly job — not only while Settings was open"),
+                Change(ChangeKind.FIXED, "The Hindi catalogue syncs again — 1,700+ titles on the first run — and its episodes play, with resume and the SUB / HINDI tags"),
             ),
         ),
         Release(
