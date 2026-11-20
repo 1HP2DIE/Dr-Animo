@@ -129,7 +129,7 @@ android {
         applicationId = "com.animo.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 17
+        versionCode = 20
         versionName = "1.11.0"
 
         // No endpoint ever reaches BuildConfig: every host is resolved from the encrypted
