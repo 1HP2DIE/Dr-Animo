@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en" class="is-embed-root">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Gondhal (2026) · MovieLinkBD</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=Syne:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="/style/pd2.css?v=128">
+</head>
+<body class="is-embed is-watch">
+<main class="watch-main">
+  <div class="player-band">
+  <div class="player-stage">
+    <div class="player" id="player" tabindex="0" role="application" aria-label="Video player">
+      <div class="poster-veil" id="posterVeil">
+        <div class="poster-veil-thumb" style="background-image:url('https://cdn.example.invalid/poster_oam9th1795137186.jpg')"></div>
+        <div class="poster-veil-hq"></div>
+      </div>
+      <video id="video" playsinline webkit-playsinline preload="metadata" crossorigin="anonymous" x-webkit-airplay="allow" poster="https://cdn.example.invalid/poster_oam9th1795137186.jpg"></video>
+
+      <div class="embed-chrome" id="embedChrome" aria-hidden="true">
+        <div class="embed-chrome-top">
+          <a class="embed-back" id="btnHomeBack" href="/" hidden aria-label="Back to home" title="Home">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+          </a>
+          <div class="embed-chrome-copy">
+            <div class="embed-title" id="embedTitle">Gondhal (2026)</div>
+            <div class="embed-meta" id="embedMeta"><span id="embedMetaLead"></span><b id="embedMetaLangs">Hindi</b></div>
+          </div>
+          <div class="embed-chrome-actions" id="embedChromeActions">
+            <button type="button" class="embed-share-btn" id="btnShare" title="Share" aria-label="Share" aria-haspopup="dialog">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="center-overlay" id="centerOverlay"><div class="spinner"></div></div>
+      <div class="cc-overlay" id="ccOverlay" hidden aria-hidden="true"><div class="cc-box"><span class="cc-text" id="ccText"></span></div></div>
+      <div class="vol-hud" id="volHud" aria-hidden="true">
+        <div class="vol-hud-level" id="volHudLevel">100%</div>
+        <div class="vol-hud-bar"><div class="vol-hud-fill" id="volHudFill"></div></div>
+        <div class="vol-hud-icon" id="volHudIcon" aria-hidden="true"></div>
+      </div>
+      <div class="vol-hud bright-hud" id="brightHud" aria-hidden="true">
+        <div class="vol-hud-level" id="brightHudLevel">100%</div>
+        <div class="vol-hud-bar"><div class="vol-hud-fill" id="brightHudFill"></div></div>
+        <div class="vol-hud-icon" id="brightHudIcon" aria-hidden="true"></div>
+      </div>
+      <div class="player-error" id="playerError"></div>
+
+      <button class="big-play" id="bigPlay" aria-label="Play / Pause">
+        <svg id="bigIconPlay" viewBox="6.5 5 14 14" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+        <svg id="bigIconPause" viewBox="0 0 24 24" style="display:none" aria-hidden="true"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
+      </button>
+
+      <div class="controls" id="controls">
+        <div class="progress-wrap" id="progress">
+          <div class="progress-times ctime">
+            <span id="timeCurrent">0:00</span><span class="sep">/</span><span class="total" id="timeTotal">0:00</span>
+          </div>
+          <div class="thumb-preview" id="thumbPreview"><div class="thumb-time" id="thumbTime">0:00</div></div>
+          <div class="progress-rail">
+            <div class="progress-track">
+              <div class="progress-buffered" id="progressBuffered"></div>
+              <div class="progress-played" id="progressPlayed"></div>
+            </div>
+            <div class="progress-handle" id="progressHandle"></div>
+          </div>
+        </div>
+        <div class="crow">
+          <button class="cbtn" id="btnPlay" aria-label="Play" data-tip="Play">
+            <svg id="iconPlay" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            <svg id="iconPause" viewBox="0 0 24 24" style="display:none"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+          </button>
+          <div class="volume-wrap" id="volumeWrap">
+            <button class="cbtn" id="btnMute" aria-label="Mute" data-tip="Mute">
+              <svg id="iconVolHigh" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 00-2.5-4.03v8.05A4.5 4.5 0 0016.5 12zM14 3.23v2.06A7 7 0 0119 12a7 7 0 01-5 6.71v2.06A9 9 0 0021 12 9 9 0 0014 3.23z"/></svg>
+              <svg id="iconVolLow" viewBox="0 0 24 24" style="display:none"><path d="M7 9v6h4l5 5V4l-5 5H7zM16.5 12a4.5 4.5 0 00-2.5-4.03v8.05A4.5 4.5 0 0016.5 12z"/></svg>
+              <svg id="iconVolMute" viewBox="0 0 24 24" style="display:none"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.96 8.96 0 0021 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.99 8.99 0 003.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+            </button>
+            <div class="volume-slider" id="volumeSlider"><div class="volume-fill" id="volumeFill" style="width:100%"></div></div>
+          </div>
+          <div class="spacer"></div>
+          <button class="cbtn crow-opt" id="btnPip" type="button" aria-label="Picture in picture" data-tip="Picture in picture" hidden>
+            <svg id="iconPipEnter" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M19 11h-8v6h8v-6zm4 8V4.98C23 3.88 22.1 3 21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2zm-2 .02H3V4.97h18v14.05z"/></svg>
+            <svg id="iconPipExit" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="display:none"><path d="M19 11h-8v6h8v-6zm4 8V4.98C23 3.88 22.1 3 21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2zm-2 .02H3V4.97h18v14.05z"/></svg>
+          </button>
+          <button class="cbtn crow-opt" id="btnVideoFit" type="button" aria-haspopup="dialog" aria-label="Screen fit" data-tip="Screen">
+            <svg id="iconFitContain" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M19 12h-2v3h-3v2h5v-5zM7 9h3V7H5v5h2V9zm14-6H3c-1.1 0-2 .9-2 2v14c0 1.11.9 2 2 2h18c1.1 0 2-.89 2-2V5c0-1.1-.9-2-2-2zm0 16.01H3V4.99h18v14.02z"/></svg>
+            <svg id="iconFitCrop" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="display:none"><path d="M17 15h2V7c0-1.1-.9-2-2-2H9v2h8v8zM7 17V1H5v4H1v2h4v10c0 1.1.9 2 2 2h10v4h2v-4h4v-2H7z"/></svg>
+            <svg id="iconFitStretch" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="display:none"><path d="M3 5v4h2V7h2V5H3zm14 0v2h2v2h2V5h-4zM5 17H3v4h4v-2H5v-2zm16 0h-2v2h-2v2h4v-4zM8 8h8v8H8V8z"/></svg>
+          </button>
+          <button class="cbtn text crow-opt" id="btnSpeed" type="button" aria-haspopup="dialog" aria-label="Playback speed" data-tip="Speed">
+            <span class="lbl-val" id="btnSpeedVal">1×</span>
+          </button>
+          <button class="cbtn text lang-btn crow-keep" id="btnAudio" aria-haspopup="dialog" aria-label="Audio track" data-tip="Audio" style="display:none">
+            <svg class="lang-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3a3 3 0 00-3 3v6a3 3 0 006 0V6a3 3 0 00-3-3zm5 9a5 5 0 01-10 0H5a7 7 0 0014 0h-2zm-6 7h2v3h-2z"/></svg>
+            <span class="lbl-val" id="btnAudioVal">—</span>
+          </button>
+          <button class="cbtn text lang-btn crow-keep" id="btnSubs" aria-haspopup="dialog" aria-label="Subtitles" data-tip="Subtitles" style="display:none">
+            <svg class="lang-ico cc-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M19 4H5c-1.11 0-2 .9-2 2v12c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1c0 .55-.45 1-1 1h-3c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1z"/></svg>
+            <span class="lbl-val" id="btnSubsVal">Off</span>
+          </button>
+          <button class="cbtn text lang-btn crow-keep" id="btnQuality" aria-haspopup="dialog" aria-label="Quality" data-tip="Quality">
+            <svg class="lang-ico q-caret" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 11l1.41 1.41L12 7.83l4.59 4.58L18 11l-6-6-6 6z"/><path class="q-caret-trail" d="M6 17.59L7.41 19 12 14.42 16.59 19 18 17.59l-6-6-6 6z"/></svg>
+            <span class="lbl-val" id="btnQualityVal">Auto</span>
+          </button>
+          <button class="cbtn crow-keep" id="btnFullscreen" aria-label="Fullscreen" data-tip="Fullscreen">
+            <svg id="iconFsEnter" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+            <svg id="iconFsExit" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="display:none"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="ps-backdrop" id="psBackdrop"></div>
+      <aside class="ps-sheet" id="psSheet" role="dialog" aria-hidden="true" aria-labelledby="psTitle">
+        <header class="ps-head">
+          <span class="ps-grip" aria-hidden="true"></span>
+          <h3 class="ps-title" id="psTitle">Quality</h3>
+          <button class="ps-close" id="psClose" type="button" aria-label="Close">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          </button>
+        </header>
+        <div class="ps-body" id="psBody" role="listbox" aria-label="Options"></div>
+      </aside>
+    </div>
+  </div>
+  </div>
+</main>
+<script>window.__PD2 = {"master":"https://watch.example.invalid/m/RAc1uqLN87YL-cDuxRmJHuScwNLa4mDd1qGLbGR734aauIZVPZ9wKOXWtm4llTH0TCIskePN_xUMALblEZT9dQqVS_qp5ZAvXgzAZ8JZ-NVETrHY4PbuNTgQXEi8duCp1lK9S5zmL8ubMSOq_kAYjemg8PKLClOvBjhWxu9yDM8TTal51i5FdiKreaXaIdjipLR-NhcMZz-dNxf7mUf_N0usMvBR16S1LDCmhWqrIRCHRc71huXWbHkPU85Bsx_1dp8F_nlhHqKRNCI620mtM4b94WIDsUObC4jj9Vb8I-xxTHARYJ6zMeUTM5VtmWCmLWM2_0r5OqqQiXfTBaLylUAdNq5ZzTTU_2GuoifQ-SkfXwb8H43ZuQ4mjSMTJFKORGyzF9DwzksJnfWdorvxuyzBhTEhA9imhTGEO8A6a75aX1kCGwo50F-l_00a6qroqMVeJ88nEEO7JXi-FyuqT-3b0jcEh1CKEGPN4IMaYdNj3vmBr0KgcQH2rR7KNKnfvap6exMnbfjQkxwyyQabWHYhbpD4nkETNns5SDQhoJgHCkMu2K4aMuEyHxf_CwwuSoY1m_n3t3raYZEKRZSOjX3sXEJpghieR8YDOvz5WchPFc_psJZEDlt6pktCnLYxbH1nES25TGrc2awbgeWPjsRhfc0ti6n1PV2Ts8MddVQmsiiE0LEqmgK2Bp2P-LX23xTK9uvayg","title":"Gondhal (2026)","year":"","langs":"Hindi","poster":"https://cdn.example.invalid/poster_oam9th1795137186.jpg","subs":[],"audio":[],"episodes":[{"label":"Movie","number":0,"num_end":0,"master":"https://watch.example.invalid/m/RAc1uqLN87YL-cDuxRmJHuScwNLa4mDd1qGLbGR734aauIZVPZ9wKOXWtm4llTH0TCIskePN_xUMALblEZT9dQqVS_qp5ZAvXgzAZ8JZ-NVETrHY4PbuNTgQXEi8duCp1lK9S5zmL8ubMSOq_kAYjemg8PKLClOvBjhWxu9yDM8TTal51i5FdiKreaXaIdjipLR-NhcMZz-dNxf7mUf_N0usMvBR16S1LDCmhWqrIRCHRc71huXWbHkPU85Bsx_1dp8F_nlhHqKRNCI620mtM4b94WIDsUObC4jj9Vb8I-xxTHARYJ6zMeUTM5VtmWCmLWM2_0r5OqqQiXfTBaLylUAdNq5ZzTTU_2GuoifQ-SkfXwb8H43ZuQ4mjSMTJFKORGyzF9DwzksJnfWdorvxuyzBhTEhA9imhTGEO8A6a75aX1kCGwo50F-l_00a6qroqMVeJ88nEEO7JXi-FyuqT-3b0jcEh1CKEGPN4IMaYdNj3vmBr0KgcQH2rR7KNKnfvap6exMnbfjQkxwyyQabWHYhbpD4nkETNns5SDQhoJgHCkMu2K4aMuEyHxf_CwwuSoY1m_n3t3raYZEKRZSOjX3sXEJpghieR8YDOvz5WchPFc_psJZEDlt6pktCnLYxbH1nES25TGrc2awbgeWPjsRhfc0ti6n1PV2Ts8MddVQmsiiE0LEqmgK2Bp2P-LX23xTK9uvayg","mp4":"https://files.example.invalid/p/rzJSaorKyfh7Q2SQ.u1zJb2yGBxi1lrxSRDQz4i0OmAzqLOzI7SAmb4EJt2N_h51lp3Qr3wJIOiOCbM73r3Bo89qGg3fzEIkhFg_L8GOGsb2V3NMeAkHKbhnx8TqkRJMCeln0F23b4GBff9MgVsKOcjaAR6PNUS9XHNVVBjecZ1s4kt7PkTxZLecmfxtP7HSd.dHYMfEoYeVYn9iSs_oJ_Yw","season":0,"audio":[],"subs":[]}],"startEp":0,"id":"16880","mp4":"","share":"","home":""};</script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+<script src="/style/pd2.js?v=128"></script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" data-cf-beacon='{"version":"2024.11.0","token":"5a4547243e9b4e8f819e6f53ff70dcb9","r":1,"spa":2}' crossorigin="anonymous"></script>
+</body>
+</html>
