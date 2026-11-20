@@ -41,6 +41,12 @@ INDEX = ROOT / "docs" / "index.html"
 FEED = ROOT / "docs" / "update.json"
 
 KIND_ORDER = {"NEW": 0, "IMPROVED": 1, "FIXED": 2}
+
+# Rule: the feed carries only the last few releases. The app only ever needs `latest` to decide
+# whether to prompt, and the newest few to render "what changed since your build" — shipping the
+# whole history would make a file every installed device downloads grow forever. The landing page
+# keeps the full history: it is HTML, read by people, and is where the archive belongs.
+MAX_FEED_RELEASES = 5
 FENCE = re.compile(r"```.*?```", re.S)
 SECTION = re.compile(r"^##\s+(.+?)\s*$", re.M)
 BULLET = re.compile(r"^\s*[-*]\s*(NEW|IMPROVED|FIXED)\s*:\s*(.+?)\s*$", re.I | re.M)
@@ -131,7 +137,12 @@ def parse_release(rel: dict, repo: str) -> dict | None:
     }
 
 
-def build_feed(repo: str) -> dict:
+def trim_feed(releases: list[dict]) -> tuple[list[dict], int]:
+    """Newest-first list, cut to [MAX_FEED_RELEASES]. Returns (kept, total)."""
+    return releases[:MAX_FEED_RELEASES], len(releases)
+
+
+def build_feed(repo: str) -> tuple[dict, list[dict]]:
     raw = json.loads(
         run(
             "gh", "api",
@@ -152,10 +163,16 @@ def build_feed(repo: str) -> dict:
         raise SystemExit("no releases with a versionCode found")
 
     latest = releases[0]
+    # The feed is cut to the last few releases; the landing page keeps the whole archive.
+    everything = list(releases)
+    # Newest first, then cut. `latest` is taken before the cut so it can never be dropped.
+    releases, total = trim_feed(releases)
     return {
         "schema": 1,
         "generated": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "repo": repo,
+        "releaseLimit": MAX_FEED_RELEASES,
+        "totalReleases": total,
         "latest": {
             "version": latest["version"],
             "versionCode": latest["versionCode"],
@@ -166,17 +183,16 @@ def build_feed(repo: str) -> dict:
             "releaseUrl": latest["releaseUrl"],
         },
         "releases": releases,
-    }
+    }, everything
 
 
 def esc(text: str) -> str:
     return html.escape(text, quote=False)
 
 
-def html_block(feed: dict) -> str:
-    latest = feed["latest"]
+def html_block(releases: list[dict], latest: dict) -> str:
     rows = []
-    for rel in feed["releases"]:
+    for rel in releases:
         badge = ' <span class="pill">latest</span>' if rel["version"] == latest["version"] else ""
         items = "".join(
             f'<li class="k-{c["kind"].lower()}"><span class="kind">{c["kind"]}</span>{esc(c["text"])}</li>'
@@ -198,10 +214,22 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY", "1HP2DIE/Dr-Animo"))
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--selftest", action="store_true",
+                    help="check the 5-release cap without touching GitHub or the working tree")
     args = ap.parse_args()
 
-    feed = build_feed(args.repo)
-    block = html_block(feed)
+    if args.selftest:
+        fake = [{"version": f"1.{i}.0", "versionCode": i} for i in range(12, 3, -1)]
+        kept, total = trim_feed(fake)
+        assert total == 9, total
+        assert len(kept) == MAX_FEED_RELEASES, len(kept)
+        assert kept[0]["versionCode"] == 12, "newest must survive the cut"
+        assert [r["versionCode"] for r in kept] == [12, 11, 10, 9, 8], kept
+        print(f"selftest ok: {total} releases in, {len(kept)} kept, newest {kept[0]['version']}")
+        return 0
+
+    feed, everything = build_feed(args.repo)
+    block = html_block(everything, feed["latest"])
 
     page = INDEX.read_text()
     start, end = "<!-- versions:start -->", "<!-- versions:end -->"
@@ -213,13 +241,15 @@ def main() -> int:
 
     if args.dry_run:
         print(json.dumps(feed["latest"], indent=2))
-        print(f"{len(feed['releases'])} releases, {len(block)} bytes of html")
+        print(f"{len(feed['releases'])}/{feed['totalReleases']} releases kept in the feed "
+              f"(limit {feed['releaseLimit']}), {len(everything)} in the page history")
         return 0
 
     FEED.write_text(json.dumps(feed, indent=2) + "\n")
     INDEX.write_text(page)
     print(f"wrote {FEED.relative_to(ROOT)} and refreshed {INDEX.relative_to(ROOT)} "
-          f"({len(feed['releases'])} releases, latest {feed['latest']['version']})")
+          f"({len(feed['releases'])}/{feed['totalReleases']} releases in the feed, "
+          f"latest {feed['latest']['version']})")
     return 0
 
 

@@ -127,6 +127,12 @@ installed builds without shipping new code first.
 3. `.github/workflows/update-feed.yml` runs on `release: published`, regenerates
    `docs/update.json` and the `<!-- versions -->` block in `docs/index.html`, and commits them.
 
+**Feed size rule:** `docs/update.json` carries only the **last 5 releases** (`MAX_FEED_RELEASES` in
+`tools/update_feed.py`). The app only needs `latest` to decide whether to prompt and the newest few to
+show what changed, so the file every installed device downloads stays under ~12 KB forever. The landing page
+keeps the full history — that is HTML, and the archive belongs there. `--selftest` asserts the cap and
+runs in CI.
+
 A release body is parsed for `## Headline`, `## Released`, and `- NEW: … / - IMPROVED: … /
 - FIXED: …` bullets; anything else (install snippets, hashes) is ignored. `versionCode` is read from
   `app/build.gradle.kts` **at the tag**, never guessed from the tag text.
