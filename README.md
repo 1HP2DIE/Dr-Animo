@@ -127,6 +127,13 @@ installed builds without shipping new code first.
 3. `.github/workflows/update-feed.yml` runs on `release: published`, regenerates
    `docs/update.json` and the `<!-- versions -->` block in `docs/index.html`, and commits them.
 
+**Download mirror:** the newest APK is also copied to `docs/download/<name>.apk` and served from
+GitHub Pages (`content-type: application/vnd.android.package-archive`), because a Release asset goes
+through a signed redirect to `release-assets.githubusercontent.com` and that hop is slow or throttled on
+some mobile networks. The generator verifies the sha256 before mirroring, replaces the previous file
+(only one APK lives in the tree, so the site stays small) and keeps the GitHub URL as the fallback in
+`update.json.latest.apkUrlGithub`.
+
 **Feed size rule:** `docs/update.json` carries only the **last 5 releases** (`MAX_FEED_RELEASES` in
 `tools/update_feed.py`). The app only needs `latest` to decide whether to prompt and the newest few to
 show what changed, so the file every installed device downloads stays under ~12 KB forever. The landing page
