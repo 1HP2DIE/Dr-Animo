@@ -33,9 +33,10 @@ import okhttp3.Response
  * 2. **Cookies** — [cookieJar] is `android.webkit.CookieManager`, i.e. Chromium's own store. The
  *    invisible WebView warm-up and OkHttp therefore share one cookie set instead of two, and
  *    Cloudflare's `cf_clearance` survives process death without a byte of our own persistence code.
- * 3. **Network changes** — a default-network callback drops the cookie jar and tells the transport
- *    that its per-host budget is spent. Clearance cookies are IP-bound: after a WiFi↔LTE switch the
- *    old cookie is worthless at best and bot-shaped at worst.
+ * 3. **Network changes** — a default-network callback drops the cookie jar and calls the listeners
+ *    registered with [addNetworkChangeListener]. Clearance cookies are IP-bound: after a WiFi↔LTE
+ *    switch the old cookie is worthless at best and bot-shaped at worst, so the WebView rung's
+ *    "already warm" marks and the transport's per-host pacing belong to a network that is gone.
  *
  * Deliberately **log-free** per request: no HttpLoggingInterceptor, no body dumps. Episode payloads
  * are large and the API returns no secrets, so there is nothing worth the I/O.
@@ -68,8 +69,8 @@ object HttpClientFactory {
     }
 
     /**
-     * The client without the network-change hook. Kept because [OkHttpTransportChannel] defaults its
-     * `client` to this call: a transport built outside the container still gets the jar and the
+     * The client without the network-change hook. Kept because the transport's OkHttp rung defaults
+     * its `client` to this call: a channel built outside the container still gets the jar and the
      * fingerprint, just not the "new network, new cookies" reset.
      */
     fun create(): OkHttpClient = build(null)
@@ -190,7 +191,6 @@ class PlatformCookieJar : CookieJar {
                     .value(pair.substring(equals + 1).trim())
                     .path("/")
                     .hostOnlyDomain(url.host)
-                    .expiresAt(Long.MAX_VALUE)
                     .apply { if (url.isHttps) secure() }
                     .build()
             }.getOrNull()
@@ -200,10 +200,15 @@ class PlatformCookieJar : CookieJar {
         return cookies
     }
 
-    /** Drops everything, including `cf_clearance`. Async in WebView; no callback needed. */
+    /** Drops everything, including `cf_clearance`, and flushes so the disk copy cannot outlive it. */
     fun clear() {
-        runCatching { store?.removeAllCookies(null) }
+        runCatching { store?.removeAllCookies { flush() } }
             .onFailure { AppLog.w("cookie store not cleared", it) }
+    }
+
+    private fun flush() {
+        runCatching { store?.flush() }
+            .onFailure { AppLog.w("cookie store not flushed", it) }
     }
 
     /**
@@ -216,9 +221,14 @@ class PlatformCookieJar : CookieJar {
         if (!cookie.hostOnly) append("; Domain=").append(cookie.domain)
         append("; Path=").append(cookie.path)
         if (cookie.persistent) {
-            val seconds = (cookie.expiresAt - System.currentTimeMillis()) / 1000
-            // A negative Max-Age is how a deletion arrives; clamp so WebView deletes it.
-            append("; Max-Age=").append(seconds.coerceAtLeast(0L))
+            // A deletion arrives as `expiresAt <= 0` (OkHttp clamps there); subtracting the clock
+            // from that would wrap around and resurrect the cookie, so it is handled first.
+            val seconds = if (cookie.expiresAt <= 0L) {
+                0L
+            } else {
+                ((cookie.expiresAt - System.currentTimeMillis()) / 1000).coerceAtLeast(0L)
+            }
+            append("; Max-Age=").append(seconds)
         }
         if (cookie.secure) append("; Secure")
         if (cookie.httpOnly) append("; HttpOnly")
