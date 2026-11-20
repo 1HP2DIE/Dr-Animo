@@ -42,6 +42,14 @@ data class SettingsUiState(
     val hindiResultCount: Int? = null,
     /** Failure text from the last Hindi sync; `null` = clean. */
     val hindiMessage: String? = null,
+    /** False when no MovieLink catalogue is wired into this build — the block is then hidden. */
+    val movieLinkAvailable: Boolean = false,
+    val movieLinkCount: Int = 0,
+    val movieLinkSyncing: Boolean = false,
+    val movieLinkDone: Int = 0,
+    val movieLinkTotal: Int = 0,
+    /** Failure text from the last MovieLink sync; `null` = clean. */
+    val movieLinkMessage: String? = null,
 ) {
     val progressFraction: Float
         get() = if (sync.total > 0) {
@@ -56,18 +64,43 @@ data class SettingsUiState(
         } else {
             0f
         }
+
+    val movieLinkProgressFraction: Float
+        get() = if (movieLinkTotal > 0) {
+            (movieLinkDone.toFloat() / movieLinkTotal.toFloat()).coerceIn(0f, 1f)
+        } else {
+            0f
+        }
+}
+
+/**
+ * What Settings needs from the MovieLink catalogue: a third source that writes into the same `anime`
+ * table, so the card only asks for a force-sync and the row count.
+ *
+ * Declared as a UI-facing port (like [HindiCatalog]) rather than taking the syncer type, so this
+ * package compiles against the contract and previews/tests can hand in a fake.
+ */
+interface MovieLinkCatalog {
+    suspend fun sync(
+        force: Boolean,
+        onProgress: suspend (done: Int, total: Int) -> Unit,
+    ): Result<Int>
+
+    suspend fun count(): Int
 }
 
 fun settingsViewModelFactory(
     repository: AnimeRepository,
     context: Context,
     hindiCatalog: HindiCatalog? = null,
+    movieLinkCatalog: MovieLinkCatalog? = null,
 ): ViewModelProvider.Factory = viewModelFactory {
     initializer {
         SettingsViewModel(
             repository = repository,
             preferences = SettingsPreferences(context.applicationContext),
             hindiCatalog = hindiCatalog,
+            movieLinkCatalog = movieLinkCatalog,
         )
     }
 }
@@ -81,11 +114,15 @@ fun settingsViewModelFactory(
  * own count/sync state instead of being folded into the main sync rows. A `null` [hindiCatalog]
  * means "this build has no Hindi source" — every Hindi field stays at its default and the screen
  * hides the block.
+ *
+ * MovieLink is a third catalogue in the same table. It rides its own [MovieLinkStats] for the same
+ * reason Hindi does: one sync in flight must never disable another source's button.
  */
 class SettingsViewModel(
     private val repository: AnimeRepository,
     private val preferences: SettingsPreferences,
     private val hindiCatalog: HindiCatalog? = null,
+    private val movieLinkCatalog: MovieLinkCatalog? = null,
 ) : ViewModel() {
 
     private val catalogueSize = MutableStateFlow(0)
@@ -104,6 +141,25 @@ class SettingsViewModel(
     )
 
     private val hindi = MutableStateFlow(HindiStats())
+
+    /** Everything the MovieLink block needs; same shape as [HindiStats] so the rows can look alike. */
+    private data class MovieLinkStats(
+        val count: Int = 0,
+        val syncing: Boolean = false,
+        val done: Int = 0,
+        val total: Int = 0,
+        val message: String? = null,
+    )
+
+    private val movieLink = MutableStateFlow(MovieLinkStats())
+
+    /**
+     * Both extra catalogues as one input, so the state combine stays at five flows. They are only
+     * paired for that reason: their `syncing` flags stay independent of each other.
+     */
+    private val extraCatalogues = combine(hindi, movieLink) { hindiStats, movieLinkStats ->
+        hindiStats to movieLinkStats
+    }
 
     private data class Prefs(
         val autoplayNext: Boolean,
@@ -134,9 +190,10 @@ class SettingsViewModel(
         repository.sync,
         isSyncing,
         syncMessage,
-        hindi,
-    ) { core, sync, syncing, message, hindiStats ->
+        extraCatalogues,
+    ) { core, sync, syncing, message, catalogues ->
         val (playbackPrefs, catalogueStats, viewPrefs) = core
+        val (hindiStats, movieLinkStats) = catalogues
         SettingsUiState(
             catalogueSize = catalogueStats.first,
             catalogueBytes = catalogueStats.second,
@@ -156,17 +213,27 @@ class SettingsViewModel(
             hindiTotal = hindiStats.total,
             hindiResultCount = hindiStats.resultCount,
             hindiMessage = hindiStats.message,
+            movieLinkAvailable = movieLinkCatalog != null,
+            movieLinkCount = movieLinkStats.count,
+            movieLinkSyncing = movieLinkStats.syncing,
+            movieLinkDone = movieLinkStats.done,
+            movieLinkTotal = movieLinkStats.total,
+            movieLinkMessage = movieLinkStats.message,
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = SettingsUiState(hindiAvailable = hindiCatalog != null),
+        initialValue = SettingsUiState(
+            hindiAvailable = hindiCatalog != null,
+            movieLinkAvailable = movieLinkCatalog != null,
+        ),
     )
 
     init {
         viewModelScope.launch {
             refreshCatalogueStats()
             refreshHindiCount()
+            refreshMovieLinkCount()
             observeSyncCompletion()
         }
     }
@@ -258,6 +325,34 @@ class SettingsViewModel(
         }
     }
 
+    /**
+     * MovieLink sync. Same contract as Hindi: its own `syncing` flag, its own progress, and its own
+     * failure line. MovieLink writes into the shared `anime` table, so a success re-reads both the
+     * count under its own row and the card's "Total titles".
+     */
+    fun syncMovieLinkNow() {
+        val catalog = movieLinkCatalog ?: return
+        if (movieLink.value.syncing) return
+        viewModelScope.launch {
+            movieLink.value = movieLink.value.copy(
+                syncing = true,
+                done = 0,
+                total = 0,
+                message = null,
+            )
+            val result = catalog.sync(force = true) { done, total ->
+                movieLink.value = movieLink.value.copy(done = done, total = total)
+            }
+            val count = runCatching { catalog.count() }.getOrDefault(movieLink.value.count)
+            movieLink.value = movieLink.value.copy(
+                syncing = false,
+                count = count,
+                message = result.exceptionOrNull()?.let { it.message ?: it::class.simpleName },
+            )
+            if (result.isSuccess) refreshCatalogueStats()
+        }
+    }
+
     fun setAutoFullscreen(enabled: Boolean) {
         viewModelScope.launch { preferences.setAutoFullscreen(enabled) }
     }
@@ -297,5 +392,11 @@ class SettingsViewModel(
         val catalog = hindiCatalog ?: return
         val count = runCatching { catalog.catalogCount() }.getOrNull() ?: return
         hindi.value = hindi.value.copy(count = count)
+    }
+
+    private suspend fun refreshMovieLinkCount() {
+        val catalog = movieLinkCatalog ?: return
+        val count = runCatching { catalog.count() }.getOrNull() ?: return
+        movieLink.value = movieLink.value.copy(count = count)
     }
 }

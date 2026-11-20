@@ -52,6 +52,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.animo.app.BuildConfig
 import com.animo.app.R
+import com.animo.app.di.ServiceLocator
 import com.animo.app.domain.model.AudioTrack
 import com.animo.app.domain.model.SyncState
 import com.animo.app.ui.changelog.Changelog
@@ -79,8 +80,14 @@ fun SettingsScreen(
 ) {
     val container = LocalAppContainer.current
     val context = LocalContext.current.applicationContext
-    val factory = remember(container, context) {
-        settingsViewModelFactory(container.animeRepository, context, container.hindiCatalog)
+    val movieLinkCatalog = remember(container) { movieLinkCatalogOrNull() }
+    val factory = remember(container, context, movieLinkCatalog) {
+        settingsViewModelFactory(
+            repository = container.animeRepository,
+            context = context,
+            hindiCatalog = container.hindiCatalog,
+            movieLinkCatalog = movieLinkCatalog,
+        )
     }
     val viewModel: SettingsViewModel = viewModel(factory = factory)
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -96,6 +103,7 @@ fun SettingsScreen(
         onDefaultAudioChange = viewModel::setDefaultAudio,
         onSyncNow = viewModel::syncNow,
         onSyncHindi = viewModel::syncHindiNow,
+        onSyncMovieLink = viewModel::syncMovieLinkNow,
         onOpenDrawer = onOpenDrawer,
         onOpenChangelog = {
             viewModel.markChangelogSeen()
@@ -104,6 +112,23 @@ fun SettingsScreen(
         onOpenSupport = onOpenSupport,
         modifier = modifier,
     )
+}
+
+/**
+ * Bridges the app's MovieLink syncer to the settings port. `null` means "this build has no
+ * MovieLink source" — the screen then hides the block instead of offering a dead button. The lookup
+ * lives here and nowhere else, so an unregistered syncer can only blank this one block.
+ */
+private fun movieLinkCatalogOrNull(): MovieLinkCatalog? {
+    val syncer = runCatching { ServiceLocator.movieLinkSyncer }.getOrNull() ?: return null
+    return object : MovieLinkCatalog {
+        override suspend fun sync(
+            force: Boolean,
+            onProgress: suspend (done: Int, total: Int) -> Unit,
+        ): Result<Int> = syncer.sync(force, onProgress)
+
+        override suspend fun count(): Int = ServiceLocator.movieLinkCount()
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -118,6 +143,7 @@ private fun SettingsScreenContent(
     onDownloadQualityChange: (DownloadQuality) -> Unit = {},
     onSyncNow: () -> Unit,
     onSyncHindi: () -> Unit,
+    onSyncMovieLink: () -> Unit,
     onOpenDrawer: () -> Unit,
     onOpenChangelog: () -> Unit,
     onOpenSupport: () -> Unit = {},
@@ -144,7 +170,12 @@ private fun SettingsScreenContent(
                 AppearanceSection(themeMode = themeMode, onThemeModeChange = onThemeModeChange)
             }
             item(key = "catalogue") {
-                CatalogueSection(state = state, onSyncNow = onSyncNow, onSyncHindi = onSyncHindi)
+                CatalogueSection(
+                    state = state,
+                    onSyncNow = onSyncNow,
+                    onSyncHindi = onSyncHindi,
+                    onSyncMovieLink = onSyncMovieLink,
+                )
             }
             item(key = "playback") {
                 PlaybackSection(
@@ -325,6 +356,7 @@ private fun CatalogueSection(
     state: SettingsUiState,
     onSyncNow: () -> Unit,
     onSyncHindi: () -> Unit,
+    onSyncMovieLink: () -> Unit,
 ) {
     SettingsSection(title = stringResource(R.string.ui_settings_catalogue)) {
         SettingsValueRow(
@@ -432,24 +464,35 @@ private fun CatalogueSection(
                 )
             }
 
-            if (state.hindiSyncing && state.hindiTotal > 0) {
+            // Shown for the whole run, not only once a page lands: a sync that is still waiting for
+            // its first answer is exactly when the viewer needs to see that something is happening.
+            // With no total yet the bar is indeterminate and the counter is omitted.
+            if (state.hindiSyncing) {
                 Spacer(Modifier.height(10.dp))
-                LinearProgressIndicator(
-                    progress = { state.hindiProgressFraction },
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = stringResource(
-                        R.string.ui_settings_hindi_progress,
-                        state.hindiDone,
-                        state.hindiTotal,
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                if (state.hindiTotal > 0) {
+                    LinearProgressIndicator(
+                        progress = { state.hindiProgressFraction },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = stringResource(
+                            R.string.ui_settings_hindi_progress,
+                            state.hindiDone,
+                            state.hindiTotal,
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                    )
+                }
             }
 
             state.hindiResultCount?.let { count ->
@@ -465,6 +508,85 @@ private fun CatalogueSection(
                 Spacer(Modifier.height(10.dp))
                 Text(
                     text = stringResource(R.string.ui_settings_hindi_failed, message),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+
+        // MovieLink is a third catalogue in the same table, so it gets the Hindi rows again rather
+        // than a card of its own: count, one force-sync button, progress, failure. Its `syncing`
+        // flag is its own, so neither extra source disables the other's button.
+        if (state.movieLinkAvailable) {
+            HorizontalDivider(
+                thickness = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f),
+                modifier = Modifier.padding(vertical = 12.dp),
+            )
+            SettingsValueRow(
+                label = stringResource(R.string.ui_settings_movielink_count),
+                value = formatCount(state.movieLinkCount),
+            )
+            OutlinedButton(
+                onClick = onSyncMovieLink,
+                enabled = !state.movieLinkSyncing,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (state.movieLinkSyncing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        strokeWidth = 2.dp,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(
+                    text = stringResource(
+                        if (state.movieLinkSyncing) {
+                            R.string.ui_settings_movielink_syncing
+                        } else {
+                            R.string.ui_settings_movielink_sync
+                        },
+                    ),
+                )
+            }
+
+            if (state.movieLinkSyncing) {
+                Spacer(Modifier.height(10.dp))
+                if (state.movieLinkTotal > 0) {
+                    LinearProgressIndicator(
+                        progress = { state.movieLinkProgressFraction },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        // Same "done / total" shape as the Hindi line above: identical rendering, so
+                        // it shares the format string instead of adding a duplicate resource.
+                        text = stringResource(
+                            R.string.ui_settings_hindi_progress,
+                            state.movieLinkDone,
+                            state.movieLinkTotal,
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                    )
+                }
+            }
+
+            state.movieLinkMessage?.let { message ->
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    // The failure string is only the message: the exception already names what
+                    // failed, so there is no prefix here to repeat.
+                    text = stringResource(R.string.ui_settings_movielink_failed, message),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
@@ -807,7 +929,7 @@ private fun formatBytes(bytes: Long): String = when {
 
 // ---------------------------------------------------------------------------- preview
 
-/** Container-free: the catalogue block (including the Hindi rows) is driven by a plain state value. */
+/** Container-free: the catalogue block (including the Hindi and MovieLink rows) is driven by a plain state value. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Preview(
     name = "Settings · Hindi catalogue",
@@ -828,6 +950,8 @@ private fun SettingsHindiPreview() {
                 hindiAvailable = true,
                 hindiCount = 412,
                 hindiResultCount = 412,
+                movieLinkAvailable = true,
+                movieLinkCount = 1_204,
             ),
             themeMode = ThemeMode.DARK,
             onThemeModeChange = {},
@@ -835,6 +959,7 @@ private fun SettingsHindiPreview() {
             onDefaultAudioChange = {},
             onSyncNow = {},
             onSyncHindi = {},
+            onSyncMovieLink = {},
             onOpenDrawer = {},
             onOpenChangelog = {},
         )
@@ -867,6 +992,7 @@ private fun SettingsLastSyncTodayPreview() {
             onDefaultAudioChange = {},
             onSyncNow = {},
             onSyncHindi = {},
+            onSyncMovieLink = {},
             onOpenDrawer = {},
             onOpenChangelog = {},
         )
