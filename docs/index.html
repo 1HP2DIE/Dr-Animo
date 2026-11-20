@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dr Animo APK — native anime client for Android (HLS, offline-first)</title>
+<meta name="description" content="Download Dr Animo APK 1.9.0 for Android — a native anime client with an offline-first catalogue and native HLS playback on Media3/ExoPlayer. No WebView, no ads, no tracking. Free, open source (MIT), Android 7.0+.">
+<meta name="keywords" content="dr animo apk, dr animo, animo apk, dr animo download, dr animo android, anime apk android, anime client apk, offline anime app, hls player apk, dr animo github">
+<meta name="author" content="1HP2DIE">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<link rel="canonical" href="https://1hp2die.github.io/Dr-Animo/">
+<meta name="theme-color" content="#07070c">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Dr Animo">
+<meta property="og:title" content="Dr Animo APK — native anime client for Android">
+<meta property="og:description" content="Dr Animo APK 1.9.0: offline-first catalogue + native HLS playback (Media3/ExoPlayer). No WebView, no ads. Open source, free download.">
+<meta property="og:url" content="https://1hp2die.github.io/Dr-Animo/">
+<meta property="og:image" content="https://1hp2die.github.io/Dr-Animo/img/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Dr Animo APK — Android anime client hero artwork">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Dr Animo APK — native anime client for Android">
+<meta name="twitter:description" content="Offline-first catalogue, native HLS playback, no WebView. Dr Animo APK 1.9.0, free and open source.">
+<meta name="twitter:image" content="https://1hp2die.github.io/Dr-Animo/img/og.jpg">
+
+<link rel="icon" href="img/logo.png" sizes="512x512" type="image/png">
+<link rel="apple-touch-icon" href="img/logo.png">
+
+<style>
+  :root{
+    --void:#07070c; --void2:#0d0d16; --ink:#e8e8f2; --dim:#9b9bb2;
+    --edge:#6ee7ff; --edge2:#a78bfa; --hot:#ff4d6d;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--void); color:var(--ink);
+    font:16px/1.65 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif;
+    overflow-x:hidden;
+  }
+  a{color:var(--edge)}
+  .wrap{max-width:1020px;margin:0 auto;padding:0 22px}
+  /* black hole */
+  .hole{position:fixed;inset:0;z-index:-1;overflow:hidden;background:var(--void)}
+  .hole::before{
+    content:"";position:absolute;left:50%;top:-38vh;width:150vmax;height:150vmax;
+    transform:translateX(-50%);
+    background:radial-gradient(circle at 50% 50%,#000 0 22%,rgba(110,231,255,.10) 22.4%,rgba(167,139,250,.10) 26%,rgba(255,77,109,.06) 34%,transparent 62%);
+  }
+  .hole::after{
+    content:"";position:absolute;inset:0;
+    background:
+      radial-gradient(1px 1px at 12% 22%,#fff,transparent),
+      radial-gradient(1px 1px at 78% 14%,#cfe9ff,transparent),
+      radial-gradient(1px 1px at 34% 68%,#fff,transparent),
+      radial-gradient(1px 1px at 88% 74%,#ffe6ee,transparent),
+      radial-gradient(1.5px 1.5px at 62% 42%,#fff,transparent),
+      radial-gradient(1px 1px at 22% 86%,#e6f6ff,transparent),
+      radial-gradient(1px 1px at 50% 8%,#fff,transparent);
+    opacity:.5;
+  }
+  header{position:relative;padding:56px 0 24px;text-align:center}
+  .logo{width:112px;height:112px;border-radius:26px;display:block;margin:0 auto 20px;
+    box-shadow:0 0 0 1px rgba(255,255,255,.07),0 18px 60px -18px var(--edge)}
+  h1{font-size:clamp(34px,6.4vw,62px);line-height:1.05;margin:0 0 14px;letter-spacing:-.02em}
+  h1 .thin{font-weight:300;color:var(--dim)}
+  .tagline{
+    margin:0 auto 8px;max-width:36ch;font-size:clamp(15px,2.4vw,19px);color:#cfd4ea;
+    font-style:italic
+  }
+  .tagline b{font-style:normal;background:linear-gradient(90deg,var(--edge),var(--edge2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .meta{color:var(--dim);font-size:14px;margin:14px 0 0}
+  .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:30px 0 10px}
+  .btn{display:inline-block;padding:14px 26px;border-radius:14px;text-decoration:none;font-weight:650;
+    border:1px solid rgba(255,255,255,.14);color:var(--ink);background:rgba(255,255,255,.04);
+    transition:.18s transform,.18s box-shadow,.18s background}
+  .btn:hover{transform:translateY(-2px)}
+  .btn.primary{background:linear-gradient(135deg,var(--edge),var(--edge2));color:#05050a;border:0;
+    box-shadow:0 14px 40px -14px var(--edge)}
+  .btn small{display:block;font-weight:400;font-size:12px;opacity:.8}
+  .hash{font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#6f7390;word-break:break-all;max-width:70ch;margin:16px auto 0}
+  main{padding:26px 0 70px}
+  section{margin:44px 0}
+  h2{font-size:clamp(22px,3.4vw,30px);margin:0 0 14px;letter-spacing:-.01em}
+  h3{font-size:17px;margin:22px 0 6px}
+  p{color:#c9cde0}
+  .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+  .card{background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.015));
+    border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:18px 18px 16px}
+  .card h3{margin:0 0 6px;font-size:15px;letter-spacing:.01em;color:#fff}
+  .card p{margin:0;font-size:14.5px;color:#b9bed4}
+  code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13.5px}
+  pre{background:#0b0b14;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px 16px;overflow:auto;color:#d7dbf0}
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08)}
+  th{color:var(--dim);font-weight:600}
+  details{border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px 16px;margin:10px 0;background:rgba(255,255,255,.02)}
+  summary{cursor:pointer;font-weight:620}
+  details p{margin:10px 0 0;font-size:14.5px}
+  footer{border-top:1px solid rgba(255,255,255,.07);padding:26px 0 60px;color:#7c81a0;font-size:13.5px;text-align:center}
+  .hero-img{width:100%;height:auto;border-radius:18px;border:1px solid rgba(255,255,255,.08);display:block}
+</style>
+
+<script type="application/ld+json">
+{
+  "@context":"https://schema.org",
+  "@graph":[
+    {
+      "@type":"SoftwareApplication",
+      "@id":"https://1hp2die.github.io/Dr-Animo/#app",
+      "name":"Dr Animo",
+      "alternateName":["Dr Animo APK","Animo","Dr Animo Android"],
+      "applicationCategory":"MultimediaApplication",
+      "applicationSubCategory":"Anime streaming client",
+      "operatingSystem":"Android 7.0 and newer",
+      "softwareVersion":"1.9.0",
+      "softwareRequirements":"Android 7.0 (API 24)+, ~27 MB install",
+      "fileSize":"26.9MB",
+      "downloadUrl":"https://github.com/1HP2DIE/Dr-Animo/releases/download/v1.9.0/Animo-1.9.0.apk",
+      "installUrl":"https://github.com/1HP2DIE/Dr-Animo/releases/latest",
+      "codeRepository":"https://github.com/1HP2DIE/Dr-Animo",
+      "license":"https://opensource.org/licenses/MIT",
+      "isAccessibleForFree":true,
+      "offers":{"@type":"Offer","price":"0","priceCurrency":"USD","availability":"https://schema.org/InStock"},
+      "featureList":[
+        "Native HLS playback with Media3/ExoPlayer",
+        "Offline-first catalogue in Room",
+        "No WebView renderer",
+        "Local full-text search",
+        "Material 3 Compose UI"
+      ],
+      "author":{"@type":"Organization","name":"1HP2DIE","url":"https://github.com/1HP2DIE"},
+      "screenshot":"https://1hp2die.github.io/Dr-Animo/img/og.jpg"
+    },
+    {
+      "@type":"FAQPage",
+      "@id":"https://1hp2die.github.io/Dr-Animo/#faq",
+      "mainEntity":[
+        {"@type":"Question","name":"What is Dr Animo APK?","acceptedAnswer":{"@type":"Answer","text":"Dr Animo is a native Android anime client distributed as an APK. It keeps the catalogue offline in a local database and plays HLS streams with Media3/ExoPlayer instead of a WebView."}},
+        {"@type":"Question","name":"Is the Dr Animo APK free?","acceptedAnswer":{"@type":"Answer","text":"Yes. The APK is a free download and the complete source code is public under the MIT license on GitHub at 1HP2DIE/Dr-Animo."}},
+        {"@type":"Question","name":"Which Android versions run Dr Animo?","acceptedAnswer":{"@type":"Answer","text":"Android 7.0 (API 24) and newer. The APK is 26.9 MB and installs as com.animo.app."}},
+        {"@type":"Question","name":"How do I install the Dr Animo APK?","acceptedAnswer":{"@type":"Answer","text":"Download Animo-1.9.0.apk from the GitHub release, allow installs from your browser or file manager, then open it. With a PC attached run: adb install -r Animo-1.9.0.apk."}},
+        {"@type":"Question","name":"Does Dr Animo work offline?","acceptedAnswer":{"@type":"Answer","text":"The catalogue and your progress are stored locally in Room, so browsing works with no network. Video playback still needs a connection because streams are not downloaded."}},
+        {"@type":"Question","name":"Is Dr Animo listed in the Play Store?","acceptedAnswer":{"@type":"Answer","text":"No. Dr Animo is distributed only as a signed APK from its GitHub releases page; it is not published to any app store."}}
+      ]
+    },
+    {
+      "@type":"WebSite",
+      "@id":"https://1hp2die.github.io/Dr-Animo/#site",
+      "url":"https://1hp2die.github.io/Dr-Animo/",
+      "name":"Dr Animo APK",
+      "inLanguage":"en",
+      "publisher":{"@type":"Organization","name":"1HP2DIE","url":"https://github.com/1HP2DIE"}
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<div class="hole" aria-hidden="true"></div>
+
+<header>
+  <div class="wrap">
+    <img class="logo" src="img/logo.png" width="112" height="112" alt="Dr Animo app icon — Android anime client">
+    <h1>Dr Animo <span class="thin">APK</span></h1>
+    <p class="tagline">Only <b>Dr Animo</b> can be hidden under the black hole.</p>
+    <p class="meta">v1.9.0 · 26.9 MB · Android 7.0+ · free · MIT licensed · no ads, no tracking</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/1HP2DIE/Dr-Animo/releases/download/v1.9.0/Animo-1.9.0.apk">
+        Download Dr Animo APK<small>Animo-1.9.0.apk · direct</small>
+      </a>
+      <a class="btn" href="https://github.com/1HP2DIE/Dr-Animo">Source on GitHub</a>
+    </div>
+    <p class="hash">SHA-256 4cb2acfd9beb02bcda8ac23c20c3b00125a3ce25183eec0599ddc98ac4d737e6</p>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+
+    <section>
+      <h2>What is the Dr Animo APK?</h2>
+      <p><strong>Dr Animo</strong> is a native Android anime client shipped as a single APK. Unlike
+      browser-wrapped apps, it never spins up a WebView for playback: the catalogue is read from a local
+      Room database and streams are played by Media3/ExoPlayer, with the <code>Referer</code> and
+      <code>X-Requested-With</code> headers rebuilt on every playlist, variant and segment request.
+      That is what makes scrubbing, subtitles and resume-position behave like a real video player instead
+      of a web page.</p>
+      <p>The app is built with Kotlin 2.0, Jetpack Compose and AGP 8.7, targets API 35, and runs from
+      Android 7.0 up. It is published only here and on GitHub — there is no Play Store listing, no
+      telemetry SDK, and no advertising ID in the manifest.</p>
+      <img class="hero-img" src="img/hero.jpg" width="1600" height="900"
+           alt="Dr Animo APK hero artwork — the Android anime client mascot">
+    </section>
+
+    <section>
+      <h2>Features</h2>
+      <div class="grid">
+        <div class="card"><h3>Native HLS playback</h3><p>Media3/ExoPlayer with a custom OkHttp data source; referer and UA are attached to the playlist, every variant and every segment.</p></div>
+        <div class="card"><h3>Offline-first catalogue</h3><p>Room is the source of truth. Cold start renders instantly with zero network, and search is a local FTS4 index.</p></div>
+        <div class="card"><h3>No WebView renderer</h3><p>Playback never depends on Chromium. A WebView is used only to clear a challenge on hosts that demand one, then the request is replayed.</p></div>
+        <div class="card"><h3>Resume and subtitles</h3><p>Position, speed and sleep timer persist per episode; subtitle matching is token-based and tolerant of release naming.</p></div>
+        <div class="card"><h3>Two catalogue sources</h3><p>A primary API plus a scraped second source with its own PD2 stream resolution, both behind a shared transport router.</p></div>
+        <div class="card"><h3>Open source</h3><p>MIT licensed, 400+ files of Kotlin, unit tests for the resolver and parsers. Read it, fork it, audit it.</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Download and install Dr Animo</h2>
+      <table>
+        <tr><th>Version</th><td>1.9.0 (versionCode 13)</td></tr>
+        <tr><th>File</th><td><a href="https://github.com/1HP2DIE/Dr-Animo/releases/download/v1.9.0/Animo-1.9.0.apk">Animo-1.9.0.apk</a> (5.3 MB compressed, 26.9 MB installed)</td></tr>
+        <tr><th>Package</th><td><code>com.animo.app</code></td></tr>
+        <tr><th>Requires</th><td>Android 7.0 (API 24) or newer</td></tr>
+        <tr><th>License</th><td>MIT</td></tr>
+        <tr><th>SHA-256</th><td><code>4cb2acfd9beb02bcda8ac23c20c3b00125a3ce25183eec0599ddc98ac4d737e6</code></td></tr>
+      </table>
+      <h3>Sideload it</h3>
+      <pre>adb install -r Animo-1.9.0.apk
+# or from a file manager: allow "install unknown apps" for that app, then open the APK</pre>
+      <p>Verify the download before installing:</p>
+      <pre>sha256sum Animo-1.9.0.apk</pre>
+    </section>
+
+    <section>
+      <h2>Frequently asked questions</h2>
+      <details open><summary>What is Dr Animo APK?</summary><p>A native Android anime client distributed as an APK: offline-first catalogue in Room, native HLS playback through Media3/ExoPlayer, no WebView renderer.</p></details>
+      <details><summary>Is the Dr Animo APK free?</summary><p>Yes. The APK is free and the full source is public under MIT at <a href="https://github.com/1HP2DIE/Dr-Animo">1HP2DIE/Dr-Animo</a>.</p></details>
+      <details><summary>Which Android versions are supported?</summary><p>Android 7.0 (API 24) and newer; the manifest targets API 35.</p></details>
+      <details><summary>How do I update Dr Animo?</summary><p>Download the newer APK from Releases and install it over the existing app — the signature matches, so your data is kept.</p></details>
+      <details><summary>Does it work offline?</summary><p>Browsing and search work offline because the catalogue is local. Playback needs a connection; streams are not cached.</p></details>
+      <details><summary>Is it on the Play Store?</summary><p>No. APK-only distribution from GitHub releases.</p></details>
+      <details><summary>Why "under the black hole"?</summary><p>It is the app's tagline: nothing else surfaces there, only Dr Animo. The only indexable page is this one and the repository.</p></details>
+    </section>
+
+    <section>
+      <h2>Tech stack</h2>
+      <pre>Kotlin 2.0.21 · Jetpack Compose (Material 3) · Media3/ExoPlayer · OkHttp · Room + FTS4
+AGP 8.7.3 · compileSdk 35 · minSdk 24 · manual DI (no Hilt) · WorkManager sync</pre>
+      <p>Architecture notes, the measured header matrix and the provider research live in the
+      repository under <code>docs/</code> and <code>research/</code>.</p>
+    </section>
+
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    Dr Animo APK · built by <a href="https://github.com/1HP2DIE">1HP2DIE</a> ·
+    <a href="https://github.com/1HP2DIE/Dr-Animo">source</a> ·
+    <a href="https://github.com/1HP2DIE/Dr-Animo/releases">releases</a>
+  </div>
+</footer>
+</body>
+</html>

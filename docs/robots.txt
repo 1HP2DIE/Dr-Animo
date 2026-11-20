@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://1hp2die.github.io/Dr-Animo/sitemap.xml
