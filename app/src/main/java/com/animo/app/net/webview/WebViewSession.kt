@@ -11,8 +11,14 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
-/** Warm-up budget when the caller does not impose a tighter one. */
-internal const val WARMUP_TIMEOUT_MS: Long = 15_000L
+/**
+ * Warm-up budget when the caller does not impose a tighter one.
+ *
+ * 25 s, not 15: an interstitial on a mobile connection routinely needs more than fifteen seconds
+ * of JavaScript before it hands over the clearance cookie, and a first attempt that gives up early
+ * leaves the host marked cold for the rest of the session.
+ */
+internal const val WARMUP_TIMEOUT_MS: Long = 25_000L
 
 /**
  * How long a successful warm-up is trusted before the WebView is asked again. The clearance cookie

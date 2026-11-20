@@ -241,7 +241,7 @@ class HindiCatalogImpl(
 
         if (failures.size == targets.size) {
             return Result.failure(
-                IllegalStateException("Hindi sync failed: ${failures.joinToString("; ")}"),
+                IllegalStateException(failures.joinToString("; ")),
             )
         }
         if (failures.isNotEmpty()) {
