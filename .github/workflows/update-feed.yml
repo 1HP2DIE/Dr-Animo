@@ -40,12 +40,15 @@ jobs:
       - name: Commit if anything moved
         run: |
           # `generated` is a timestamp: it moves on every run and must not create a commit.
-          if git diff --quiet -I'"generated"' -- docs/update.json docs/index.html docs/sitemap.xml; then
+          # docs/download is part of the feed too: apkUrl points at the Pages mirror, so an APK that
+          # is written but never committed is a 404 on the site's own download link.
+          if git diff --quiet -I'"generated"' -- docs/update.json docs/index.html docs/sitemap.xml docs/download; then
             echo "feed already current"
             exit 0
           fi
           git config user.name  "dr-animo-bot"
           git config user.email "bot@1hp2die.invalid"
-          git add docs/update.json docs/index.html docs/sitemap.xml
+          # -A, so the pruned previous APK (the mirror keeps only the newest) is staged as a deletion.
+          git add -A docs/update.json docs/index.html docs/sitemap.xml docs/download
           git commit -m "chore(feed): sync update.json with the latest release [skip ci]"
           git push
