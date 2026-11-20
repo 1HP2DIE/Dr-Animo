@@ -28,6 +28,18 @@ object Changelog {
 
     val releases: List<Release> = listOf(
         Release(
+            version = "1.11.0",
+            date = "21 Nov 2026",
+            headline = "A Providers page: see what each catalogue carries, and decide which ones sync on their own.",
+            changes = listOf(
+                Change(ChangeKind.NEW, "A Providers page: every catalogue, what it carries — anime, films, series — and which servers it plays from"),
+                Change(ChangeKind.NEW, "Each provider has its own Auto / Manual / Off switch. Off stops it fetching entirely and leaves its titles where they are"),
+                Change(ChangeKind.NEW, "Filter by kind — Anime, Movie or Series — and by language, so a Hindi film and a Japanese series stop looking the same in the grid"),
+                Change(ChangeKind.IMPROVED, "The nightly sync only touches the providers you left on Auto, and one failing no longer stops the rest"),
+                Change(ChangeKind.IMPROVED, "Film and series titles now carry a language, so they can be found by it"),
+            ),
+        ),
+        Release(
             version = "1.10.0",
             date = "20 Nov 2026",
             headline = "A second catalogue of films and series — and Hindi that works again.",
