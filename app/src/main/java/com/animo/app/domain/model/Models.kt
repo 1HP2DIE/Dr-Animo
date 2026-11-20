@@ -33,9 +33,25 @@ data class Anime(
      * Blank for original-catalogue rows — everything they need is in the row itself.
      */
     val originUrl: String = "",
+    /**
+     * Which catalogue owns this row — one of [Providers]. A column since v6 (the provider page counts
+     * rows per provider); readers fall back to [Providers.idFor] when it is blank, so a row written
+     * before the column existed still reports its real owner instead of an empty string.
+     */
+    val providerId: String = "",
+    /** What the row *is* — the one axis every provider can be mapped onto. See [ContentKind]. */
+    val contentKind: ContentKind = ContentKind.ANIME,
+    /**
+     * ISO-639-1 tag of the catalogue this row came from, or `null` when the provider serves several
+     * languages and does not say which one a title is. A language filter never matches `null`.
+     */
+    val language: String? = null,
 ) {
     val hasSub: Boolean get() = subCount != null || episodeCount > 0
     val hasDub: Boolean get() = (dubCount ?: 0) > 0
+
+    /** Alias for [contentKind], so a filter chip can read `anime.kind` without a wrapper. */
+    val kind: ContentKind get() = contentKind
 
     /**
      * Hindi-dub rows live in a **negative id space** so a single `anime` table (and therefore one
@@ -149,6 +165,12 @@ data class Filters(
     val hasDub: Boolean = false,
     /** Only titles from a Hindi-dub provider (negative id space). */
     val hindiOnly: Boolean = false,
+    /** Multi-select catalogue kind. Empty = any. */
+    val kinds: Set<ContentKind> = emptySet(),
+    /** Multi-select ISO-639-1 catalogue language. Empty = any. Rows with no language never match. */
+    val languages: Set<String> = emptySet(),
+    /** Multi-select provider ids. Empty = any. */
+    val providers: Set<String> = emptySet(),
     val sort: SortOrder = SortOrder.RECENT,
 )
 
@@ -161,6 +183,10 @@ data class FilterFacets(
     val types: List<String> = emptyList(),
     val statuses: List<String> = emptyList(),
     val letters: List<Char> = emptyList(),
+    /** Languages actually present in the catalogue, so a chip can never filter to nothing. */
+    val languages: List<String> = emptyList(),
+    /** Providers actually present, ordered as [Providers.ALL]. */
+    val providers: List<String> = emptyList(),
 )
 
 enum class SyncState { IDLE, RUNNING, THROTTLED, ERROR }

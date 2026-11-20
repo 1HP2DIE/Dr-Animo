@@ -8,6 +8,7 @@ import com.animo.app.data.local.FtsQuery
 import com.animo.app.data.local.dao.AnimeDao
 import com.animo.app.data.local.dao.EpisodeDao
 import com.animo.app.data.local.dao.ProgressDao
+import com.animo.app.data.local.dao.ProviderCount
 import com.animo.app.data.local.entity.EpisodeEntity
 import com.animo.app.data.local.entity.ProgressEntity
 import com.animo.app.data.local.filterFacetsOf
@@ -19,6 +20,7 @@ import com.animo.app.domain.model.CatalogueCounts
 import com.animo.app.domain.model.Episode
 import com.animo.app.domain.model.FilterFacets
 import com.animo.app.domain.model.Filters
+import com.animo.app.domain.model.Providers
 import com.animo.app.domain.model.SyncProgress
 import com.animo.app.domain.model.SyncState
 import com.animo.app.domain.repo.AnimeRepository
@@ -119,12 +121,37 @@ class AnimeRepositoryImpl(
      * Built from the catalogue, never the network, so the filter sheet is populated on a cold,
      * offline start and can never offer a value that returns an empty screen. Recomputed per
      * emission (no cached copy that could outlive a sync) off the main thread.
+     *
+     * The per-row projection answers five facets; language and provider are whole-table
+     * vocabularies (one DISTINCT, one GROUP BY), so they are read per emission instead of being
+     * folded into the projection — the same invalidation triggers both, so the sheet still cannot
+     * go stale against the grid.
      */
     override fun observeFacets(): Flow<FilterFacets> =
         animeDao.observeFacetRows()
-            .map(::filterFacetsOf)
+            .map { rows ->
+                filterFacetsOf(rows).copy(
+                    languages = animeDao.languagesPresent(),
+                    providers = orderedProviders(animeDao.countsByProvider()),
+                )
+            }
             .distinctUntilChanged()
             .flowOn(Dispatchers.Default)
+
+    /**
+     * Provider ids in [Providers.ALL] order, so the chips and the provider page never reorder
+     * themselves between emissions. A provider the build does not know about yet is kept (and sorted
+     * last) instead of being hidden, and a blank bucket — only reachable if a writer forgot the
+     * column — is dropped rather than shown as an unnamed chip.
+     */
+    private fun orderedProviders(counts: List<ProviderCount>): List<String> {
+        val present = counts.filter { it.count > 0 }.map { it.providerId }.toSet()
+        val known = Providers.ALL.map { it.id }.filter { it in present }
+        val unknown = present
+            .filter { id -> id.isNotBlank() && Providers.spec(id) == null }
+            .sorted()
+        return known + unknown
+    }
 
     override fun observeAnime(id: Int): Flow<Anime?> =
         animeDao.observeById(id).map { row -> row?.toDomain() }

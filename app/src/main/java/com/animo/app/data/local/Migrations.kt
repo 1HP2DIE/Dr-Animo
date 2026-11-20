@@ -69,6 +69,51 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
 }
 
 /**
+ * v6 gives every row an owner, a content kind and a language, and adds the per-provider sync
+ * preference.
+ *
+ * The three columns are additive with defaults, so no row is invalid mid-migration; the backfill
+ * below then fills them from what the row already carries, which is why the provider list did not
+ * need a data migration of its own. `providerId` is derived from the id band exactly as
+ * [com.animo.app.domain.model.Providers.idFor] does, so the column and the fallback agree for every
+ * pre-v6 row.
+ *
+ * `contentKind` cannot be read off the id band alone: the film catalogue carries both films and
+ * multi-episode series behind one band, so the episode count decides — which is also what
+ * [com.animo.app.domain.model.ContentKind.infer] does at write time.
+ */
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `anime` ADD COLUMN `providerId` TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE `anime` ADD COLUMN `contentKind` TEXT NOT NULL DEFAULT 'ANIME'")
+        db.execSQL("ALTER TABLE `anime` ADD COLUMN `language` TEXT")
+
+        db.execSQL("UPDATE `anime` SET `providerId` = 'movielink' WHERE `id` BETWEEN -2100000000 AND -2000000001")
+        db.execSQL("UPDATE `anime` SET `providerId` = 'hindi' WHERE `id` BETWEEN -1999999999 AND -1")
+        db.execSQL("UPDATE `anime` SET `providerId` = 'anikoto' WHERE `id` >= 0")
+
+        db.execSQL("UPDATE `anime` SET `contentKind` = 'SERIES' WHERE `providerId` = 'movielink' AND `episodeCount` > 1")
+        db.execSQL("UPDATE `anime` SET `contentKind` = 'MOVIE' WHERE `providerId` = 'movielink' AND `episodeCount` <= 1")
+        db.execSQL("UPDATE `anime` SET `contentKind` = 'MOVIE' WHERE `providerId` = 'hindi' AND `type` = 'Movie'")
+
+        db.execSQL("UPDATE `anime` SET `language` = 'hi' WHERE `providerId` = 'hindi'")
+        db.execSQL("UPDATE `anime` SET `language` = 'ja' WHERE `providerId` = 'anikoto'")
+        // The film catalogue states no language at all; Hindi is its declared default, and the
+        // next sync upgrades the rows whose title names a different one.
+        db.execSQL("UPDATE `anime` SET `language` = 'hi' WHERE `providerId` = 'movielink'")
+
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_anime_providerId` ON `anime` (`providerId`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_anime_contentKind` ON `anime` (`contentKind`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_anime_language` ON `anime` (`language`)")
+
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `provider_pref` " +
+                "(`provider` TEXT NOT NULL, `syncMode` TEXT NOT NULL, PRIMARY KEY(`provider`))",
+        )
+    }
+}
+
+/**
  * Reads `id, title` first and writes afterwards: executing the `UPDATE` while the cursor is still
  * open on `anime` would reset it. Each write also fires Room's external-content FTS trigger, which
  * re-inserts the indexed columns for that rowid — harmless, and bounded by the catalogue size

@@ -8,6 +8,8 @@ import com.animo.app.data.remote.AnikotoApi
 import com.animo.app.data.remote.ApiEvent
 import com.animo.app.data.remote.ApiException
 import com.animo.app.data.remote.toEntity
+import com.animo.app.domain.model.ContentKind
+import com.animo.app.domain.model.Providers
 import com.animo.app.domain.model.SyncProgress
 import com.animo.app.domain.model.SyncState
 import java.util.concurrent.atomic.AtomicReference
@@ -126,7 +128,15 @@ class CatalogSyncer(
             if (response.pagination.totalPages > 0) totalPages = response.pagination.totalPages
 
             val stamps = animeDao.stampsFor(response.data.map { it.id }).associateBy { it.id }
-            val rows = response.data.map { dto -> dto.toEntity(stamps[dto.id]) }
+            // The DTO mapper predates the v6 owner columns, so this walk stamps them: `/recent-anime`
+            // is one catalogue with one kind and one audio language, whatever the row's format is.
+            val rows = response.data.map { dto ->
+                dto.toEntity(stamps[dto.id]).copy(
+                    providerId = Providers.ORIGINAL,
+                    contentKind = ContentKind.ANIME.name,
+                    language = ORIGINAL_LANGUAGE,
+                )
+            }
 
             var pageChanged = 0
             for (row in rows) {
@@ -236,6 +246,9 @@ class CatalogSyncer(
     private companion object {
         /** Hard ceiling for a runaway `total_pages`; the real catalog is 95. */
         const val MAX_PAGES = 400
+
+        /** The original API catalogues Japanese-audio anime; its spec declares the same tag. */
+        const val ORIGINAL_LANGUAGE = "ja"
 
         /**
          * Stop after this many consecutive pages with nothing new and nothing moved. Two, not one:

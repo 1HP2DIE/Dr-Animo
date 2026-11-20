@@ -1,6 +1,7 @@
 package com.animo.app.data.local
 
 import com.animo.app.data.remote.Normalize
+import com.animo.app.domain.model.ContentKind
 import com.animo.app.domain.model.Filters
 import com.animo.app.domain.model.SortOrder
 
@@ -34,6 +35,9 @@ object FilterSql {
 
     /** Upper bound on a page — a corrupt limit from the UI must not try to inflate the whole table. */
     const val MAX_LIMIT = 1_000
+
+    /** Ceiling on one `IN (?,…,?)` list — see [appendInClause]. */
+    const val MAX_IN_VALUES = 200
 
     fun build(match: String?, filters: Filters, limit: Int, offset: Int): FilterQuery {
         val sql = StringBuilder(SELECT)
@@ -83,6 +87,14 @@ object FilterSql {
         // Hindi rows live in the negative id space; the primary key index covers this as a range scan.
         if (filters.hindiOnly) sql.append(AND_HINDI)
 
+        // The three v6 owner columns. Each is one `AND <col> IN (?,?,…)` with a placeholder per
+        // selected value; the vocabularies are small and closed (a kind enum, ISO-639-1 tags,
+        // provider ids), so the count is only ever a handful. All three are skipped when empty, and
+        // every value still travels as a bind argument — same rule as the genres above.
+        appendInClause(sql, args, "a.contentKind", kindArgs(filters.kinds))
+        appendInClause(sql, args, "a.language", languageArgs(filters.languages))
+        appendInClause(sql, args, "a.providerId", providerArgs(filters.providers))
+
         sql.append("\nORDER BY ").append(orderBy(filters.sort))
         sql.append("\nLIMIT ? OFFSET ?")
         args += limit.coerceIn(1, MAX_LIMIT)
@@ -104,6 +116,61 @@ object FilterSql {
             .distinct()
             .sorted()
             .toList()
+
+    /** Stored spelling of each selected kind ([ContentKind.name]), in enum order and de-duplicated. */
+    fun kindArgs(kinds: Set<ContentKind>): List<String> =
+        kinds.asSequence()
+            .distinct()
+            .sortedBy { it.ordinal }
+            .map { it.name }
+            .toList()
+
+    /**
+     * [Filters.languages] is an ISO-639-1 set the UI can spell as `JA`; the column stores lowercase,
+     * so the same trim/lowercase/de-duplicate/sort rule as [genreArgs] is what keeps the SQL text —
+     * and therefore Room's statement cache — stable.
+     */
+    fun languageArgs(languages: Set<String>): List<String> =
+        languages.asSequence()
+            .map { it.trim().lowercase() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .sorted()
+            .toList()
+
+    /** Provider ids are already part of the database contract, so they are only trimmed and sorted. */
+    fun providerArgs(providers: Set<String>): List<String> =
+        providers.asSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .sorted()
+            .toList()
+
+    /**
+     * Appends `AND <column> IN (?,?,…)` for a non-empty [values], binding one argument per value.
+     *
+     * [MAX_IN_VALUES] is a statement-size guard, not a behaviour: the vocabularies this is used for
+     * are a handful of values, and a set larger than the ceiling is a caller bug that must not turn
+     * into a 999-argument statement.
+     */
+    private fun appendInClause(
+        sql: StringBuilder,
+        args: MutableList<Any?>,
+        column: String,
+        values: List<String>,
+    ) {
+        val bounded = values.take(MAX_IN_VALUES)
+        if (bounded.isEmpty()) return
+
+        sql.append("\n  AND ").append(column).append(" IN (")
+        bounded.forEachIndexed { index, value ->
+            if (index > 0) sql.append(',')
+            sql.append('?')
+            args += value
+        }
+        sql.append(')')
+    }
 
     fun orderBy(sort: SortOrder): String = when (sort) {
         SortOrder.RECENT -> "a.updatedAtEpoch DESC, a.id DESC"

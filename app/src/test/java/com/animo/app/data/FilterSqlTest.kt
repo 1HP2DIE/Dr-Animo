@@ -2,7 +2,9 @@ package com.animo.app.data
 
 import com.animo.app.data.local.FilterQuery
 import com.animo.app.data.local.FilterSql
+import com.animo.app.domain.model.ContentKind
 import com.animo.app.domain.model.Filters
+import com.animo.app.domain.model.Providers
 import com.animo.app.domain.model.SortOrder
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -225,6 +227,105 @@ class FilterSqlTest {
         assertTrue(query.sql.indexOf("a.genres") < query.sql.indexOf("a.isDub"))
         assertTrue(query.sql.indexOf("a.isDub") < query.sql.indexOf("a.id BETWEEN"))
         assertEquals(listOf<Any?>("naruto*", "action", 20, 0), query.args)
+    }
+
+    // ---------------------------------------------------------------- owner columns
+
+    @Test
+    fun `kinds filter on the contentKind column in enum order`() {
+        // Insertion order is deliberately reversed: the statement text must not depend on the Set.
+        val query = build(filters = Filters(kinds = setOf(ContentKind.MOVIE, ContentKind.ANIME)))
+
+        assertTrue(query.sql.contains("AND a.contentKind IN (?,?)"))
+        assertEquals(listOf<Any?>("ANIME", "MOVIE", 40, 0), query.args)
+    }
+
+    @Test
+    fun `kind args follow the enum order and can name every value`() {
+        assertEquals(
+            listOf("ANIME", "MOVIE", "SERIES"),
+            FilterSql.kindArgs(ContentKind.ALL.toSet()),
+        )
+    }
+
+    @Test
+    fun `languages are trimmed, lowercased and bound`() {
+        val query = build(filters = Filters(languages = setOf("JA", " hi ")))
+
+        assertTrue(query.sql.contains("AND a.language IN (?,?)"))
+        assertEquals(listOf<Any?>("hi", "ja", 40, 0), query.args)
+    }
+
+    @Test
+    fun `a language filter can never match a row without a language`() {
+        // `IN` is never true for NULL, which is the intended semantics: a row whose provider does not
+        // state a language must not surface under any language chip.
+        val query = build(filters = Filters(languages = setOf("hi")))
+
+        assertFalse(query.sql.contains("a.language IS NULL"))
+        assertFalse(query.sql.contains("a.language != ''"))
+    }
+
+    @Test
+    fun `providers filter on the providerId column`() {
+        val query = build(filters = Filters(providers = setOf(Providers.MOVIE_LINK, Providers.ORIGINAL)))
+
+        assertTrue(query.sql.contains("AND a.providerId IN (?,?)"))
+        assertEquals(listOf<Any?>("anikoto", "movielink", 40, 0), query.args)
+    }
+
+    @Test
+    fun `the three owner filters compose in clause order`() {
+        val query = build(
+            filters = Filters(
+                kinds = setOf(ContentKind.ANIME),
+                languages = setOf("ja"),
+                providers = setOf(Providers.ORIGINAL),
+                hasDub = true,
+            ),
+        )
+
+        assertEquals(listOf<Any?>("ANIME", "ja", "anikoto", 40, 0), query.args)
+        assertTrue(query.sql.indexOf("a.isDub") < query.sql.indexOf("a.contentKind"))
+        assertTrue(query.sql.indexOf("a.contentKind") < query.sql.indexOf("a.language"))
+        assertTrue(query.sql.indexOf("a.language") < query.sql.indexOf("a.providerId"))
+    }
+
+    @Test
+    fun `empty owner sets add no clause`() {
+        val query = build(
+            filters = Filters(
+                kinds = emptySet(),
+                languages = emptySet(),
+                providers = emptySet(),
+            ),
+        )
+
+        assertEquals("SELECT * FROM anime AS a WHERE 1 = 1", query.sql.substringBefore("\nORDER BY"))
+        assertEquals(listOf<Any?>(40, 0), query.args)
+    }
+
+    @Test
+    fun `blank owner values add no clause`() {
+        val query = build(filters = Filters(languages = setOf("  ", ""), providers = setOf(" ")))
+
+        assertFalse(query.sql.contains("a.language"))
+        assertFalse(query.sql.contains("a.providerId"))
+        assertEquals(listOf<Any?>(40, 0), query.args)
+    }
+
+    @Test
+    fun `owner values travel as bind arguments only`() {
+        val injection = "'; DROP TABLE anime;--"
+        val query = build(filters = Filters(providers = setOf(injection), languages = setOf(injection)))
+
+        assertFalse(query.sql.contains(injection))
+        assertFalse(query.sql.contains("DROP TABLE"))
+        // The language normaliser lowercases, so exactly one argument ends up folded…
+        assertEquals(1, query.args.count { it is String && it.endsWith("drop table anime;--") })
+        // …and the provider id is *not* folded: ids are part of the database contract and a
+        // case-insensitive match there would stop finding a provider whose id ever gains a capital.
+        assertEquals(1, query.args.count { it is String && it.endsWith("DROP TABLE anime;--") })
     }
 
     // ---------------------------------------------------------------- paging

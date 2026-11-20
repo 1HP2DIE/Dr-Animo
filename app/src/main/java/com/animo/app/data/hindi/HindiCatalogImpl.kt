@@ -10,8 +10,10 @@ import com.animo.app.data.local.dao.AnimeStamp
 import com.animo.app.data.local.dao.EpisodeDao
 import com.animo.app.data.local.entity.AnimeEntity
 import com.animo.app.data.remote.Normalize
+import com.animo.app.domain.model.ContentKind
 import com.animo.app.domain.model.Episode
 import com.animo.app.domain.model.Filters
+import com.animo.app.domain.model.Providers
 import com.animo.app.domain.model.SortOrder
 import com.animo.app.domain.repo.HindiCatalog
 import kotlin.math.abs
@@ -353,6 +355,9 @@ class HindiCatalogImpl(
     ): AnimeEntity {
         val episodeCount = previousEpisodeCount(previous, title.episodeUrls.size)
         val kind = if (title.id.startsWith(TOONO_MOVIE_PATH)) TYPE_MOVIE else TYPE_TV
+        // The listing states a page path, not a kind: `movies/…` is a film and everything else is a
+        // series, which is exactly what the provider-level inference reads.
+        val contentKind = ContentKind.infer(Providers.HINDI, kind, episodeCount)
 
         return AnimeEntity(
             id = id,
@@ -397,6 +402,9 @@ class HindiCatalogImpl(
             // The title page: series and movies are separate routes and the resolver needs the one
             // this row came from (a movie page is also its own player page).
             originUrl = title.url,
+            providerId = Providers.HINDI,
+            contentKind = contentKind.name,
+            language = HINDI_LANGUAGE,
         )
     }
 
@@ -442,6 +450,7 @@ class HindiCatalogImpl(
     ): AnimeEntity {
         val episodeCount = previousEpisodeCount(previous, post.episodes.size)
         val kind = if (post.isMovie) TYPE_MOVIE else TYPE_TV
+        val contentKind = ContentKind.infer(Providers.HINDI, kind, episodeCount)
         val publishedAt = parsePostDate(post.date)
 
         return AnimeEntity(
@@ -484,6 +493,9 @@ class HindiCatalogImpl(
             // The WordPress article. `?p=<id>` is measured-reachable, so a blank `link` (a parse
             // regression) still leaves a page the resolver can walk.
             originUrl = post.link.ifBlank { "$RARE_FALLBACK_BASE/?p=${post.id}" },
+            providerId = Providers.HINDI,
+            contentKind = contentKind.name,
+            language = HINDI_LANGUAGE,
         )
     }
 
@@ -776,6 +788,9 @@ class HindiCatalogImpl(
     private companion object {
         const val MIN_YEAR = 1900
         const val MAX_YEAR = 2100
+
+        /** Both Hindi sources publish one audio track, so the catalogue's language is stated. */
+        const val HINDI_LANGUAGE = "hi"
 
         const val TYPE_TV = "TV"
         const val TYPE_MOVIE = "Movie"

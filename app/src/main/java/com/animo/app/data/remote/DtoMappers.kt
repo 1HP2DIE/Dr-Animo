@@ -6,6 +6,8 @@ import com.animo.app.data.local.entity.EpisodeEntity
 import com.animo.app.data.remote.dto.AnimeDto
 import com.animo.app.data.remote.dto.EpisodeDto
 import com.animo.app.data.remote.dto.SeriesDataDto
+import com.animo.app.domain.model.ContentKind
+import com.animo.app.domain.model.Providers
 
 /**
  * DTO -> Room row. This is the ingest boundary: every measured trap in research/DATA_CONTRACT.md §7
@@ -63,8 +65,17 @@ fun AnimeDto.toEntity(previous: AnimeStamp? = null): AnimeEntity {
             ?: previous?.nextAirAt?.takeIf { Normalize.normalizeStatus(status) != "finished_airing" },
         nextAirEp = nextAirEp,
         detailFetchedAt = previous?.detailFetchedAt,
+        // Stamped here rather than at each call site: a detail refresh rebuilds the whole row from
+        // the DTO, so a site that forgot these would silently reset the owner to "" and move the
+        // row out of its provider's count.
+        providerId = Providers.ORIGINAL,
+        contentKind = ContentKind.ANIME.name,
+        language = ORIGINAL_LANGUAGE,
     )
 }
+
+/** Catalogue language of the original source; its own audio is Japanese, subtitles are ours. */
+private const val ORIGINAL_LANGUAGE = "ja"
 
 /**
  * Episode DTO -> row. `title`/`jp_title` are HTML-entity escaped on the wire ("I&#39;m Luffy!").

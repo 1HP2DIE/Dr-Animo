@@ -1,9 +1,11 @@
 package com.animo.app.data.local.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.animo.app.data.remote.Normalize
+import com.animo.app.domain.model.ContentKind
 
 /**
  * Catalog row — column names and nullability mirror the DDL in research/DATA_CONTRACT.md §5
@@ -28,6 +30,9 @@ import com.animo.app.data.remote.Normalize
         Index(value = ["type"]),
         Index(value = ["score"]),
         Index(value = ["titleNorm"]),
+        Index(value = ["providerId"]),
+        Index(value = ["contentKind"]),
+        Index(value = ["language"]),
     ],
 )
 data class AnimeEntity(
@@ -73,4 +78,28 @@ data class AnimeEntity(
      * row is self-contained". Hindi rows are identified by a negative [id] — see `Anime.isHindi`.
      */
     val originUrl: String = "",
+
+    /**
+     * Which catalogue wrote this row — one of [com.animo.app.domain.model.Providers].
+     *
+     * Until v6 the provider was inferred from the id band, which only works while there are exactly
+     * three of them and each owns a fixed range. The provider page needs per-provider counts and
+     * per-provider sync state, so the owner is now a column; the band stays as the id allocator and
+     * as the fallback for anything written before this column existed.
+     */
+    @ColumnInfo(defaultValue = "")
+    val providerId: String = "",
+
+    /**
+     * `ANIME` | `MOVIE` | `SERIES` — see [ContentKind]. Stored as text rather than an ordinal so a
+     * future value can be added without renumbering the rows that already exist.
+     */
+    @ColumnInfo(defaultValue = "ANIME")
+    val contentKind: String = ContentKind.ANIME.name,
+
+    /**
+     * ISO-639-1 tag of the catalogue this row came from, or null when the provider serves several
+     * languages and does not say which one a title is.
+     */
+    val language: String? = null,
 )

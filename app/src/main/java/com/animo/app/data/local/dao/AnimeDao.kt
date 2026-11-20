@@ -45,6 +45,12 @@ data class SlugStamp(
     val detailFetchedAt: Long?,
 )
 
+/** One row of the provider facet: how many catalogue rows a provider owns. See [AnimeDao.countsByProvider]. */
+data class ProviderCount(
+    val providerId: String,
+    val count: Int,
+)
+
 @Dao
 interface AnimeDao {
 
@@ -102,9 +108,29 @@ interface AnimeDao {
     /**
      * Facet source. Deliberately one projection for all five facets — the filter sheet needs
      * genres, years, types, statuses and letters, and they all live on the same row.
+     *
+     * The language and provider facets are **not** derivable here: each is one vocabulary over the
+     * whole table, with a row count the UI also renders, so folding them in Kotlin would mean
+     * unzipping every title's owner on the UI thread. They get their own DISTINCT / GROUP BY below,
+     * on the same invalidation path.
      */
     @Query("SELECT genres, year, type, statusNorm, titleNorm FROM anime")
     fun observeFacetRows(): Flow<List<FacetRow>>
+
+    /** Languages actually stored; `NULL`/blank is "not stated", not a language a chip can offer. */
+    @Query(
+        "SELECT DISTINCT language FROM anime " +
+            "WHERE language IS NOT NULL AND language != '' ORDER BY language",
+    )
+    suspend fun languagesPresent(): List<String>
+
+    /** Rows per owning catalogue, for the provider facet and the provider page. */
+    @Query("SELECT providerId, COUNT(*) AS count FROM anime GROUP BY providerId")
+    suspend fun countsByProvider(): List<ProviderCount>
+
+    /** How many rows one catalogue owns — the provider page's headline number. */
+    @Query("SELECT COUNT(*) FROM anime WHERE providerId = :providerId")
+    suspend fun countForProvider(providerId: String): Int
 
     /** Continue watching: one row per series, ordered by its most recently touched episode. Grouping
      * on `a.id` collapses multiple in-progress episodes of the same series into a single card.

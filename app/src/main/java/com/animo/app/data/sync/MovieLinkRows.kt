@@ -6,6 +6,8 @@ import com.animo.app.data.remote.Normalize
 import com.animo.app.data.remote.provider.movielink.MovieLinkCard
 import com.animo.app.data.remote.provider.movielink.MovieLinkKind
 import com.animo.app.domain.model.CatalogIds
+import com.animo.app.domain.model.ContentKind
+import com.animo.app.domain.model.Providers
 
 /**
  * MovieLink listing card → `anime` row.
@@ -67,6 +69,9 @@ internal object MovieLinkRows {
         // the only honest answer here is "whatever the detail pass already learned".
         val listedEpisodes = if (card.kind == MovieLinkKind.MOVIE) 1 else 0
         val episodeCount = maxOf(previous?.episodeCount ?: 0, listedEpisodes)
+        // Card `kind` is the provider's own shape, and the provider-level inference is the rule that
+        // turns it into the app's three-value axis (one entry = film, a grid = series).
+        val contentKind = ContentKind.infer(Providers.MOVIE_LINK, kind, episodeCount)
 
         return AnimeEntity(
             id = id,
@@ -113,6 +118,13 @@ internal object MovieLinkRows {
             // and `MovieLinkProvider.detail` rebuilds the URL from the current host (and discards
             // the host part if a stored value is absolute).
             originUrl = card.seriesId.trim().trim('/'),
+            providerId = Providers.MOVIE_LINK,
+            contentKind = contentKind.name,
+            // No language metadata anywhere in the payload, so a title that names its own language
+            // wins and everything else takes the provider default. Hindi is declared because that
+            // is the bulk of the catalogue; the Tamil/Telugu exceptions say so in the title.
+            language = Providers.languageFromTitle(card.title)
+                ?: Providers.MOVIE_LINK_SPEC.defaultLanguage,
         )
     }
 }
