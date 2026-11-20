@@ -19,8 +19,12 @@ jobs:
   feed:
     runs-on: ubuntu-latest
     steps:
+      # A `release` event checks out the tag, i.e. a detached HEAD, and the push below then fails
+      # with "You are not currently on a branch". The feed belongs on the default branch, so ask
+      # for it explicitly; the release tags are still fetched for the version lookup.
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
           fetch-tags: true
 
