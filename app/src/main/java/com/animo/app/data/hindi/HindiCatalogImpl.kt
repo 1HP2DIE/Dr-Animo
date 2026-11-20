@@ -201,6 +201,10 @@ class HindiCatalogImpl(
             }
         }
 
+        // Announce the estimate immediately: without this the screen had nothing to show until the
+        // first page came back, which on a slow or blocked host is never.
+        runCatching { onProgress(0, total) }
+
         fun emit(remaining: Int?) {
             pages += 1
             if (remaining != null && remaining > 0) total = maxOf(total, pages + remaining)
