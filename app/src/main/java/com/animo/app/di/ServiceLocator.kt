@@ -22,6 +22,9 @@ import com.animo.app.data.repo.RoutingStreamRepository
 import com.animo.app.domain.repo.AnimeRepository
 import com.animo.app.domain.repo.HindiCatalog
 import com.animo.app.domain.repo.StreamRepository
+import com.animo.app.net.OkHttpTransportChannel
+import com.animo.app.net.TransportRouter
+import com.animo.app.net.webview.WebViewChannel
 import com.animo.app.player.ResolveException
 import com.animo.app.player.StreamResolver
 import com.animo.app.player.AltStreamSource
@@ -84,7 +87,33 @@ object ServiceLocator {
 
     // ---------------------------------------------------------------- infrastructure
 
-    val httpClient: OkHttpClient by lazy { HttpClientFactory.create() }
+    val httpClient: OkHttpClient by lazy { HttpClientFactory.create(requireContext()) }
+
+    /**
+     * The fallback ladder every third-party host goes through: the shared OkHttp client first, the
+     * invisible System WebView last (it can solve a JS challenge and leaves the clearance cookie in
+     * the same `CookieManager` [httpClient] reads from).
+     *
+     * Lazy on purpose: building the channels touches no WebView and opens no socket, but there is
+     * also no reason to pay for it in `onCreate`.
+     */
+    val transport: TransportRouter by lazy {
+        val webView = WebViewChannel(requireContext(), httpClient)
+        val router = TransportRouter(
+            listOf(
+                OkHttpTransportChannel(httpClient),
+                webView,
+            ),
+            log = AppLog::d,
+        )
+        // A clearance and a cooldown are both statements about the IP that earned them: after a
+        // Wi-Fi to mobile switch neither is true any more, so the ladder starts clean.
+        HttpClientFactory.addNetworkChangeListener {
+            webView.clearAll()
+            router.resetBudget()
+        }
+        router
+    }
 
     val json: Json by lazy { AnimoJson }
 

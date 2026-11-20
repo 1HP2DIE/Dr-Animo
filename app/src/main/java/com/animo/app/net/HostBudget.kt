@@ -105,6 +105,17 @@ class HostBudget(
         }
     }
 
+    /**
+     * Forgets every cooldown and every strike.
+     *
+     * A refusal is a statement about the IP that made the request, so the instant the phone is on a
+     * different network that statement is stale: keeping a 30 s penalty across a Wi-Fi→mobile hand
+     * over would punish the caller for something that is no longer true.
+     */
+    fun clear() {
+        synchronized(lock) { states.clear() }
+    }
+
     private companion object {
         /** Far enough back that "never fired" cannot be confused with `0` (a real clock value). */
         const val NEVER = Long.MIN_VALUE / 2

@@ -26,7 +26,7 @@ data class ChannelAttempt(
 class TransportBlockedException(
     val host: String,
     val attempts: List<ChannelAttempt>,
-    /** Remaining cooldown from [HostBudget], so a caller can back off without touching the budget. */
+    /** When the host is free again (cooldown or pacing remainder), so a caller can back off. */
     val retryAfterMs: Long,
     cause: Throwable? = null,
 ) : IOException(blockedMessage(host, attempts, retryAfterMs), cause) {
@@ -52,6 +52,9 @@ class TransportRouter(
     private val budget: HostBudget = HostBudget(),
     private val log: (String) -> Unit = {},
 ) {
+
+    /** Drops every per-host penalty; the network underneath changed (see [HostBudget.clear]). */
+    fun resetBudget() = budget.clear()
 
     suspend fun get(
         url: String,
