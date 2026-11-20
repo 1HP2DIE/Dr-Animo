@@ -1,23 +1,66 @@
 {
   "schema": 1,
-  "generated": "2026-11-20T08:23:06Z",
+  "generated": "2026-11-20T20:38:25Z",
   "repo": "1HP2DIE/Dr-Animo",
   "releaseLimit": 5,
-  "totalReleases": 6,
+  "totalReleases": 7,
   "latest": {
-    "version": "1.10.0",
-    "versionCode": 15,
-    "date": "20 Nov 2026",
-    "headline": "A second catalogue of films and series \u2014 and Hindi that works again.",
-    "apkUrl": "https://1hp2die.github.io/Dr-Animo/download/Animo-1.10.0.apk",
-    "apkUrlGithub": "https://github.com/1HP2DIE/Dr-Animo/releases/download/v1.10.0/Animo-1.10.0.apk",
-    "apkName": "Animo-1.10.0.apk",
-    "sizeBytes": 5663595,
-    "sha256": "5d722153c155f3ae9ba8de035de31e3c7fbc4b0631cdcdc039c5bf6c1c9eef81",
-    "publishedAt": "2026-11-20T08:02:21Z",
-    "releaseUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/tag/v1.10.0"
+    "version": "1.11.0",
+    "versionCode": 20,
+    "date": "21 Nov 2026",
+    "headline": "A Providers page: see what each catalogue carries, and decide which ones sync on their own.",
+    "apkUrl": "https://1hp2die.github.io/Dr-Animo/download/Animo-1.11.0.apk",
+    "apkUrlGithub": "https://github.com/1HP2DIE/Dr-Animo/releases/download/v1.11.0/Animo-1.11.0.apk",
+    "apkName": "Animo-1.11.0.apk",
+    "sizeBytes": 5698371,
+    "sha256": "9dd3a2c295f942681ae07af345461bec2f6a209ab0a081efdedfaa1746644f01",
+    "publishedAt": "2026-11-20T20:38:14Z",
+    "releaseUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/tag/v1.11.0"
   },
   "releases": [
+    {
+      "version": "1.11.0",
+      "versionCode": 20,
+      "tag": "v1.11.0",
+      "date": "21 Nov 2026",
+      "publishedAt": "2026-11-20T20:38:14Z",
+      "headline": "A Providers page: see what each catalogue carries, and decide which ones sync on their own.",
+      "apkUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/download/v1.11.0/Animo-1.11.0.apk",
+      "apkName": "Animo-1.11.0.apk",
+      "sizeBytes": 5698371,
+      "sha256": "9dd3a2c295f942681ae07af345461bec2f6a209ab0a081efdedfaa1746644f01",
+      "releaseUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/tag/v1.11.0",
+      "changes": [
+        {
+          "kind": "NEW",
+          "text": "A Providers page: every catalogue, what it carries \u2014 anime, films, series \u2014 and which servers it plays from"
+        },
+        {
+          "kind": "NEW",
+          "text": "Each provider has its own Auto / Manual / Off switch. Off stops it fetching entirely and leaves its titles where they are"
+        },
+        {
+          "kind": "NEW",
+          "text": "Filter by kind \u2014 Anime, Movie or Series \u2014 and by language, so a Hindi film and a Japanese series stop looking the same in the grid"
+        },
+        {
+          "kind": "NEW",
+          "text": "History lists every episode you watched, each with its own progress bar and how long ago \u2014 not one row per show"
+        },
+        {
+          "kind": "IMPROVED",
+          "text": "The nightly sync only touches the providers you left on Auto, and one failing no longer stops the rest"
+        },
+        {
+          "kind": "IMPROVED",
+          "text": "Film and series titles now carry a language, so they can be found by it"
+        },
+        {
+          "kind": "FIXED",
+          "text": "A series from the films catalogue showed a single episode: the whole season is listed now, and every episode plays its own stream"
+        }
+      ]
+    },
     {
       "version": "1.10.0",
       "versionCode": 15,
@@ -219,25 +262,6 @@
         {
           "kind": "FIXED",
           "text": "Back closes the player on the first press, and a stray second tap no longer closes the app"
-        }
-      ]
-    },
-    {
-      "version": "1.7.1",
-      "versionCode": 8,
-      "tag": "v1.7.1",
-      "date": "18 Nov 2026",
-      "publishedAt": "2026-11-20T05:41:51Z",
-      "headline": "Our Telegram channel moved.",
-      "apkUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/download/v1.7.1/Animo-1.7.1.apk",
-      "apkName": "Animo-1.7.1.apk",
-      "sizeBytes": 5317632,
-      "sha256": "c42fcd03a15d4d2f5e48943f9305bde99ab09ade59c568e3bae81d0710d3f422",
-      "releaseUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/tag/v1.7.1",
-      "changes": [
-        {
-          "kind": "IMPROVED",
-          "text": "Support page links to the new Telegram channel, @dr_animo_apk"
         }
       ]
     }
