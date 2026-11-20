@@ -165,4 +165,11 @@
     <string name="ui_settings_whats_new">What\'s new</string>
     <string name="ui_settings_badge_new">New</string>
 
+    <!-- In-app update notice (reads docs/update.json) -->
+    <string name="ui_update_title">Update available</string>
+    <string name="ui_update_version">Version %1$s</string>
+    <string name="ui_update_current">You are on %1$s.</string>
+    <string name="ui_update_download">Download APK</string>
+    <string name="ui_update_later">Later</string>
+
 </resources>

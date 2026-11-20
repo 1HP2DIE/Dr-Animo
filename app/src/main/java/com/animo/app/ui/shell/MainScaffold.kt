@@ -23,6 +23,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import com.animo.app.ui.LocalAppContainer
 import com.animo.app.ui.Routes
 import com.animo.app.ui.theme.LocalThemePreference
+import com.animo.app.ui.update.UpdatePrompt
 import kotlinx.coroutines.launch
 
 /**
@@ -105,6 +106,8 @@ fun MainScaffold(
                     .consumeWindowInsets(innerPadding),
             ) {
                 content(openDrawer)
+                // Version tracking: a newer release prompts here, once per version.
+                UpdatePrompt()
             }
         }
     }
