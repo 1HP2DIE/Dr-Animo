@@ -442,16 +442,22 @@ def render_page(page: str, feed: dict, everything: list[dict], installed: int) -
 
 def render_sitemap() -> str:
     today = dt.datetime.now(dt.timezone.utc).date().isoformat()
+    def entry(path: str, priority: str, freq: str) -> str:
+        return (
+            "  <url>\n"
+            f"    <loc>{SITE}{path}</loc>\n"
+            f"    <lastmod>{today}</lastmod>\n"
+            f"    <changefreq>{freq}</changefreq>\n"
+            f"    <priority>{priority}</priority>\n"
+            "  </url>\n"
+        )
+
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-        "  <url>\n"
-        f"    <loc>{SITE}</loc>\n"
-        f"    <lastmod>{today}</lastmod>\n"
-        "    <changefreq>weekly</changefreq>\n"
-        "    <priority>1.0</priority>\n"
-        "  </url>\n"
-        "</urlset>\n"
+        + entry("", "1.0", "weekly")
+        + entry("dmca.html", "0.3", "yearly")
+        + "</urlset>\n"
     )
 
 

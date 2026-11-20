@@ -81,6 +81,20 @@ research/                  verified protocol docs, provider matrix, crawler, pro
 - This app consumes a third-party API that redistributes copyrighted streams. That is a legal risk
   outside the code: expect domain rotation, dead mirrors and takedowns.
 
+## Legal
+
+Dr Animo **hosts no content and runs no media server**. The APK ships empty — no video, no subtitle
+files, no catalogue — and every stream is requested at runtime, directly from a third-party source, over
+the user's own connection. There is no analytics SDK, no advertising ID and no account system.
+
+It is not affiliated with, endorsed by or licensed by any studio, distributor or rights holder
+(including Cartoon Network / Warner Bros. Discovery — the mascot is a fan reference). Titles, characters
+and artwork belong to their owners.
+
+DMCA / takedown procedure, counter-notice and the designated contact:
+[`docs/dmca.html`](docs/dmca.html) · live at https://1hp2die.github.io/Dr-Animo/dmca.html ·
+summary in [`LEGAL.md`](LEGAL.md).
+
 ## Docs
 
 - `docs/ARCHITECTURE.md` — layers, ownership, sync model
