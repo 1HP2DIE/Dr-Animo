@@ -51,6 +51,24 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
 }
 
 /**
+ * v4 → v5: the `sync_cursor` table, the resume point of a paged catalogue walk.
+ *
+ * Purely additive and one row per provider, so no install loses anything and no backfill is needed:
+ * a provider with no row is simply "never walked", which every walker already treats as page 1.
+ * The column types and NOT NULL flags mirror [com.animo.app.data.local.entity.SyncCursorEntity]
+ * exactly, because Room compares the migrated table against the entity at open time.
+ */
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `sync_cursor` " +
+                "(`provider` TEXT NOT NULL, `lastPage` INTEGER NOT NULL, " +
+                "`lastSyncEpoch` INTEGER NOT NULL, PRIMARY KEY(`provider`))",
+        )
+    }
+}
+
+/**
  * Reads `id, title` first and writes afterwards: executing the `UPDATE` while the cursor is still
  * open on `anime` would reset it. Each write also fires Room's external-content FTS trigger, which
  * re-inserts the indexed columns for that rowid — harmless, and bounded by the catalogue size

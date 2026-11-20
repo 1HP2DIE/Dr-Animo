@@ -204,10 +204,12 @@ class FilterSqlTest {
     // ---------------------------------------------------------------- hindi
 
     @Test
-    fun `hindiOnly filters on the negative id space`() {
+    fun `hindiOnly filters on the Hindi id bands, not on the sign`() {
         val query = build(filters = Filters(hindiOnly = true))
 
-        assertTrue(query.sql.contains("AND a.id < 0"))
+        // MovieLink rows are negative too, so the predicate must exclude the band below -1.9e9.
+        assertTrue(query.sql.contains("AND a.id BETWEEN -1999999999 AND -1"))
+        assertFalse(query.sql.contains("a.id < 0"))
         assertEquals(listOf<Any?>(40, 0), query.args)
     }
 
@@ -221,7 +223,7 @@ class FilterSqlTest {
 
         assertTrue(query.sql.indexOf("anime_fts MATCH") < query.sql.indexOf("a.genres"))
         assertTrue(query.sql.indexOf("a.genres") < query.sql.indexOf("a.isDub"))
-        assertTrue(query.sql.indexOf("a.isDub") < query.sql.indexOf("a.id < 0"))
+        assertTrue(query.sql.indexOf("a.isDub") < query.sql.indexOf("a.id BETWEEN"))
         assertEquals(listOf<Any?>("naruto*", "action", 20, 0), query.args)
     }
 

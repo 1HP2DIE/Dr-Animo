@@ -70,7 +70,7 @@ class MovieLinkProvider(
     private val userAgent: String = HttpClientFactory.UA_DESKTOP,
     private val minIntervalMs: Long = MIN_INTERVAL_MS,
     private val log: (String) -> Unit = {},
-) : AnimeProvider {
+) : AnimeProvider, MovieLinkCatalogue {
 
     override val id: String = PROVIDER_ID
 
@@ -83,7 +83,7 @@ class MovieLinkProvider(
     private val base: String = origin?.toString()?.trimEnd('/').orEmpty()
 
     /** False when the vault slot was empty or malformed. The UI can hide the provider instead of failing. */
-    val isConfigured: Boolean get() = origin != null
+    override val isConfigured: Boolean get() = origin != null
 
     private val paceLock = Mutex()
 
@@ -171,7 +171,7 @@ class MovieLinkProvider(
      * past it is clamped rather than requested, so a sync that drifts cannot turn into a stream of
      * 404s.
      */
-    suspend fun cataloguePage(page: Int): Result<MovieLinkPage> {
+    override suspend fun cataloguePage(page: Int): Result<MovieLinkPage> {
         val safePage = page.coerceIn(1, MovieLinkParser.MAX_PAGE)
         val html = get("$PAGE_PATH/$safePage").getOrElse { return Result.failure(it) }
 
@@ -200,6 +200,9 @@ class MovieLinkProvider(
     }
 
     // ------------------------------------------------------------------ mapping
+
+    /** Absolute poster for a card `src`, so a synced row never depends on the current mirror. */
+    override fun posterUrl(raw: String): String = absolute(raw)
 
     private fun hitsOf(cards: List<MovieLinkCard>): List<ProviderHit> = cards.map { card ->
         ProviderHit(
@@ -442,7 +445,7 @@ class MovieLinkProvider(
     }
 
     private companion object {
-        const val PROVIDER_ID = "movielink"
+        const val PROVIDER_ID = MovieLinkCatalogue.PROVIDER_ID
 
         const val SEARCH_PATH = "search"
         const val PAGE_PATH = "/page"

@@ -129,6 +129,11 @@ object FilterSql {
     /** `isDub` is an episode **count**, and NULL on 73.7% of rows — presence, not truthiness. */
     private const val AND_DUB = "\n  AND (a.isDub IS NOT NULL AND a.isDub > 0)"
 
-    /** Hindi-dub providers write negative ids, so this needs no extra column. */
-    private const val AND_HINDI = "\n  AND a.id < 0"
+    /**
+     * Hindi-dub providers write negative ids, so this needs no extra column — but it must be the
+     * **Hindi bands**, not `id < 0`: MovieLink rows also live below zero (see `CatalogIds`), and a
+     * sign test would fold a third catalogue into the Hindi rail. Bounds are the two Hindi ranges,
+     * adjacent by design; `-2_000_000_000` is deliberately outside both.
+     */
+    private const val AND_HINDI = "\n  AND a.id BETWEEN -1999999999 AND -1"
 }

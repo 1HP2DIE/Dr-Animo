@@ -39,15 +39,22 @@ data class Anime(
 
     /**
      * Hindi-dub rows live in a **negative id space** so a single `anime` table (and therefore one
-     * grid, one search, one set of filters) can hold both catalogues without a join or a flag that
-     * could drift. The ranges are:
+     * grid, one search, one set of filters) can hold every catalogue without a join or a flag that
+     * could drift. The ranges — and the one below them, which is *not* Hindi — are documented and
+     * classified by [CatalogIds]:
      *
-     *   -1 … -999,999,999           toono.app
+     *   -1 … -999,999,999               toono.app
      *   -1,000,000,000 … -1,999,999,999  rareanimes.foo
+     *   -2,000,000,001 … -2,100,000,000  MovieLink (see [isMovieLink])
      *
      * The original API's `s_id` tops out around 2.1e9, so the positive space can never collide.
+     * A bare `id < 0` test would have been true for the MovieLink band as well; the classifier is
+     * therefore an explicit range check, not a sign test.
      */
-    val isHindi: Boolean get() = id < 0
+    val isHindi: Boolean get() = CatalogIds.isHindi(id)
+
+    /** True for MovieLink rows — a separate catalogue that shares the `anime` table. */
+    val isMovieLink: Boolean get() = CatalogIds.isMovieLink(id)
 }
 
 /** Split of the local catalogue, used by the home hero and the drawer stats. */

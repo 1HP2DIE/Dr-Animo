@@ -31,6 +31,20 @@ data class DueRow(
     val detailFetchedAt: Long?,
 )
 
+/**
+ * Stored state of a paged-catalogue row, used by writers whose ids come from a hash.
+ *
+ * [slug] is here (and not in [AnimeStamp]) because it is the only column that can prove a hash
+ * collision: two different slugs mapping onto one id are indistinguishable by id alone, and the
+ * writer must not let the second one overwrite the first one's title.
+ */
+data class SlugStamp(
+    val id: Int,
+    val slug: String,
+    val episodeCount: Int,
+    val detailFetchedAt: Long?,
+)
+
 @Dao
 interface AnimeDao {
 
@@ -42,7 +56,14 @@ interface AnimeDao {
     @Query("SELECT * FROM anime WHERE id > 0 ORDER BY updatedAtEpoch DESC, id DESC LIMIT :limit")
     fun observeRecentOriginal(limit: Int): Flow<List<AnimeEntity>>
 
-    @Query("SELECT * FROM anime WHERE id < 0 ORDER BY updatedAtEpoch DESC, id DESC LIMIT :limit")
+    /**
+     * The Hindi rail: the two Hindi bands only. Not `id < 0` — MovieLink rows are negative as well
+     * and belong to their own catalogue (`CatalogIds`).
+     */
+    @Query(
+        "SELECT * FROM anime WHERE id BETWEEN -1999999999 AND -1 " +
+            "ORDER BY updatedAtEpoch DESC, id DESC LIMIT :limit",
+    )
     fun observeRecentHindi(limit: Int): Flow<List<AnimeEntity>>
 
     /** Highest rated originals; Hindi rows carry anitoko-incompatible scores, so they stay out. */
@@ -55,7 +76,11 @@ interface AnimeDao {
     @Query("SELECT COUNT(*) FROM anime WHERE id > 0")
     suspend fun countOriginal(): Int
 
-    @Query("SELECT COUNT(*) FROM anime WHERE id < 0")
+    /** Hindi titles only: the two Hindi bands, so MovieLink rows are not counted as dub. */
+    @Query("SELECT COUNT(*) FROM anime WHERE id BETWEEN :min AND :max")
+    suspend fun countInBand(min: Int, max: Int): Int
+
+    @Query("SELECT COUNT(*) FROM anime WHERE id BETWEEN -1999999999 AND -1")
     suspend fun countHindi(): Int
 
     @Query("SELECT * FROM anime WHERE id = :id")
@@ -114,6 +139,13 @@ interface AnimeDao {
     /** Non-empty [ids] only — an empty `IN ()` is invalid SQL. */
     @Query("SELECT id, updatedAtEpoch, detailFetchedAt, episodeCount, nextAirAt FROM anime WHERE id IN (:ids)")
     suspend fun stampsFor(ids: List<Int>): List<AnimeStamp>
+
+    /**
+     * [SlugStamp]s for the ids a hash-derived writer is about to upsert. Empty [ids] → empty list,
+     * same rule as [stampsFor].
+     */
+    @Query("SELECT id, slug, episodeCount, detailFetchedAt FROM anime WHERE id IN (:ids)")
+    suspend fun slugStampsFor(ids: List<Int>): List<SlugStamp>
 
     @Query("SELECT updatedAtEpoch FROM anime WHERE id = :id")
     suspend fun updatedAtEpochOf(id: Int): Long?
