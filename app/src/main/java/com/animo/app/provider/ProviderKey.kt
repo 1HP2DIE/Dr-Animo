@@ -48,6 +48,12 @@ enum class ProviderKey(val slot: String) {
     /** Direct-file archive source: one site, title search + per-quality files. */
     ARCHIVE_HOST("archive_host"),
 
+    /** Second catalogue source: its index pages, the referer its watch page expects, and its UA. */
+    MOVIELINK_INDEX_HOST("movielink_index_host"),
+    MOVIELINK_WATCH_REFERER("movielink_watch_referer"),
+    /** Optional; an empty slot falls back to the shared desktop UA in `HttpClientFactory`. */
+    MOVIELINK_AVATAR_UA("movielink_ua"),
+
     /** Community opening/ending timestamps, for sources that publish no markers. */
     SKIP_TIMES_API("skip_api"),
 

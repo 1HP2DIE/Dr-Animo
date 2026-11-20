@@ -196,6 +196,11 @@ android {
                 "/META-INF/LICENSE*",
                 "/META-INF/NOTICE*",
                 "META-INF/*.kotlin_module",
+                // Build-time only. Kotlin debug probes and the tooling-metadata manifest are read by
+                // IDE/tooling builds; a release process never loads either, and shipping them only
+                // advertises the toolchain that produced the APK.
+                "DebugProbesKt.bin",
+                "kotlin-tooling-metadata.json",
             )
         }
     }

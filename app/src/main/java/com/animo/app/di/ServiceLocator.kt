@@ -181,10 +181,26 @@ object ServiceLocator {
 
     // ---------------------------------------------------------------- providers
 
-    /** P0 chain. ReAnime/AnimeEgg join here once their recipes are ported. */
-    val providerChain: List<AnimeProvider> by lazy {
-        listOf(AnikotoProvider(api = api, resolverProvider = { streamResolver }))
+    /**
+     * Providers the app adds at start-up, after the P0 chain. Kept in a separate list so a provider
+     * whose slots are not provisioned can only *shorten* the chain: the P0 entry is never replaced,
+     * and an empty list is a supported state.
+     */
+    @Volatile
+    private var extraProviders: List<AnimeProvider> = emptyList()
+
+    fun registerProvider(provider: AnimeProvider) {
+        synchronized(this) { extraProviders = extraProviders + provider }
+        AppLog.i("catalogue provider registered: ${provider.javaClass.simpleName}")
     }
+
+    private val p0Provider: AnimeProvider by lazy {
+        AnikotoProvider(api = api, resolverProvider = { streamResolver })
+    }
+
+    /** P0 chain. ReAnime/AnimeEgg join here once their recipes are ported. */
+    val providerChain: List<AnimeProvider>
+        get() = listOf(p0Provider) + extraProviders
 
     // ---------------------------------------------------------------- stream resolver
 

@@ -5,9 +5,14 @@ import com.animo.app.data.hindi.HindiCatalogImpl
 import com.animo.app.data.hindi.HindiStreamRepositoryImpl
 import com.animo.app.data.hindi.RareAnimesProvider
 import com.animo.app.data.hindi.ToonoProvider
+import com.animo.app.data.remote.HttpClientFactory
+import com.animo.app.data.remote.provider.movielink.MovieLinkProvider
 import com.animo.app.data.sync.SyncScheduler
 import com.animo.app.di.ServiceLocator
 import com.animo.app.player.MegaplayStreamResolver
+import com.animo.app.player.movielink.MovieLinkStreamResolver
+import com.animo.app.provider.ProviderKey
+import com.animo.app.provider.ProviderVault
 
 /**
  * Process entry point. Order matters:
@@ -29,6 +34,32 @@ class AnimoApp : Application() {
         ServiceLocator.registerStreamResolver(
             MegaplayStreamResolver(client = ServiceLocator.httpClient),
         )
+
+        // Second catalogue source. Both host slots are optional: when either is missing the provider
+        // is not registered at all, so the chain stays at P0 and start-up never throws.
+        val movieLinkIndex = ProviderVault.optionalUrl(ProviderKey.MOVIELINK_INDEX_HOST)
+        val movieLinkReferer = ProviderVault.optionalUrl(ProviderKey.MOVIELINK_WATCH_REFERER)
+        if (movieLinkIndex != null && movieLinkReferer != null) {
+            val movieLinkResolver = MovieLinkStreamResolver(
+                client = ServiceLocator.httpClient,
+                watchReferer = movieLinkReferer,
+                userAgent = ProviderVault.optionalUrl(ProviderKey.MOVIELINK_AVATAR_UA)
+                    ?: HttpClientFactory.UA_DESKTOP,
+            )
+            ServiceLocator.registerProvider(
+                MovieLinkProvider(
+                    client = ServiceLocator.httpClient,
+                    indexHost = movieLinkIndex,
+                    resolverProvider = { movieLinkResolver },
+                ),
+            )
+        } else {
+            AppLog.w(
+                "catalogue provider skipped: slots " +
+                    "${ProviderKey.MOVIELINK_INDEX_HOST.slot}/" +
+                    "${ProviderKey.MOVIELINK_WATCH_REFERER.slot} not provisioned",
+            )
+        }
 
         // Hindi sources: two providers, one catalogue, one resolver. Registered rather than built by
         // the container so every Hindi path degrades to a readable failure if it is missing.
