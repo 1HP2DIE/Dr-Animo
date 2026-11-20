@@ -92,6 +92,10 @@ class UpdateCenter private constructor(context: Context) {
                 }
                 cached = parsed
                 cachedAt = System.currentTimeMillis()
+                AppLog.i(
+                    "update feed: latest ${parsed.latest?.version} " +
+                        "(code ${parsed.latest?.versionCode}) vs installed $currentVersionCode",
+                )
                 parsed
             }
         } catch (e: IOException) {
