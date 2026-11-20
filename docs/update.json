@@ -1,19 +1,60 @@
 {
   "schema": 1,
-  "generated": "2026-11-20T06:36:41Z",
+  "generated": "2026-11-20T08:03:34Z",
   "repo": "1HP2DIE/Dr-Animo",
   "releaseLimit": 5,
-  "totalReleases": 5,
+  "totalReleases": 6,
   "latest": {
-    "version": "1.9.0",
-    "versionCode": 13,
-    "date": "19 Nov 2026",
-    "headline": "Smoother everywhere, and SUB/DUB that finally switches what you are watching.",
-    "apkUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/download/v1.9.0/Animo-1.9.0.apk",
-    "sizeBytes": 5334604,
-    "releaseUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/tag/v1.9.0"
+    "version": "1.10.0",
+    "versionCode": 15,
+    "date": "20 Nov 2026",
+    "headline": "A second catalogue of films and series \u2014 and Hindi that works again.",
+    "apkUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/download/v1.10.0/Animo-1.10.0.apk",
+    "sizeBytes": 5663595,
+    "releaseUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/tag/v1.10.0"
   },
   "releases": [
+    {
+      "version": "1.10.0",
+      "versionCode": 15,
+      "tag": "v1.10.0",
+      "date": "20 Nov 2026",
+      "publishedAt": "2026-11-20T08:02:21Z",
+      "headline": "A second catalogue of films and series \u2014 and Hindi that works again.",
+      "apkUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/download/v1.10.0/Animo-1.10.0.apk",
+      "sizeBytes": 5663595,
+      "releaseUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/tag/v1.10.0",
+      "changes": [
+        {
+          "kind": "NEW",
+          "text": "A second catalogue of films and series \u2014 Tamil, Telugu, Hindi and more \u2014 searchable and filterable with everything else"
+        },
+        {
+          "kind": "NEW",
+          "text": "Its titles play in the same player, with resume, subtitles and downloads"
+        },
+        {
+          "kind": "NEW",
+          "text": "Settings shows how many titles it has, with its own Sync button and a live page counter"
+        },
+        {
+          "kind": "IMPROVED",
+          "text": "Hindi sync now shows its progress from the first second instead of looking stuck"
+        },
+        {
+          "kind": "IMPROVED",
+          "text": "When a site refuses to answer, the app tries the browser route before giving up, and says which route failed"
+        },
+        {
+          "kind": "FIXED",
+          "text": "Last sync is now recorded for every sync \u2014 from the drawer, pull-to-refresh or the nightly job \u2014 not only while Settings was open"
+        },
+        {
+          "kind": "FIXED",
+          "text": "The Hindi catalogue syncs again \u2014 1,700+ titles on the first run \u2014 and its episodes play, with resume and the SUB / HINDI tags"
+        }
+      ]
+    },
     {
       "version": "1.9.0",
       "versionCode": 13,
@@ -183,75 +224,6 @@
         {
           "kind": "IMPROVED",
           "text": "Support page links to the new Telegram channel, @dr_animo_apk"
-        }
-      ]
-    },
-    {
-      "version": "1.7.0",
-      "versionCode": 7,
-      "tag": "v1.7.0",
-      "date": "18 Nov 2026",
-      "publishedAt": "2026-11-20T05:41:44Z",
-      "headline": "Download and watch offline, a weekly airing schedule, favourites and your own colours.",
-      "apkUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/download/v1.7.0/Animo-1.7.0.apk",
-      "sizeBytes": 5317636,
-      "releaseUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/tag/v1.7.0",
-      "changes": [
-        {
-          "kind": "NEW",
-          "text": "Download episodes and watch them offline: pick languages, subtitles and any quality the servers have"
-        },
-        {
-          "kind": "NEW",
-          "text": "Download SUB and DUB (or Hindi) of the same episode in one go"
-        },
-        {
-          "kind": "NEW",
-          "text": "Downloads page with progress, speed and time left; open any finished episode in VLC or another player"
-        },
-        {
-          "kind": "NEW",
-          "text": "Change a download's server, and a failed server hands over to the next one by itself"
-        },
-        {
-          "kind": "NEW",
-          "text": "Episodes play right on the title page; go full screen when you want, or turn on auto full screen in Settings"
-        },
-        {
-          "kind": "NEW",
-          "text": "Schedule tab: what airs each day this week, in your time zone, with Airing today on Home"
-        },
-        {
-          "kind": "NEW",
-          "text": "Favourites: tap the heart on any title, find them in their own tab and on Home"
-        },
-        {
-          "kind": "NEW",
-          "text": "New episodes of airing shows and favourites are picked up quietly in the background"
-        },
-        {
-          "kind": "NEW",
-          "text": "Six accent colours and a pure black mode for OLED screens"
-        },
-        {
-          "kind": "NEW",
-          "text": "More servers and languages, including Hindi, with skip intro, up next and screen lock in the player"
-        },
-        {
-          "kind": "NEW",
-          "text": "Support Animo page in the drawer: Telegram channel and crypto tips"
-        },
-        {
-          "kind": "IMPROVED",
-          "text": "Smoother screen changes, tab and drawer animations"
-        },
-        {
-          "kind": "IMPROVED",
-          "text": "Play and skip buttons sit in the exact middle of the player, and subtitles stay clear of the controls"
-        },
-        {
-          "kind": "IMPROVED",
-          "text": "Settings moved to the drawer to make room for Schedule and Favourites"
         }
       ]
     }
