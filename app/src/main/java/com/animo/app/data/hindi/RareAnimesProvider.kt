@@ -64,7 +64,7 @@ import okhttp3.Response
 class RareAnimesProvider(
     private val http: OkHttpClient,
     baseUrl: String = DEFAULT_BASE_URL,
-    private val userAgent: String = UA_HEADLESS_CHROME,
+    private val userAgent: String = UA_DESKTOP,
     private val catalogIntervalMs: Long = CATALOG_INTERVAL_MS,
     private val resolveIntervalMs: Long = RESOLVE_INTERVAL_MS,
     private val maxAttempts: Int = MAX_ATTEMPTS,
@@ -608,10 +608,14 @@ class RareAnimesProvider(
     private companion object {
         val DEFAULT_BASE_URL: String by lazy { ProviderVault.url(ProviderKey.DUB_HOST_B) }
 
-        /** The UA that returned 200 on every hop of the measured crawl. */
-        const val UA_HEADLESS_CHROME =
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) " +
-                "HeadlessChrome/156.0.0.0 Safari/537.36"
+        /**
+         * One UA for every hop, shared with the warm-up WebView.
+         *
+         * The previous value was a headless-Chrome string and the origin nginx answers it with
+         * a bare 403 (`<center><h1>403 Forbidden</h1></center>`) on uncached paths while any normal
+         * browser UA gets 200 — so this was our own block, not the site's.
+         */
+        const val UA_DESKTOP = com.animo.app.data.remote.HttpClientFactory.UA_DESKTOP
 
         const val ACCEPT_JSON = "application/json, text/plain, */*"
         const val ACCEPT_HTML = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"

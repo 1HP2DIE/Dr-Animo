@@ -462,9 +462,8 @@ class HindiStreamRepositoryImpl(
         val ARGON_REFERER: String by lazy { "$ARGON_BASE/" }
 
         /** Same UA the toono/rareanimes hops use; the embed page serves the payload to it. */
-        const val USER_AGENT =
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) " +
-                "HeadlessChrome/156.0.0.0 Safari/537.36"
+        /** Same string the warm-up WebView sends, so its clearance is replayable here. */
+        const val USER_AGENT = com.animo.app.data.remote.HttpClientFactory.UA_DESKTOP
         const val ACCEPT_LANGUAGE = "en-US,en;q=0.6"
         const val ACCEPT_HTML = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
 

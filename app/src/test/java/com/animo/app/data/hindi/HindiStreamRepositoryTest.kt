@@ -68,10 +68,12 @@ class HindiStreamRepositoryTest {
         val stream = result.getOrThrow()
         assertEquals(MASTER_URL, stream.masterUrl)
         assertEquals("https://argon.razorshell.space/", stream.referer)
-        // Same UA the toono/rareanimes hops use; the embed page only serves the payload to it.
+        // The embed page only serves the payload to a UA the origin does not reject, and it has to
+        // be the same string the warm-up WebView sends, or the clearance cannot be replayed.
+        // Pinned to the shared constant rather than a literal: the old literal was a headless-Chrome
+        // string, which the origin answers with a bare 403 on uncached paths.
         assertEquals(
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) " +
-                "HeadlessChrome/156.0.0.0 Safari/537.36",
+            com.animo.app.data.remote.HttpClientFactory.UA_DESKTOP,
             stream.userAgent,
         )
         assertNull(stream.thumbnails)

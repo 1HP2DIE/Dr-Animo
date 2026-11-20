@@ -526,9 +526,12 @@ class ToonoProvider(
         const val SERIES = "series"
         const val MOVIES = "movies"
 
-        const val USER_AGENT =
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) " +
-                "HeadlessChrome/156.0.0.0 Safari/537.36"
+        /**
+         * One UA for every hop. The origin nginx rejects a headless-Chrome UA with a bare 403 on
+         * uncached paths (measured twice, independently), and the warm-up WebView is configured
+         * with this same string, so a clearance earned there is replayable here.
+         */
+        const val USER_AGENT = com.animo.app.data.remote.HttpClientFactory.UA_DESKTOP
         const val ACCEPT_LANGUAGE = "en-US,en;q=0.6"
         const val ACCEPT_HTML = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
 
