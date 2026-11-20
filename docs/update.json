@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generated": "2026-11-20T08:03:34Z",
+  "generated": "2026-11-20T08:10:47Z",
   "repo": "1HP2DIE/Dr-Animo",
   "releaseLimit": 5,
   "totalReleases": 6,
@@ -10,7 +10,10 @@
     "date": "20 Nov 2026",
     "headline": "A second catalogue of films and series \u2014 and Hindi that works again.",
     "apkUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/download/v1.10.0/Animo-1.10.0.apk",
+    "apkName": "Animo-1.10.0.apk",
     "sizeBytes": 5663595,
+    "sha256": "5d722153c155f3ae9ba8de035de31e3c7fbc4b0631cdcdc039c5bf6c1c9eef81",
+    "publishedAt": "2026-11-20T08:02:21Z",
     "releaseUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/tag/v1.10.0"
   },
   "releases": [
@@ -22,7 +25,9 @@
       "publishedAt": "2026-11-20T08:02:21Z",
       "headline": "A second catalogue of films and series \u2014 and Hindi that works again.",
       "apkUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/download/v1.10.0/Animo-1.10.0.apk",
+      "apkName": "Animo-1.10.0.apk",
       "sizeBytes": 5663595,
+      "sha256": "5d722153c155f3ae9ba8de035de31e3c7fbc4b0631cdcdc039c5bf6c1c9eef81",
       "releaseUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/tag/v1.10.0",
       "changes": [
         {
@@ -63,7 +68,9 @@
       "publishedAt": "2026-11-20T05:26:52Z",
       "headline": "Smoother everywhere, and SUB/DUB that finally switches what you are watching.",
       "apkUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/download/v1.9.0/Animo-1.9.0.apk",
+      "apkName": "Animo-1.9.0.apk",
       "sizeBytes": 5334604,
+      "sha256": "4cb2acfd9beb02bcda8ac23c20c3b00125a3ce25183eec0599ddc98ac4d737e6",
       "releaseUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/tag/v1.9.0",
       "changes": [
         {
@@ -108,7 +115,9 @@
       "publishedAt": "2026-11-20T05:42:10Z",
       "headline": "Every genre on a title page is now a shortcut, and a sleep timer that puts the phone to sleep.",
       "apkUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/download/v1.8.0/Animo-1.8.0.apk",
+      "apkName": "Animo-1.8.0.apk",
       "sizeBytes": 5334988,
+      "sha256": "619e47d151125c01d44b7b423496319799aa3779d776fdcd297d264d105fb6c4",
       "releaseUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/tag/v1.8.0",
       "changes": [
         {
@@ -153,7 +162,9 @@
       "publishedAt": "2026-11-20T05:41:59Z",
       "headline": "A polish pass: downloads that tell the truth, a player that stays put, a schedule that keeps up.",
       "apkUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/download/v1.7.2/Animo-1.7.2.apk",
+      "apkName": "Animo-1.7.2.apk",
       "sizeBytes": 5318096,
+      "sha256": "efcbf976c2d9129a13a6fad5d990c73d8b18e2327bf753784ba5aed37e0ce04a",
       "releaseUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/tag/v1.7.2",
       "changes": [
         {
@@ -218,7 +229,9 @@
       "publishedAt": "2026-11-20T05:41:51Z",
       "headline": "Our Telegram channel moved.",
       "apkUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/download/v1.7.1/Animo-1.7.1.apk",
+      "apkName": "Animo-1.7.1.apk",
       "sizeBytes": 5317632,
+      "sha256": "c42fcd03a15d4d2f5e48943f9305bde99ab09ade59c568e3bae81d0710d3f422",
       "releaseUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/tag/v1.7.1",
       "changes": [
         {
