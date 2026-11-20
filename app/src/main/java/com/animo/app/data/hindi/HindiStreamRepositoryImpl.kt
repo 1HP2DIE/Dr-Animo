@@ -10,6 +10,8 @@ import com.animo.app.domain.model.ServerLanguage
 import com.animo.app.domain.model.ServerOption
 import com.animo.app.domain.model.StreamServer
 import com.animo.app.domain.repo.StreamRepository
+import com.animo.app.di.ServiceLocator
+import com.animo.app.net.TransportRouter
 import com.animo.app.player.ResolveException
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
@@ -95,7 +97,20 @@ class HindiStreamRepositoryImpl(
     private val clock: () -> Long = { System.currentTimeMillis() },
     private val log: (String) -> Unit = {},
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    /**
+     * The channel ladder for the argon embed GET. `null` means "raw OkHttp only", which is what unit
+     * tests and an un-installed container get; production resolves [ServiceLocator.transport] lazily.
+     */
+    private val transport: TransportRouter? = null,
 ) : StreamRepository {
+
+    /**
+     * The ladder, or null when there is none (JVM tests, an un-installed container).
+     *
+     * Resolved lazily so a unit test that never builds the container keeps its fake client.
+     */
+    private val router: TransportRouter?
+        get() = transport ?: if (ServiceLocator.isInstalled()) ServiceLocator.transport else null
 
     private enum class Origin { SOURCE_A, SOURCE_B }
 
@@ -290,6 +305,31 @@ class HindiStreamRepositoryImpl(
      * behind a CDN that emits transient 5xx under load, and a tap-to-play must not surface that.
      */
     private suspend fun fetchEmbed(embedUrl: String, hops: MutableList<String>): String {
+        // The embed host answers 403 to a plain client often enough that one UA is not a strategy:
+        // go through the ladder (browser headers -> cookies -> invisible WebView) and keep the raw
+        // client only as the no-ladder fallback.
+        val ladder = router ?: return fetchEmbedDirect(embedUrl, hops)
+        val headers = mapOf(
+            "User-Agent" to USER_AGENT,
+            "Accept" to ACCEPT_HTML,
+            "Accept-Language" to ACCEPT_LANGUAGE,
+            "Referer" to ARGON_REFERER,
+        )
+        val answer = ChannelGate.fetch(ladder, embedUrl, headers, timeoutMs = EMBED_TIMEOUT_MS)
+        hops += "embed ${answer.describe()}"
+        return when (answer.fault) {
+            ChannelFault.OK -> answer.body
+            ChannelFault.DEAD -> throw ResolveException.NotFound("argon embed HTTP ${answer.code}")
+            ChannelFault.BLOCKED -> throw ResolveException.Blocked(
+                ChannelGate.blockedMessage(answer.code, answer.channel, answer.retryAfterMs),
+            )
+            ChannelFault.TRANSIENT, ChannelFault.OTHER ->
+                answer.error?.let { throw ResolveException.Network(it) }
+                    ?: throw ResolveException.Network(IOException("argon embed HTTP ${answer.code}"))
+        }
+    }
+
+    private suspend fun fetchEmbedDirect(embedUrl: String, hops: MutableList<String>): String {
         var last: ResolveException = ResolveException.Network(IOException("argon embed: no attempt"))
 
         for (attempt in 1..EMBED_ATTEMPTS) {
@@ -357,13 +397,16 @@ class HindiStreamRepositoryImpl(
 
     private fun classifyIo(error: IOException): ResolveException {
         val message = error.message.orEmpty()
-        val status = HTTP_STATUS.find(message)?.groupValues?.getOrNull(1)?.toIntOrNull()
-        return when {
-            status == 404 || status == 410 -> ResolveException.NotFound(message)
-            status == 403 || status == 429 -> ResolveException.Blocked(message)
-            PARSE_MARKERS.any { marker -> message.contains(marker, ignoreCase = true) } ->
-                ResolveException.Parse(message)
-            else -> ResolveException.Network(error)
+        // Parse markers are our own words ("no player frame"), not an HTTP status: check them first
+        // so a page that changed shape is reported as such instead of as a network blip.
+        if (PARSE_MARKERS.any { marker -> message.contains(marker, ignoreCase = true) }) {
+            return ResolveException.Parse(message)
+        }
+        return when (ChannelGate.verdict(error)) {
+            ChannelFault.DEAD -> ResolveException.NotFound(message)
+            ChannelFault.BLOCKED -> ResolveException.Blocked(message)
+            ChannelFault.TRANSIENT, ChannelFault.OTHER, ChannelFault.OK ->
+                ResolveException.Network(error)
         }
     }
 
@@ -426,6 +469,9 @@ class HindiStreamRepositoryImpl(
         const val ACCEPT_HTML = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
 
         const val EMBED_ATTEMPTS = 2
+
+        /** Matches the shared client's read timeout, so the ladder does not stretch a tap. */
+        const val EMBED_TIMEOUT_MS = 25_000L
         const val RETRY_DELAY_MS = 400L
 
         val RETRYABLE_CODES = setOf(408, 425, 429, 500, 502, 503, 504)

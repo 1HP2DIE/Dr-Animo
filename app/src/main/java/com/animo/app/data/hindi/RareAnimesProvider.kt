@@ -5,6 +5,8 @@ import com.animo.app.provider.ProviderVault
 
 import com.animo.app.data.remote.Normalize
 import com.animo.app.data.remote.dto.AnimoJson
+import com.animo.app.di.ServiceLocator
+import com.animo.app.net.TransportRouter
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.resume
@@ -67,9 +69,27 @@ class RareAnimesProvider(
     private val resolveIntervalMs: Long = RESOLVE_INTERVAL_MS,
     private val maxAttempts: Int = MAX_ATTEMPTS,
     private val log: (String) -> Unit = {},
+    /**
+     * The channel ladder for every page fetch. `null` means "raw OkHttp only", which is what unit
+     * tests and an un-installed container get; production resolves [ServiceLocator.transport] on
+     * first use.
+     */
+    private val transport: TransportRouter? = null,
 ) {
 
     private val base: String = baseUrl.trimEnd('/')
+
+    /**
+     * Resolved lazily so constructing a provider never touches the container: the tests build one
+     * with a fake OkHttp client and no Android runtime.
+     */
+    private val router: TransportRouter? by lazy {
+        transport ?: if (ServiceLocator.isInstalled()) {
+            runCatching { ServiceLocator.transport }.getOrNull()
+        } else {
+            null
+        }
+    }
 
     /**
      * Single-threaded pacer state. The crawler is serial by design (research/RAREDOWN §C3: no
@@ -326,9 +346,14 @@ class RareAnimesProvider(
     /**
      * One GET with pacing, bounded retries and a Cloudflare kill switch.
      *
+     * The ladder carries the browser session, so a challenged host is a *channel* problem: a refusal
+     * costs one retry and a typed [RareAnimesBlockedException], never three identical requests. 404
+     * and 410 stay ordinary answers and are not retried. Only when no ladder is configured (unit
+     * tests) does the raw client keep its own retry loop — see [fetchDirect].
+     *
      * Retryable answers (408/425/429/5xx) honour `Retry-After` and then fall back to exponential
-     * backoff. A challenge page is **not** retried: it parks every call for 24 h and throws, because
-     * a retry storm is how a soft block becomes an IP ban (research/RAREDOWN §C3.7).
+     * backoff. A challenge page is **not** retried here: it parses nothing and parks every call for
+     * 24 h, because a retry storm is how a soft block becomes an IP ban (research/RAREDOWN §C3.7).
      */
     private suspend fun fetch(
         url: String,
@@ -338,6 +363,68 @@ class RareAnimesProvider(
     ): RareResponse {
         checkCooldown()
 
+        val router = router
+        if (router != null) return fetchRouted(router, url, accept, referer, intervalMs)
+        return fetchDirect(url, accept, referer, intervalMs)
+    }
+
+    /**
+     * The exchange itself, through [ChannelGate].
+     *
+     * [TransportResponse] carries the status, body and headers this parser reads, but not the URL a
+     * redirect landed on: `finalUrl` is therefore the requested URL. Every measured frame on these
+     * pages is absolute, so the relative-iframe resolution in [absolute] is unaffected in practice.
+     */
+    private suspend fun fetchRouted(
+        router: TransportRouter,
+        url: String,
+        accept: String,
+        referer: String?,
+        intervalMs: Long,
+    ): RareResponse {
+        pace(intervalMs)
+
+        val headers = LinkedHashMap<String, String>(4)
+        headers["User-Agent"] = userAgent
+        headers["Accept"] = accept
+        headers["Accept-Language"] = ACCEPT_LANGUAGE
+        if (referer != null) headers["Referer"] = referer
+
+        val answer = ChannelGate.fetch(router, url, headers, PAGE_TIMEOUT_MS)
+        // Status, size and rung only: the host is deliberately absent from every log line.
+        log("ra ${answer.describe()}")
+
+        if (answer.fault == ChannelFault.BLOCKED) {
+            enterCooldown("refused on channel=${answer.channel} (http ${answer.code})")
+            throw RareAnimesBlockedException(
+                answer.code,
+                ChannelGate.blockedMessage(answer.code, answer.channel, answer.retryAfterMs),
+            )
+        }
+        if (answer.fault == ChannelFault.TRANSIENT && answer.code == 0) {
+            throw RareAnimesException(
+                "GET failed on channel=${answer.channel}: " +
+                    (answer.error?.javaClass?.simpleName ?: "no answer"),
+                answer.error,
+            )
+        }
+
+        return RareResponse(
+            code = answer.code,
+            body = answer.body,
+            finalUrl = url,
+            total = answer.header(HEADER_TOTAL)?.trim()?.toIntOrNull(),
+            totalPages = answer.header(HEADER_TOTAL_PAGES)?.trim()?.toIntOrNull(),
+        )
+    }
+
+    /** Raw-client path, kept for the no-ladder case (unit tests): unchanged retry semantics. */
+    private suspend fun fetchDirect(
+        url: String,
+        accept: String,
+        referer: String?,
+        intervalMs: Long,
+    ): RareResponse {
         var attempt = 0
         var lastCode = 0
         var lastError = "no attempt"
@@ -359,7 +446,7 @@ class RareAnimesProvider(
             } catch (error: IOException) {
                 lastError = error.message ?: error.javaClass.simpleName
                 if (attempt == maxAttempts - 1) {
-                    throw RareAnimesException("GET $url failed after ${attempt + 1} attempts: $lastError", error)
+                    throw RareAnimesException("GET failed after ${attempt + 1} attempts: $lastError", error)
                 }
                 val wait = backoffMs(attempt)
                 log("ra io error ($lastError) -> retry in ${wait}ms (${attempt + 1}/$maxAttempts)")
@@ -380,13 +467,16 @@ class RareAnimesProvider(
 
             val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000
             log(
-                "ra $code ${response.request.url} ${body.length}b ${elapsedMs}ms " +
-                    "cf=${response.header("cf-cache-status") ?: "-"}",
+                "ra $code ${body.length}b ${elapsedMs}ms " +
+                    "cf=${response.header("cf-cache-status") ?: "-"} channel=direct",
             )
 
             if (looksChallenged(response.header("cf-mitigated"), body)) {
-                enterCooldown("cloudflare challenge on $url")
-                throw RareAnimesBlockedException(code, "cloudflare challenge on $url")
+                enterCooldown("cloudflare challenge on http $code")
+                throw RareAnimesBlockedException(
+                    code,
+                    ChannelGate.blockedMessage(code, "direct"),
+                )
             }
 
             if (code in RETRYABLE_CODES && attempt < maxAttempts - 1) {
@@ -407,7 +497,7 @@ class RareAnimesProvider(
             )
         }
 
-        throw RareAnimesException("GET $url failed (HTTP $lastCode) after $maxAttempts attempts: $lastError")
+        throw RareAnimesException("GET failed (HTTP $lastCode) after $maxAttempts attempts: $lastError")
     }
 
     /** Serial spacing between request starts. Skipped when the configured interval is zero. */
@@ -559,6 +649,9 @@ class RareAnimesProvider(
 
         const val MAX_ATTEMPTS = 3
         const val MAX_EMBED_HOPS = 5
+
+        /** Matches [com.animo.app.data.remote.HttpClientFactory]'s read timeout: no new budget. */
+        const val PAGE_TIMEOUT_MS = 25_000L
 
         const val BASE_BACKOFF_MS = 1_000L
         const val BACKOFF_JITTER_MS = 750L

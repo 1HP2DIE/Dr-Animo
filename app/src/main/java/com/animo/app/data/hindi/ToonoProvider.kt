@@ -5,7 +5,11 @@ import com.animo.app.provider.ProviderVault
 
 import com.animo.app.AppLog
 import com.animo.app.data.remote.Normalize
+import com.animo.app.di.ServiceLocator
+import com.animo.app.net.TransportRouter
+import com.animo.app.player.ResolveException
 import java.io.IOException
+import java.net.URLEncoder
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.delay
@@ -22,9 +26,10 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.Call
 import okhttp3.Callback
-import okhttp3.FormBody
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
 /**
@@ -37,9 +42,30 @@ import okhttp3.Response
  * Everything is scraped, so every regex below encodes a structure that was measured live on
  * 2026-11-17; the KDoc notes what was verified and what a caller may not assume.
  */
-class ToonoProvider(private val http: OkHttpClient) {
+class ToonoProvider(
+    private val http: OkHttpClient,
+    /**
+     * The channel ladder for every page fetch. `null` means "raw OkHttp only", which is what unit
+     * tests and an un-installed container get; production resolves [ServiceLocator.transport] on
+     * first use.
+     */
+    private val transport: TransportRouter? = null,
+) {
 
     private val json = Json { ignoreUnknownKeys = true }
+
+    /**
+     * Resolved lazily so constructing a provider never touches the container: the tests build one
+     * with a fake OkHttp client and no Android runtime, and a `NullPointerException` there would be
+     * indistinguishable from a parser bug.
+     */
+    private val router: TransportRouter? by lazy {
+        transport ?: if (ServiceLocator.isInstalled()) {
+            runCatching { ServiceLocator.transport }.getOrNull()
+        } else {
+            null
+        }
+    }
 
     // ------------------------------------------------------------------ catalog
 
@@ -180,13 +206,17 @@ class ToonoProvider(private val http: OkHttpClient) {
         for (attempt in 0 until AJAX_ATTEMPTS) {
             val token = nonce(refresh = attempt > 0)
             val vars = buildVars(page, taxonomy, term, type, token)
-            val form = FormBody.Builder()
-                .add("action", "action_search")
-                .add("vars", vars.toString())
-                .build()
+            val form = "action=$AJAX_ACTION&vars=" + URLEncoder.encode(vars.toString(), "UTF-8")
 
-            val response = fetch(AJAX_ENDPOINT, referer = "$BASE/series/", form = form)
+            val response = postForm(AJAX_ENDPOINT, referer = "$BASE/series/", form = form)
             if (!response.isOk()) {
+                // A 403 here is the edge refusing the channel, not the page being gone: the sync must
+                // stop with a "blocked" message instead of retrying the same POST three times.
+                if (ChannelGate.verdict(response.code, response.body) == ChannelFault.BLOCKED) {
+                    throw ResolveException.Blocked(
+                        ChannelGate.blockedMessage(response.code, ChannelGate.UNKNOWN_CHANNEL),
+                    )
+                }
                 lastError = ToonoException("ajax page $page: HTTP ${response.code}")
                 continue
             }
@@ -349,27 +379,90 @@ class ToonoProvider(private val http: OkHttpClient) {
 
     // ------------------------------------------------------------------ transport
 
+    /**
+     * One page GET.
+     *
+     * Goes through [ChannelGate] and the transport ladder because the toono pages are what the edge
+     * challenges: the same URL answers 200 to a browser session and 403 to the app's fingerprint, and
+     * a 403 used to read as "episode gone" downstream. The ladder keeps the browser headers below and
+     * adds the cookies a warm-up leaves behind.
+     */
     private suspend fun fetch(
         url: String,
         referer: String? = null,
         accept: String = ACCEPT_HTML,
-        form: FormBody? = null,
     ): Page {
+        val headers = headersFor(referer, accept)
+        val router = router
+        if (router != null) return routed(ChannelGate.fetch(router, url, headers, PAGE_TIMEOUT_MS), url)
+        return direct(url, headers, form = null)
+    }
+
+    /**
+     * The catalogue's "Load more" POST.
+     *
+     * Routed for the same reason as [fetch]: the AJAX endpoint sits on the same challenged host, and
+     * the transport knows the POST path so the nonce and the page it authorises travel on one session.
+     */
+    private suspend fun postForm(url: String, referer: String, form: String): Page {
+        val headers = headersFor(referer, ACCEPT_HTML)
+        headers["Content-Type"] = FORM_CONTENT_TYPE
+        val router = router
+        if (router != null) {
+            return routed(ChannelGate.fetch(router, url, headers, PAGE_TIMEOUT_MS, form = form), url)
+        }
+        return direct(url, headers, form)
+    }
+
+    /**
+     * Turns a classified answer into a page.
+     *
+     * A refusal throws so the caller stops walking: a 403 on `/series/x/` must not be followed by a
+     * probe of `/movies/x/`, which is what turned one block into two requests and a confusing 404.
+     * 404/410 is returned as a page because [title] needs it to try the other route.
+     */
+    private fun routed(answer: Fetched, url: String): Page {
+        AppLog.d("source A ${answer.describe()}")
+        return when (answer.fault) {
+            ChannelFault.OK, ChannelFault.DEAD, ChannelFault.OTHER -> Page(answer.code, answer.body, url)
+            ChannelFault.BLOCKED -> throw ResolveException.Blocked(
+                ChannelGate.blockedMessage(answer.code, answer.channel, answer.retryAfterMs),
+            )
+            ChannelFault.TRANSIENT -> throw ToonoException(
+                "GET failed on channel=${answer.channel}: " +
+                    (answer.error?.javaClass?.simpleName ?: "HTTP ${answer.code}"),
+            )
+        }
+    }
+
+    private fun headersFor(referer: String?, accept: String): MutableMap<String, String> {
+        val headers = LinkedHashMap<String, String>(4)
+        headers["User-Agent"] = USER_AGENT
+        headers["Accept-Language"] = ACCEPT_LANGUAGE
+        headers["Accept"] = accept
+        if (referer != null) headers["Referer"] = referer
+        return headers
+    }
+
+    /**
+     * Raw-client path, kept as the fallback when no ladder is configured (unit tests): bounded
+     * retries over transient codes and IO errors, exactly as before.
+     */
+    private suspend fun direct(url: String, headers: Map<String, String>, form: String?): Page {
         var lastCode = 0
         var lastError: IOException? = null
 
         for (attempt in 0 until FETCH_ATTEMPTS) {
             if (attempt > 0) delay(RETRY_DELAY_MS * attempt)
 
-            val builder = Request.Builder()
-                .url(url)
-                .header("User-Agent", USER_AGENT)
-                .header("Accept-Language", ACCEPT_LANGUAGE)
-                .header("Accept", accept)
+            val builder = Request.Builder().url(url)
+            headers.forEach { (name, value) -> builder.header(name, value) }
 
-            if (referer != null) builder.header("Referer", referer)
-
-            val request = if (form == null) builder.get().build() else builder.post(form).build()
+            val request = if (form == null) {
+                builder.get().build()
+            } else {
+                builder.post(form.toRequestBody(FORM_MEDIA_TYPE)).build()
+            }
 
             val outcome = try {
                 http.newCall(request).await().use { response ->
@@ -457,6 +550,14 @@ class ToonoProvider(private val http: OkHttpClient) {
         const val HEADER_WINDOW = 4_000
         const val ARTICLE_WINDOW = 12_000
         const val STATUS_400_MARKER = "\"status\":400"
+
+        const val AJAX_ACTION = "action_search"
+
+        /** Matches [com.animo.app.data.remote.HttpClientFactory]'s read timeout: no new budget. */
+        const val PAGE_TIMEOUT_MS = 25_000L
+
+        const val FORM_CONTENT_TYPE = "application/x-www-form-urlencoded"
+        val FORM_MEDIA_TYPE = FORM_CONTENT_TYPE.toMediaType()
 
         val RETRYABLE_CODES = setOf(408, 425, 429, 500, 502, 503, 504)
 
