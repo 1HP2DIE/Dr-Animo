@@ -53,6 +53,15 @@ class AnimeRepositoryImpl(
      * repository is a process-wide singleton that must see that registration.
      */
     private val hindiCatalog: () -> HindiCatalog? = { null },
+    /**
+     * Stamps "Last sync" after a catalogue walk that actually finished.
+     *
+     * Kept as a lambda instead of a settings dependency: the repository has no Context, and the UI
+     * layer is the only place that knows where the timestamp lives. Calling it here (rather than
+     * from one screen) is what makes the value true for the worker and the drawer's Sync now too,
+     * which previously only recorded it if Settings happened to be open.
+     */
+    private val recordSynced: suspend (Long) -> Unit = {},
 ) : AnimeRepository {
 
     private val _sync = MutableStateFlow(SyncProgress(0, 0, SyncState.IDLE))
@@ -153,8 +162,11 @@ class AnimeRepositoryImpl(
 
     // ---------------------------------------------------------------- writes / network
 
-    override suspend fun refreshCatalog(force: Boolean): Result<Unit> =
-        catalogSyncer.sync(force) { progress -> _sync.value = progress }
+    override suspend fun refreshCatalog(force: Boolean): Result<Unit> {
+        val result = catalogSyncer.sync(force) { progress -> _sync.value = progress }
+        if (result.isSuccess) runCatching { recordSynced(System.currentTimeMillis()) }
+        return result
+    }
 
     override suspend fun ensureEpisodes(animeId: Int): Result<Unit> = when {
         // Hindi rows resolve their episode list from the provider page, not from the API.

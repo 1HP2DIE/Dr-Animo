@@ -154,6 +154,9 @@ object ServiceLocator {
             catalogSyncer = catalogSyncer,
             episodeBackfill = episodeBackfill,
             hindiCatalog = { hindiCatalogRef.get() },
+            recordSynced = { epochMs ->
+                com.animo.app.ui.settings.SettingsPreferences(requireContext()).recordSync(epochMs)
+            },
         )
     }
 
