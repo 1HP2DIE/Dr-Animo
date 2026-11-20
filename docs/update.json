@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generated": "2026-11-20T08:10:47Z",
+  "generated": "2026-11-20T08:23:06Z",
   "repo": "1HP2DIE/Dr-Animo",
   "releaseLimit": 5,
   "totalReleases": 6,
@@ -9,7 +9,8 @@
     "versionCode": 15,
     "date": "20 Nov 2026",
     "headline": "A second catalogue of films and series \u2014 and Hindi that works again.",
-    "apkUrl": "https://github.com/1HP2DIE/Dr-Animo/releases/download/v1.10.0/Animo-1.10.0.apk",
+    "apkUrl": "https://1hp2die.github.io/Dr-Animo/download/Animo-1.10.0.apk",
+    "apkUrlGithub": "https://github.com/1HP2DIE/Dr-Animo/releases/download/v1.10.0/Animo-1.10.0.apk",
     "apkName": "Animo-1.10.0.apk",
     "sizeBytes": 5663595,
     "sha256": "5d722153c155f3ae9ba8de035de31e3c7fbc4b0631cdcdc039c5bf6c1c9eef81",

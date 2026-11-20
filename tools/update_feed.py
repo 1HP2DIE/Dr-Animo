@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import html
 import json
 import os
@@ -47,6 +48,7 @@ ROOT = Path(__file__).resolve().parent.parent
 INDEX = ROOT / "docs" / "index.html"
 FEED = ROOT / "docs" / "update.json"
 SITEMAP = ROOT / "docs" / "sitemap.xml"
+DOWNLOAD_DIR = ROOT / "docs" / "download"
 
 SITE = "https://1hp2die.github.io/Dr-Animo/"
 REPO_URL = "https://github.com/{repo}"
@@ -200,6 +202,7 @@ def build_feed(repo: str) -> tuple[dict, list[dict]]:
             "date": latest["date"],
             "headline": latest["headline"],
             "apkUrl": latest["apkUrl"],
+            "apkUrlGithub": latest["apkUrl"],
             "apkName": latest["apkName"],
             "sizeBytes": latest["sizeBytes"],
             "sha256": latest["sha256"],
@@ -211,26 +214,53 @@ def build_feed(repo: str) -> tuple[dict, list[dict]]:
     return feed, everything
 
 
-# ----------------------------------------------------------------------------- asset probe
-def installed_bytes(apk_url: str) -> int:
+# ----------------------------------------------------------------------------- asset download / mirror
+def probe_asset(latest: dict) -> tuple[Path | None, int]:
     """
-    Real installed footprint: the sum of the entries inside the APK.
+    Download the latest APK once and return (local path, installed footprint).
 
-    The GitHub API reports the download size and the sha256 digest, but not what the phone stores,
-    and hard-coding "26.9 MB" in the page is exactly the drift this script exists to remove. Costs one
-    ~5 MB download, only for the latest asset, only when the workflow runs.
+    Why download at all:
+      * the installed size (sum of the entries inside the APK) is not in the API, and hard-coding
+        "26.9 MB" is exactly the drift this script exists to remove;
+      * the file is then mirrored onto GitHub Pages, because a release asset goes through a signed
+        redirect to `release-assets.githubusercontent.com` and that hop is slow on mobile networks
+        in this region. Same bytes, one hop, CDN-cached.
+    The sha256 from the release API is verified before the mirror is trusted.
     """
     try:
         tmp = Path(tempfile.mkdtemp()) / "probe.apk"
-        urllib.request.urlretrieve(apk_url, tmp)
+        urllib.request.urlretrieve(latest["apkUrl"], tmp)
+
+        expected = (latest.get("sha256") or "").lower()
+        if expected:
+            digest = hashlib.sha256(tmp.read_bytes()).hexdigest()
+            if digest != expected:
+                print(f"warning: sha256 mismatch on the release asset ({digest} != {expected}); "
+                      f"mirror skipped", file=sys.stderr)
+                return None, 0
+
         with zipfile.ZipFile(tmp) as zf:
-            total = sum(info.file_size for info in zf.infolist())
-        tmp.unlink(missing_ok=True)
-        shutil.rmtree(tmp.parent, ignore_errors=True)
-        return total
-    except Exception as exc:  # network hiccup must not fail the release
-        print(f"warning: could not measure the installed size: {exc}", file=sys.stderr)
-        return 0
+            installed = sum(info.file_size for info in zf.infolist())
+        return tmp, installed
+    except Exception as exc:  # a network hiccup must not fail the release
+        print(f"warning: could not fetch the APK: {exc}", file=sys.stderr)
+        return None, 0
+
+
+def mirror(apk: Path | None, latest: dict) -> str:
+    """Copy the APK into docs/download so it is served by GitHub Pages, and return its URL."""
+    if apk is None:
+        return ""
+    try:
+        DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        for stale in DOWNLOAD_DIR.glob("*.apk"):
+            stale.unlink()  # only the newest build is mirrored; history stays in Releases
+        target = DOWNLOAD_DIR / latest["apkName"]
+        shutil.copyfile(apk, target)
+        return f"{SITE}download/{latest['apkName']}"
+    except Exception as exc:
+        print(f"warning: mirror failed: {exc}", file=sys.stderr)
+        return ""
 
 
 # ----------------------------------------------------------------------------- html blocks
@@ -280,13 +310,20 @@ def render_version_meta(latest: dict, installed: int) -> str:
     return f'    <p class="meta">{" · ".join(bits)}</p>'
 
 
-def render_cta(latest: dict) -> str:
+def render_cta(latest: dict, repo: str) -> str:
     sub = f'{esc(latest["apkName"])} · {mb(latest["sizeBytes"])} · tap to install'
-    return (
-        f'      <a class="btn primary" href="{esc(latest["apkUrl"])}">\n'
-        f'        Download Dr Animo APK {esc(latest["version"])}<small>{sub}</small>\n'
-        f"      </a>"
-    )
+    primary = latest.get("apkUrl") or latest["apkUrlGithub"]
+    github = latest.get("apkUrlGithub") or primary
+    note = ["      <!-- primary is the GitHub Pages mirror; the release asset is the fallback -->"]
+    lines = note + [
+        f'      <a class="btn primary" href="{esc(primary)}">',
+        f'        Download Dr Animo APK {esc(latest["version"])}<small>{sub}</small>',
+        "      </a>",
+        f'      <a class="btn" href="{REPO_URL.format(repo=repo)}/releases">Releases page</a>',
+    ]
+    if primary == github:
+        lines = lines[1:]  # no mirror in play, no need to explain it
+    return "\n".join(lines)
 
 
 def render_sha(latest: dict) -> str:
@@ -302,9 +339,11 @@ def render_download_table(latest: dict, installed: int) -> str:
     rows = [
         ("Version", f'{esc(latest["version"])} (versionCode {latest["versionCode"]}) · '
                     f'{esc(latest["date"])}'),
-        ("File", f'<a href="{esc(latest["apkUrl"])}">{esc(latest["apkName"])}</a> '
+        ("File", f'<a href="{esc(latest.get("apkUrl") or latest["apkUrlGithub"])}">'
+                 f'{esc(latest["apkName"])}</a> '
                  f'({mb(latest["sizeBytes"])} download'
                  + (f', {mb(installed)} installed' if installed else "") + ")"),
+        ("Mirror", f'<a href="{esc(latest["apkUrlGithub"])}">GitHub Releases</a>'),
         ("Package", "<code>com.animo.app</code>"),
         ("Requires", "Android 7.0 (API 24) or newer"),
         ("License", "MIT"),
@@ -390,7 +429,7 @@ def render_page(page: str, feed: dict, everything: list[dict], installed: int) -
         "meta-tw": render_meta_tw(latest),
         "ld:app": render_ld_app(latest, installed, feed["repo"]),
         "version-meta": render_version_meta(latest, installed),
-        "cta": render_cta(latest),
+        "cta": render_cta(latest, feed["repo"]),
         "sha": render_sha(latest),
         "download-table": render_download_table(latest, installed),
         "install-cmds": render_install_cmds(latest),
@@ -436,12 +475,18 @@ def main() -> int:
         return 0
 
     feed, everything = build_feed(args.repo)
-    installed = installed_bytes(feed["latest"]["apkUrl"])
+    apk, installed = probe_asset(feed["latest"])
+    fast_url = mirror(apk, feed["latest"])
+    if fast_url:
+        # The app and the buttons both use the mirrored URL; GitHub stays as the fallback.
+        feed["latest"]["apkUrlGithub"] = feed["latest"]["apkUrl"]
+        feed["latest"]["apkUrl"] = fast_url
     page = render_page(INDEX.read_text(), feed, everything, installed)
 
     if args.dry_run:
         print(json.dumps(feed["latest"], indent=2))
         print(f"installed size: {installed} bytes ({mb(installed)})")
+        print(f"mirror: {fast_url or '(none — GitHub only)'}")
         print(f"{len(feed['releases'])}/{feed['totalReleases']} releases kept in the feed "
               f"(limit {feed['releaseLimit']}), {len(everything)} in the page history")
         return 0
