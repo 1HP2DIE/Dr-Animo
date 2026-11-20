@@ -46,13 +46,13 @@ class AnimoApp : Application() {
                 userAgent = ProviderVault.optionalUrl(ProviderKey.MOVIELINK_AVATAR_UA)
                     ?: HttpClientFactory.UA_DESKTOP,
             )
-            ServiceLocator.registerProvider(
-                MovieLinkProvider(
-                    client = ServiceLocator.httpClient,
-                    indexHost = movieLinkIndex,
-                    resolverProvider = { movieLinkResolver },
-                ),
+            val provider = MovieLinkProvider(
+                client = ServiceLocator.httpClient,
+                indexHost = movieLinkIndex,
+                resolverProvider = { movieLinkResolver },
             )
+            ServiceLocator.registerProvider(provider)
+            ServiceLocator.registerMovieLink(provider, movieLinkResolver)
         } else {
             AppLog.w(
                 "catalogue provider skipped: slots " +

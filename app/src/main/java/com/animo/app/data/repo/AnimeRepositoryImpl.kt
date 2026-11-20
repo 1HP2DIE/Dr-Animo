@@ -54,6 +54,13 @@ class AnimeRepositoryImpl(
      */
     private val hindiCatalog: () -> HindiCatalog? = { null },
     /**
+     * The movielinkbd catalogue: its own id space below Hindi, and the only thing that knows how to
+     * turn a `movie/<slug>` page into episode rows. Lazy for the same reason as [hindiCatalog] — the
+     * provider is registered after the container is built, and this repository is a process-wide
+     * singleton that must see that registration.
+     */
+    private val movieLinkStream: () -> MovieLinkStreamRepository? = { null },
+    /**
      * Stamps "Last sync" after a catalogue walk that actually finished.
      *
      * Kept as a lambda instead of a settings dependency: the repository has no Context, and the UI
@@ -169,9 +176,50 @@ class AnimeRepositoryImpl(
     }
 
     override suspend fun ensureEpisodes(animeId: Int): Result<Unit> = when {
+        // movielink titles are below the Hindi range and read their list from the provider page too.
+        MovieLinkIds.isMovieLink(animeId) -> ensureMovieLinkEpisodes(animeId)
         // Hindi rows resolve their episode list from the provider page, not from the API.
         animeId < 0 -> ensureHindiEpisodes(animeId)
         else -> episodeBackfill.ensure(animeId)
+    }
+
+    /**
+     * The movielink index has no episode API either: the list is the `#mlbdEpisodeDownloads` grid of the
+     * title page, and each cell's `/p/<token>` is the player itself. A re-open is free once rows exist,
+     * for the same reason as the Hindi branch — the page fetch is the expensive part and must not be
+     * repeated just to draw a list.
+     *
+     * The rows are written with ids derived from `(animeId, number)` ([MovieLinkIds.episodeId]), so a
+     * second sync upserts the same keys instead of appending a duplicate list.
+     */
+    private suspend fun ensureMovieLinkEpisodes(animeId: Int): Result<Unit> {
+        val repository = movieLinkStream()
+            ?: return Result.failure(IllegalStateException("MovieLink catalogue is not available"))
+        if (episodeDao.countForAnime(animeId) > 0) return Result.success(Unit)
+
+        val row = animeDao.findById(animeId)
+            ?: return Result.failure(IllegalStateException("no MovieLink title with id $animeId"))
+
+        return repository.episodes(animeId, row.originUrl).map { episodes ->
+            episodeDao.upsertAll(
+                episodes.map { episode ->
+                    EpisodeEntity(
+                        episodeId = episode.id,
+                        animeId = animeId,
+                        number = episode.number,
+                        title = episode.title,
+                        jpTitle = "",
+                        embedId = episode.embedId,
+                        subUrl = episode.subUrl,
+                        dubUrl = episode.dubUrl,
+                        updatedAt = "",
+                        updatedAtEpoch = episode.updatedAtEpoch,
+                    )
+                },
+            )
+            val fetchedAt = System.currentTimeMillis()
+            animeDao.updateDetailMeta(animeId, episodes.size, fetchedAt)
+        }
     }
 
     /**

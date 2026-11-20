@@ -22,6 +22,11 @@ import com.animo.app.data.repo.RoutingStreamRepository
 import com.animo.app.domain.repo.AnimeRepository
 import com.animo.app.domain.repo.HindiCatalog
 import com.animo.app.domain.repo.StreamRepository
+import com.animo.app.data.repo.MovieLinkStreamRepository
+import com.animo.app.data.sync.MovieLinkSyncer
+import com.animo.app.data.sync.RoomMovieLinkCursorStore
+import com.animo.app.data.sync.RoomMovieLinkStore
+import com.animo.app.domain.model.CatalogIds
 import com.animo.app.net.OkHttpTransportChannel
 import com.animo.app.net.TransportRouter
 import com.animo.app.net.webview.WebViewChannel
@@ -154,6 +159,7 @@ object ServiceLocator {
             catalogSyncer = catalogSyncer,
             episodeBackfill = episodeBackfill,
             hindiCatalog = { hindiCatalogRef.get() },
+            movieLinkStream = { movieLinkRef.get()?.stream },
             recordSynced = { epochMs ->
                 com.animo.app.ui.settings.SettingsPreferences(requireContext()).recordSync(epochMs)
             },
@@ -195,7 +201,52 @@ object ServiceLocator {
                 ),
             ),
             hindi = { hindiStreamRef.get() },
+            movieLink = { movieLinkRef.get()?.stream },
         )
+    }
+
+    // ---------------------------------------------------------------- second catalogue
+
+    /** What the container keeps once the second catalogue is registered. */
+    private class MovieLinkBundle(
+        val syncer: MovieLinkSyncer,
+        val stream: MovieLinkStreamRepository,
+    )
+
+    private val movieLinkRef = java.util.concurrent.atomic.AtomicReference<MovieLinkBundle?>(null)
+
+    /** Settings' sync button; `null` when the build has no second catalogue provisioned. */
+    val movieLinkSyncer: MovieLinkSyncer? get() = movieLinkRef.get()?.syncer
+
+    /** Read by the episode/stream routing for ids in the second catalogue's band. */
+    val movieLinkStream: MovieLinkStreamRepository? get() = movieLinkRef.get()?.stream
+
+    /** Rows the second catalogue has written. Cheap: one indexed count on the id band. */
+    suspend fun movieLinkCount(): Int =
+        animeDao.countInBand(CatalogIds.MOVIE_LINK_MIN, CatalogIds.MOVIE_LINK_MAX)
+
+    /**
+     * Registers the second catalogue: catalogue walker, stream backend and the pieces the routing
+     * layers read lazily. Called from [AnimoApp] only when both vault slots are provisioned.
+     */
+    fun registerMovieLink(
+        provider: com.animo.app.data.remote.provider.movielink.MovieLinkProvider,
+        resolver: com.animo.app.player.movielink.MovieLinkStreamResolver,
+    ) {
+        val syncer = MovieLinkSyncer(
+            catalogue = provider,
+            store = RoomMovieLinkStore(animeDao),
+            cursorStore = RoomMovieLinkCursorStore(database.syncCursorDao()),
+            log = AppLog::d,
+        )
+        val stream = MovieLinkStreamRepository(
+            resolverProvider = { resolver },
+            episodesOf = { seriesId -> provider.episodes(seriesId) },
+            seriesIdOf = { id -> animeDao.findById(id)?.originUrl },
+            log = AppLog::d,
+        )
+        movieLinkRef.set(MovieLinkBundle(syncer, stream))
+        AppLog.i("second catalogue registered")
     }
 
     /** Read by the UI to show Hindi counts and to trigger a Hindi sync; `null` until registered. */

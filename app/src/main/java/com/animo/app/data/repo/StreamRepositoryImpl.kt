@@ -31,6 +31,22 @@ import kotlinx.coroutines.sync.withLock
  *
  * The resolver itself is injected lazily through [resolverProvider] because the player module is
  * compiled separately (see ServiceLocator) — this class only ever sees the interface.
+ *
+ * ## Routing
+ * This class is the **original-catalogue** backend, but the id space is what decides which backend
+ * owns a request, so the dispatch lives here as well as in
+ * [RoutingStreamRepository] — one rule, stated once:
+ *
+ * | id                              | backend                          |
+ * |---------------------------------|----------------------------------|
+ * | `>= 0`                          | this class (megapay + fallbacks)  |
+ * | `-1 … -2_000_000_000`           | the Hindi delegate ([hindi])      |
+ * | `-2_100_000_000 … -2_000_000_001`| the movielink delegate ([movieLink]) |
+ * | anything else                   | a typed failure, never a guess    |
+ *
+ * Both delegates are nullable lambdas on purpose: a build without the Hindi or the movielink layer
+ * answers a normal `Result.failure` instead of crashing, and this class stays usable in a unit test
+ * with no container at all.
  */
 class StreamRepositoryImpl(
     private val resolverProvider: () -> StreamResolver,
@@ -47,6 +63,13 @@ class StreamRepositoryImpl(
     private val fallbacks: List<FallbackStreamSource> = emptyList(),
     /** How long the server menu waits for any one server's answer. */
     private val probeTimeoutMs: Long = PROBE_TIMEOUT_MS,
+    /**
+     * The Hindi-dub backend. Read lazily because it is registered after the container is built; when
+     * [RoutingStreamRepository] has already split on the sign, this is never consulted.
+     */
+    private val hindi: () -> StreamRepository? = { null },
+    /** The movielinkbd backend (its own id space below Hindi). Same lazy-null contract as [hindi]. */
+    private val movieLink: () -> StreamRepository? = { null },
 ) : StreamRepository {
 
     private data class Key(
@@ -89,6 +112,32 @@ class StreamRepositoryImpl(
         server: StreamServer?,
         languageId: String?,
     ): Result<PlayableStream> {
+        // Three-way dispatch by id space. Ownership comes before any work: a movielink episode must not
+        // be looked up in this catalogue's tables, and an id that belongs to neither is a routing bug.
+        if (animeId < 0) {
+            if (MovieLinkIds.isMovieLink(animeId)) {
+                return movieLink()?.resolve(animeId, episode, audio, server, languageId)
+                    ?: Result.failure(
+                        IllegalStateException(
+                            "MovieLink playback is not available in this build (id $animeId)",
+                        ),
+                    )
+            }
+            if (animeId >= HINDI_MIN_ID) {
+                return hindi()?.resolve(animeId, episode, audio, server, languageId)
+                    ?: Result.failure(
+                        IllegalStateException(
+                            "Hindi playback is not available in this build (id $animeId)",
+                        ),
+                    )
+            }
+            return Result.failure(
+                // A ResolveException is deliberately not used: an id outside every range is a
+                // routing bug, and the error sheet must not offer "try again" for it.
+                IllegalArgumentException("no catalogue owns anime id $animeId"),
+            )
+        }
+
         val key = Key(episode.id, audio, server, languageId)
         read(key)?.let { return Result.success(it) }
 
@@ -148,6 +197,12 @@ class StreamRepositoryImpl(
      * cannot hold the menu. A server that times out is shown as unreachable rather than missing.
      */
     override suspend fun serverOptions(animeId: Int, episode: Episode): List<ServerOption> = coroutineScope {
+        // A delegate owns its own server menu; asking this catalogue would invent servers for a title
+        // that is not in it.
+        when {
+            MovieLinkIds.isMovieLink(animeId) -> return@coroutineScope movieLink()?.serverOptions(animeId, episode).orEmpty()
+            animeId < 0 -> return@coroutineScope hindi()?.serverOptions(animeId, episode).orEmpty()
+        }
         val request = async { sourceRequest(animeId, episode) }
         val primary = async { primaryOption(episode) }
         val alternativeOption = async { alternativeOption(animeId, episode) }
@@ -303,6 +358,10 @@ class StreamRepositoryImpl(
         synchronized(lock) {
             cache.keys.removeAll { key -> key.episodeId == episodeId }
         }
+        // The id spaces never overlap, so a blind two-sided invalidate is cheaper than asking the
+        // delegates whether they own the episode — same reasoning as [RoutingStreamRepository].
+        hindi()?.invalidate(episodeId)
+        movieLink()?.invalidate(episodeId)
         AppLog.d("invalidated cached streams for ep$episodeId")
     }
 
@@ -339,6 +398,9 @@ class StreamRepositoryImpl(
         const val MAX_ENTRIES = 24
         const val INITIAL_CAPACITY = 16
         const val PROBE_TIMEOUT_MS = 10_000L
+
+        /** Bottom of the Hindi space (`-2_000_000_000`); below it belongs to movielink or to nothing. */
+        const val HINDI_MIN_ID = -2_000_000_000
     }
 }
 
