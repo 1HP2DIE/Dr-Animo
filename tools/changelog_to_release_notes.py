@@ -46,12 +46,32 @@ def parse() -> list[dict]:
 
 
 def render(rel: dict, apk: str | None = None, size: str | None = None) -> str:
+    apk = apk or 'Animo-' + rel['version'] + '.apk'
     lines = ["## Headline", rel["headline"], "", "## Released", rel["date"], "", "## Changes"]
     for change in rel["changes"]:
         lines.append(f'- {change["kind"]}: {change["text"]}')
-    lines += ["", "## Install", "```bash", f"adb install -r {apk or 'Animo-' + rel['version'] + '.apk'}", "```"]
+    lines += [
+        "",
+        "## Install on your phone",
+        f"1. Tap **{apk}** below to download it.",
+        "2. Open the file from your notification shade, or from Files → Downloads.",
+        "3. If Android asks, allow **Install unknown apps** for your browser or file manager.",
+        "4. Tap **Install**, then **Open**.",
+        "",
+        "No PC needed. Updating? Install straight over the old version — your library, "
+        "history and settings stay.",
+        "",
+        "Android 7.0+ · no Play Store, no ads, no tracking.",
+        "",
+        "<details><summary>Installing from a computer</summary>",
+        "",
+        "```bash",
+        f"adb install -r {apk}",
+        "```",
+        "</details>",
+    ]
     if size:
-        lines += ["", f"Package `com.animo.app` · {size} installed · Android 7.0+."]
+        lines += ["", f"Package `com.animo.app` · {size} installed · MIT licensed."]
     return "\n".join(lines)
 
 

@@ -104,6 +104,11 @@
   .rel .dllink{font-size:13.5px;text-decoration:none;border-bottom:1px solid rgba(110,231,255,.35)}
   .feednote{font-size:13px;color:#7c81a0;margin:14px 0 18px}
   .feednote code{color:#a9b0d0}
+  .steps{margin:0 0 18px;padding-left:20px;color:#c9cde0;font-size:15px;display:grid;gap:8px}
+  .steps li{padding-left:4px}
+  .steps strong{color:#fff}
+  details pre{margin:10px 0 0}
+  details summary{color:#a9b0d0}
   main{padding:26px 0 70px}
   section{margin:44px 0}
   h2{font-size:clamp(22px,3.4vw,30px);margin:0 0 14px;letter-spacing:-.01em}
@@ -240,11 +245,19 @@
         <tr><th>License</th><td>MIT</td></tr>
         <tr><th>SHA-256</th><td><code>4cb2acfd9beb02bcda8ac23c20c3b00125a3ce25183eec0599ddc98ac4d737e6</code></td></tr>
       </table>
-      <h3>Sideload it</h3>
-      <pre>adb install -r Animo-1.9.0.apk
-# or from a file manager: allow "install unknown apps" for that app, then open the APK</pre>
-      <p>Verify the download before installing:</p>
+      <h3>Install it on your phone</h3>
+      <ol class="steps">
+        <li>Tap <strong>Download Dr Animo APK</strong> above — the file lands in your Downloads.</li>
+        <li>Open it from the notification shade, or from <em>Files → Downloads</em>.</li>
+        <li>If Android warns, allow <strong>Install unknown apps</strong> for your browser or file manager.</li>
+        <li>Tap <strong>Install</strong>, then <strong>Open</strong>. Updating? Install straight over the old
+        version — your library, history and settings stay.</li>
+      </ol>
+      <p>Before installing you can check the file:</p>
       <pre>sha256sum Animo-1.9.0.apk</pre>
+      <details><summary>Installing from a computer</summary>
+        <pre>adb install -r Animo-1.9.0.apk</pre>
+      </details>
     </section>
 
     <section id="versions">
