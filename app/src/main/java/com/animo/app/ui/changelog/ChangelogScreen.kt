@@ -28,11 +28,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -40,6 +42,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.animo.app.BuildConfig
 import com.animo.app.R
+import com.animo.app.data.update.UpdateCenter
 import com.animo.app.ui.common.BrandMark
 import com.animo.app.ui.theme.AnimoTheme
 
@@ -55,6 +58,13 @@ fun ChangelogScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+    // Releases published after this build are not bundled in [Changelog] yet: the update feed
+    // supplies them, so "What's new" always ends at the newest version even on an older APK.
+    val releases = remember(context) {
+        val center = UpdateCenter.get(context)
+        (center.newerReleases(center.cachedFeed()) + Changelog.releases).distinctBy { it.version }
+    }
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
@@ -90,7 +100,7 @@ fun ChangelogScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item(key = "header") { Header() }
-            items(items = Changelog.releases, key = { it.version }) { release ->
+            items(items = releases, key = { it.version }) { release ->
                 ReleaseCard(release = release, latest = release.version == BuildConfig.VERSION_NAME)
             }
             item(key = "footer") {
