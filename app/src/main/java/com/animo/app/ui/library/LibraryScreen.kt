@@ -1,5 +1,6 @@
 package com.animo.app.ui.library
 
+import android.text.format.DateUtils
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -45,8 +47,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import java.util.Locale
 import coil3.compose.AsyncImage
 import com.animo.app.R
+import com.animo.app.domain.repo.HistoryEntry
 import com.animo.app.domain.model.Anime
 import com.animo.app.domain.model.AudioTrack
 import com.animo.app.ui.LocalAppContainer
@@ -116,6 +120,7 @@ fun LibraryScreen(
                     model = current.data,
                     resolving = resolving,
                     onResume = { anime -> viewModel.resume(anime) },
+                    onResumeHistory = { entry -> viewModel.resumeHistory(entry) },
                     onOpenAnime = onOpenAnime,
                 )
             }
@@ -128,6 +133,7 @@ private fun LibraryContent(
     model: LibraryUiModel,
     resolving: Int?,
     onResume: (Anime) -> Unit,
+    onResumeHistory: (HistoryEntry) -> Unit,
     onOpenAnime: (Int) -> Unit,
 ) {
     LazyVerticalGrid(
@@ -178,6 +184,33 @@ private fun LibraryContent(
                         }
                     }
                 }
+            }
+        }
+
+        if (model.history.isNotEmpty()) {
+            item(
+                key = "history-header",
+                span = { GridItemSpan(maxLineSpan) },
+                contentType = "header",
+            ) {
+                SectionHeader(
+                    title = stringResource(R.string.browse_library_history),
+                    subtitle = stringResource(R.string.browse_library_history_count, model.history.size),
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+
+            items(
+                items = model.history,
+                key = { entry -> "history-${entry.episodeId}" },
+                span = { GridItemSpan(maxLineSpan) },
+                contentType = { "history" },
+            ) { entry ->
+                HistoryRowItem(
+                    entry = entry,
+                    busy = resolving == entry.animeId,
+                    onClick = { onResumeHistory(entry) },
+                )
             }
         }
 
@@ -298,7 +331,142 @@ private fun LibraryPreview() {
             ),
             resolving = null,
             onResume = {},
+            onResumeHistory = {},
             onOpenAnime = {},
         )
     }
+}
+
+/**
+ * One watched episode: which episode, how far, and when.
+ *
+ * The bar is the point of this row — the continue rail can only show one episode per series, so a
+ * viewer who watched three of them had no way to see where each one stopped.
+ */
+@Composable
+private fun HistoryRowItem(
+    entry: HistoryEntry,
+    busy: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(enabled = !busy, onClick = onClick)
+            .padding(vertical = 6.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(width = 54.dp, height = 74.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (entry.poster.isNotBlank()) {
+                AsyncImage(
+                    model = entry.poster,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                Text(
+                    text = entry.animeTitle.take(1).uppercase(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        Spacer(Modifier.width(12.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = entry.animeTitle,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = buildString {
+                    if (entry.episodeNumber > 0) append("E${entry.episodeNumber}")
+                    if (entry.episodeTitle.isNotBlank()) {
+                        if (isNotEmpty()) append(" · ")
+                        append(entry.episodeTitle)
+                    }
+                }.ifBlank { stringResource(R.string.browse_library_history_unknown_episode) },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(6.dp))
+            entry.fraction?.let { fraction ->
+                LinearProgressIndicator(
+                    progress = { fraction },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f),
+                )
+                Spacer(Modifier.height(4.dp))
+            }
+            Text(
+                text = buildString {
+                    if (entry.durationMs > 0L) {
+                        append(formatClock(entry.positionMs))
+                        append(" / ")
+                        append(formatClock(entry.durationMs))
+                        entry.fraction?.let { append(" · ") }
+                    } else if (entry.positionMs > 0L) {
+                        append(formatClock(entry.positionMs))
+                        append(" · ")
+                    }
+                    append(relativeAge(entry.updatedAtMs))
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        if (busy) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                color = MaterialTheme.colorScheme.primary,
+                strokeWidth = 2.dp,
+            )
+        } else {
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** `12:34`, or `1:02:03` past an hour. */
+private fun formatClock(ms: Long): String {
+    val totalSeconds = (ms.coerceAtLeast(0L) / 1000L)
+    val hours = totalSeconds / 3600L
+    val minutes = (totalSeconds % 3600L) / 60L
+    val seconds = totalSeconds % 60L
+    return if (hours > 0L) {
+        String.format(Locale.US, "%d:%02d:%02d", hours, minutes, seconds)
+    } else {
+        String.format(Locale.US, "%d:%02d", minutes, seconds)
+    }
+}
+
+/** "3 days ago" — composed once per row; a stale hint is cheaper than a ticking clock. */
+private fun relativeAge(epochMs: Long): String {
+    if (epochMs <= 0L) return ""
+    if (System.currentTimeMillis() - epochMs < 60_000L) return "just now"
+    return DateUtils.getRelativeTimeSpanString(
+        epochMs,
+        System.currentTimeMillis(),
+        DateUtils.MINUTE_IN_MILLIS,
+    ).toString()
 }

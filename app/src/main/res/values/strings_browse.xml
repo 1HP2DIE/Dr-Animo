@@ -83,6 +83,9 @@
 
     <!-- Library -->
     <string name="browse_library_continue">Continue watching</string>
+    <string name="browse_library_history">History</string>
+    <string name="browse_library_history_count">%1$d episodes</string>
+    <string name="browse_library_history_unknown_episode">Episode</string>
     <string name="browse_library_all">All watched</string>
     <string name="browse_library_count">%1$d series</string>
     <string name="browse_library_empty_title">Nothing watched yet</string>

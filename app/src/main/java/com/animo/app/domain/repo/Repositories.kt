@@ -25,6 +25,9 @@ interface AnimeRepository {
     /** Same rows and ordering as [observeContinueWatching], plus the resume point of each series. */
     fun observeContinueWatchingItems(limit: Int = 20): Flow<List<ContinueWatchingItem>>
 
+    /** Every watched episode, newest first — one row per episode, not per series. */
+    fun observeHistory(limit: Int = 200): Flow<List<HistoryEntry>>
+
     /**
      * Resume points of one series, keyed by episode id.
      *
@@ -52,6 +55,32 @@ interface AnimeRepository {
  * means "we do not know how far this is", and the card renders exactly as it did before progress
  * existed — no bar, no percentage — rather than inventing one.
  */
+/**
+ * One watched episode. Unlike [ContinueWatchingItem], which collapses a series to the row the viewer
+ * would resume, this keeps every episode separate: history is the answer to "which episodes did I
+ * watch, and how far did each get", so two episodes of one show are two entries.
+ */
+data class HistoryEntry(
+    val episodeId: Long,
+    val animeId: Int,
+    val animeTitle: String,
+    val poster: String = "",
+    /** 0 when the episode list was never backfilled. */
+    val episodeNumber: Int = 0,
+    val episodeTitle: String = "",
+    val positionMs: Long = 0L,
+    val durationMs: Long = 0L,
+    val updatedAtMs: Long = 0L,
+) {
+    /** 0..1, clamped, or `null` when the row cannot describe progress at all. */
+    val fraction: Float?
+        get() = when {
+            durationMs <= 0L -> null
+            positionMs <= 0L -> null
+            else -> (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+        }
+}
+
 data class ContinueWatchingItem(
     val anime: Anime,
     /** Episode number of the resume point; 0 when the episode list was never backfilled. */

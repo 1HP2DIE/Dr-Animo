@@ -25,6 +25,26 @@ data class ContinueWatchingRow(
 )
 
 /**
+ * One watched episode, with enough of its series to render a history row without a second query.
+ *
+ * Deliberately **not** grouped: [observeContinueWatching] answers "where do I resume this series",
+ * which is one row per series, while history answers "which episodes did I watch and how far", which
+ * is one row per episode. Two episodes of the same show appear twice here, in watch order.
+ */
+data class HistoryRow(
+    val episodeId: Long,
+    val animeId: Int,
+    val animeTitle: String,
+    val poster: String,
+    /** 0 when the episode list was never backfilled; the row then shows the percentage alone. */
+    val episodeNumber: Int,
+    val episodeTitle: String,
+    val positionMs: Long,
+    val durationMs: Long,
+    val updatedAtMs: Long,
+)
+
+/**
  * One episode's resume point, without inflating the whole row.
  *
  * The detail screen draws a tick or a progress line on every episode cell, so it needs the whole
@@ -71,6 +91,33 @@ interface ProgressDao {
 
     @Query("SELECT * FROM progress ORDER BY updatedAt DESC LIMIT :limit")
     fun observeRecent(limit: Int): Flow<List<ProgressEntity>>
+
+    /**
+     * Every watched episode, newest first — the history list.
+     *
+     * `episode` is a `LEFT JOIN` for the same reason as the continue rail: a progress row can exist
+     * before the episode list was backfilled, and losing it from history would be worse than
+     * showing it without a number.
+     */
+    @Query(
+        """
+        SELECT p.episodeId AS episodeId,
+               p.animeId AS animeId,
+               a.title AS animeTitle,
+               a.poster AS poster,
+               COALESCE(e.number, 0) AS episodeNumber,
+               COALESCE(e.title, '') AS episodeTitle,
+               p.positionMs AS positionMs,
+               p.durationMs AS durationMs,
+               p.updatedAt AS updatedAtMs
+        FROM progress AS p
+        INNER JOIN anime AS a ON a.id = p.animeId
+        LEFT JOIN episode AS e ON e.episodeId = p.episodeId
+        ORDER BY p.updatedAt DESC
+        LIMIT :limit
+        """,
+    )
+    fun observeHistory(limit: Int): Flow<List<HistoryRow>>
 
     /**
      * The continue-watching rail in one statement.

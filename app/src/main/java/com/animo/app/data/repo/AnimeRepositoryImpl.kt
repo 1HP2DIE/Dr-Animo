@@ -25,6 +25,7 @@ import com.animo.app.domain.model.SyncProgress
 import com.animo.app.domain.model.SyncState
 import com.animo.app.domain.repo.AnimeRepository
 import com.animo.app.domain.repo.ContinueWatchingItem
+import com.animo.app.domain.repo.HistoryEntry
 import com.animo.app.domain.repo.EpisodeProgress
 import com.animo.app.domain.repo.HindiCatalog
 import kotlinx.coroutines.Dispatchers
@@ -172,6 +173,23 @@ class AnimeRepositoryImpl(
                     episodeNumber = row.episodeNumber,
                     positionMs = row.positionMs,
                     durationMs = row.durationMs,
+                )
+            }
+        }
+
+    override fun observeHistory(limit: Int): Flow<List<HistoryEntry>> =
+        progressDao.observeHistory(limit).map { rows ->
+            rows.map { row ->
+                HistoryEntry(
+                    episodeId = row.episodeId,
+                    animeId = row.animeId,
+                    animeTitle = row.animeTitle,
+                    poster = row.poster,
+                    episodeNumber = row.episodeNumber,
+                    episodeTitle = row.episodeTitle,
+                    positionMs = row.positionMs,
+                    durationMs = row.durationMs,
+                    updatedAtMs = row.updatedAtMs,
                 )
             }
         }
