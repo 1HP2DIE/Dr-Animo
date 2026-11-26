@@ -219,6 +219,106 @@ class MovieLinkStreamRepositoryTest {
         assertEquals(2, resolver.urls.size)
     }
 
+    // ------------------------------------------------------------------ stale token
+
+    /**
+     * The failure this repository exists to survive: the stored `/p/<token>` was minted days ago and
+     * the origin answers `400 bad config`. One refresh from the title page must turn it into a play,
+     * and the working link must be written back so the next play is direct.
+     */
+    @Test
+    fun `a stale stored token is refreshed from the title page and the row is backfilled`() {
+        val resolver = StaleForOlderTokens()
+        var askedSeries: String? = null
+        val backfill = mutableListOf<Pair<Long, String>>()
+        val repo = MovieLinkStreamRepository(
+            resolverProvider = { resolver },
+            seriesIdOf = { "series/gopal-bhar" },
+            playerLinkOf = { seriesId ->
+                askedSeries = seriesId
+                "https://movielinkbd.one/p/freshToken"
+            },
+            onLinkRefreshed = { episodeId, link -> backfill += episodeId to link },
+        )
+
+        val resolved = runBlocking {
+            repo.resolve(animeId, episode(number = 3, link = "https://movielinkbd.one/p/oldToken?ep=3"), AudioTrack.SUB)
+                .getOrThrow()
+        }
+
+        assertEquals("series/gopal-bhar", askedSeries)
+        // The stale link is tried once, the refreshed one succeeds, and the episode index survives.
+        assertEquals(
+            listOf("https://movielinkbd.one/p/oldToken?ep=3", "https://movielinkbd.one/p/freshToken?ep=3"),
+            resolver.urls,
+        )
+        assertEquals("https://fsl.movielink.tv/p/freshToken", resolved.masterUrl)
+        assertEquals(listOf(episode(number = 3).id to "https://movielinkbd.one/p/freshToken?ep=3"), backfill)
+    }
+
+    @Test
+    fun `a refresh that yields the same dead token is not retried`() {
+        val resolver = StaleForOlderTokens()
+        val repo = MovieLinkStreamRepository(
+            resolverProvider = { resolver },
+            seriesIdOf = { "series/gopal-bhar" },
+            // The page hands the same dead token back: rebuilding the link reproduces the stored one,
+            // so there is nothing new to try and a second attempt would only be a wasted request.
+            playerLinkOf = { "https://movielinkbd.one/p/oldToken" },
+        )
+
+        val error = runBlocking {
+            repo.resolve(animeId, episode(number = 3, link = "https://movielinkbd.one/p/oldToken?ep=3"), AudioTrack.SUB)
+                .exceptionOrNull()
+        }
+
+        assertTrue(error is ResolveException.Stale)
+        assertEquals(1, resolver.urls.size)
+    }
+
+    @Test
+    fun `a refresh is retried exactly once, never in a loop`() {
+        val resolver = StaleForOlderTokens()
+        val repo = MovieLinkStreamRepository(
+            resolverProvider = { resolver },
+            seriesIdOf = { "series/gopal-bhar" },
+            playerLinkOf = { "https://movielinkbd.one/p/oldToken" },
+        )
+
+        val error = runBlocking {
+            // The stored link lost its `ep` parameter, so the rebuilt link differs and one retry runs.
+            // It is still the same dead token, so the retry is the last attempt.
+            repo.resolve(animeId, episode(number = 1, link = "https://movielinkbd.one/p/oldToken"), AudioTrack.SUB)
+                .exceptionOrNull()
+        }
+
+        assertTrue(error is ResolveException.Stale)
+        assertEquals(2, resolver.urls.size)
+    }
+
+    @Test
+    fun `without a title page a stale token is reported as stale, not as a parse failure`() {
+        val repo = MovieLinkStreamRepository(resolverProvider = { StaleForOlderTokens() })
+
+        val error = runBlocking { repo.resolve(animeId, episode(), AudioTrack.SUB).exceptionOrNull() }
+
+        assertTrue(error is ResolveException.Stale)
+    }
+
+    /** Serves one stream, but answers [ResolveException.Stale] for every link that is not the fresh one. */
+    private inner class StaleForOlderTokens : StreamResolver {
+        val urls = mutableListOf<String>()
+
+        override suspend fun resolve(embedUrl: String, audio: AudioTrack): Result<PlayableStream> {
+            urls += embedUrl
+            return if (embedUrl.contains("freshToken")) {
+                Result.success(stream.copy(masterUrl = "https://fsl.movielink.tv/p/freshToken"))
+            } else {
+                Result.failure(ResolveException.Stale("embed page 400"))
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ failure mapping
 
     @Test

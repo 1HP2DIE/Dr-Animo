@@ -354,8 +354,21 @@ object MovieLinkParser {
         return ""
     }
 
-    /** `#mlbdHdFrame` first, then any iframe pointing at the `/p/` player. */
-    private fun playerPath(document: String): String {
+    /**
+     * The `/p/<token>` of the page's own player — the value that rotates, so it is also the value a
+     * caller must re-read at playback time instead of trusting a stored one.
+     *
+     * Four shapes are recognised in order, because the page has changed layout more than once and a
+     * stored link is only as good as the pattern that can refresh it:
+     *  1. `<iframe id="mlbdHdFrame" src="…">` — the measured shape;
+     *  2. any other iframe whose `src`/`data-src` is a `/p/` path;
+     *  3. a `/p/` path in any attribute (`data-player`, `data-embed`, `href`, …);
+     *  4. last resort: the first `/p/<token>` literal anywhere in the document (an inline script).
+     *
+     * Returns `""` when the page carries no player at all.
+     */
+    fun playerPath(html: String): String {
+        val document = bound(html)
         var fallback = ""
         var scanned = 0
         for (match in IFRAME_TAG.findAll(document)) {
@@ -366,7 +379,13 @@ object MovieLinkParser {
             if (attr(tag, "id").orEmpty().equals(PLAYER_FRAME_ID, ignoreCase = true)) return source
             if (fallback.isEmpty() && source.contains(PLAYER_PATH)) fallback = source
         }
-        return fallback
+        if (fallback.isNotEmpty()) return fallback
+
+        // The frame may be built by JS instead of printed in markup: accept any attribute that
+        // carries the path, then any literal at all.
+        PLAYER_ATTR.find(document)?.groupValues?.getOrNull(1)?.let { return it }
+        PLAYER_LITERAL.find(document)?.value?.let { return it }
+        return ""
     }
 
     private fun versionsOf(quality: String, resolution: String, episodes: List<MovieLinkEpisode>): List<String> {
@@ -878,6 +897,17 @@ object MovieLinkParser {
     private val QUALITY_TOKEN = Regex("\\b(360|480|540|576|720|1080|1440|2160)\\s*p\\b", RegexOption.IGNORE_CASE)
 
     private val PATH_TOKEN = Regex("/p/([A-Za-z0-9_-]{2,128})")
+
+    /**
+     * Fallbacks for the two layouts that do not print an iframe: a path handed to a JS player through
+     * an attribute, or a bare literal in an inline script. Kept separate from [PATH_TOKEN], which has
+     * no attribute context and is used when a control carries a token rather than a path.
+     */
+    private val PLAYER_ATTR = Regex(
+        "\\b(?:href|src|data-src|data-player|data-embed|data-url|data-href)\\s*=\\s*[\"'](/p/[A-Za-z0-9_-]{2,128})[\"']",
+        RegexOption.IGNORE_CASE,
+    )
+    private val PLAYER_LITERAL = Regex("/p/[A-Za-z0-9_-]{20,128}")
     private val PLAY_CALL = Regex(
         "\\bplay(?:Episode|Video|Movie)?\\s*\\(\\s*[\"']([A-Za-z0-9_-]{2,128})[\"']",
         RegexOption.IGNORE_CASE,

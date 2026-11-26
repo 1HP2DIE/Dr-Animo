@@ -258,6 +258,12 @@ object ServiceLocator {
             resolverProvider = { resolver },
             episodesOf = { seriesId -> provider.episodes(seriesId) },
             seriesIdOf = { id -> animeDao.findById(id)?.originUrl },
+            // The stored `/p/<token>` rotates, so playback re-reads a current one from the title page
+            // and writes it back onto the row (see MovieLinkProvider.playerLink).
+            playerLinkOf = { seriesId -> provider.playerLink(seriesId) },
+            onLinkRefreshed = { episodeId, link ->
+                episodeDao.findById(episodeId)?.let { row -> episodeDao.upsert(row.copy(subUrl = link)) }
+            },
             log = AppLog::d,
         )
         movieLinkRef.set(MovieLinkBundle(syncer, stream))

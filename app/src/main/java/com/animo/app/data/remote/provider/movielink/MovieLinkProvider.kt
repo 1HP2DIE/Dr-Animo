@@ -71,6 +71,9 @@ class MovieLinkProvider(
     private val userAgent: String = HttpClientFactory.UA_DESKTOP,
     private val minIntervalMs: Long = MIN_INTERVAL_MS,
     private val log: (String) -> Unit = {},
+    /** How long a refreshed `/p/<token>` is reused before the title page is read again. */
+    private val playerTokenTtlMs: Long = PLAYER_TOKEN_TTL_MS,
+    private val clock: () -> Long = { System.currentTimeMillis() },
 ) : AnimeProvider, MovieLinkCatalogue {
 
     override val id: String = PROVIDER_ID
@@ -87,6 +90,17 @@ class MovieLinkProvider(
     override val isConfigured: Boolean get() = origin != null
 
     private val paceLock = Mutex()
+
+    /** Serialises token refreshes so two simultaneous taps on one title cost one page fetch. */
+    private val playerLinkLock = Mutex()
+
+    /**
+     * Title page id -> the `/p/<token>` last read from it. Absolute, so a mirror rotation between the
+     * refresh and the play cannot produce a host that no longer answers.
+     */
+    private val playerTokens = java.util.concurrent.ConcurrentHashMap<String, PlayerToken>()
+
+    private data class PlayerToken(val link: String, val atMs: Long)
 
     @Volatile
     private var lastStartedAtNanos: Long = 0L
@@ -227,16 +241,17 @@ class MovieLinkProvider(
     }
 
     override suspend fun resolve(episode: ProviderEpisode, audio: AudioTrack): PlaybackSource {
-        val link = episode.subUrl?.trim().orEmpty()
-        if (link.isEmpty()) {
+        val stored = episode.subUrl?.trim().orEmpty()
+        if (stored.isEmpty()) {
             throw ProviderResolveException("no player link for ${episode.seriesId}#${episode.number}")
         }
 
-        // The resolver is asked for the real track, not the requested one: there is only one file,
-        // and asking an audio-aware resolver for a dub it will not find is how the link gets rejected.
-        val stream = resolverProvider().resolve(link, AudioTrack.SUB).getOrElse { error ->
+        // A stored `/p/<token>` is a token, not an id, and it rotates — but it is usually still good,
+        // so it is tried first and only a 400 pays for a fresh one.
+        val stream = resolveWith(resolverProvider(), stored, episode).getOrElse { error ->
             throw ProviderResolveException("resolver: ${error.message}", error)
         }
+
         if (audio == AudioTrack.DUB) {
             log("${episode.seriesId}#${episode.number} has no dub; serving the original track")
         }
@@ -244,11 +259,42 @@ class MovieLinkProvider(
         return PlaybackSource(
             masterUrl = stream.masterUrl,
             // The `/p/` player expects the catalogue as its referer; the resolver may know better.
-            referer = stream.referer.ifBlank { link },
+            referer = stream.referer.ifBlank { stored },
             userAgent = stream.userAgent.ifBlank { userAgent },
             audio = AudioTrack.SUB,
             isHls = stream.container == StreamContainer.HLS,
         )
+    }
+
+    /**
+     * One resolve, plus the single self-heal a rotating token needs: if the shell answers
+     * [com.animo.app.player.ResolveException.Stale], drop the cached token, read a new one from the
+     * title page and try exactly once more.
+     *
+     * No loop: a second 400 means the page now serves a token that the shell still rejects, which is
+     * a provider change, not a race — retrying it would only multiply requests.
+     */
+    private suspend fun resolveWith(
+        resolver: StreamResolver,
+        link: String,
+        episode: ProviderEpisode,
+    ): Result<com.animo.app.domain.model.PlayableStream> {
+        val first = resolver.resolve(link, AudioTrack.SUB)
+        if (first.exceptionOrNull() !is com.animo.app.player.ResolveException.Stale) return first
+
+        log("${episode.seriesId}#${episode.number}: stale player token, refreshing")
+        invalidatePlayerLink(episode.seriesId)
+        val refreshed = playerLink(episode.seriesId)?.let { withEpisode(it, episode.number.coerceAtLeast(1)) }
+            ?: return first
+        if (refreshed == link) return first
+        return resolver.resolve(refreshed, AudioTrack.SUB)
+    }
+
+    /** Applies an episode index to a refreshed link without losing an existing query. */
+    private fun withEpisode(link: String, index: Int): String {
+        val url = link.toHttpUrlOrNull() ?: return link
+        if (url.queryParameter(EPISODE_PARAM) != null) return link
+        return url.newBuilder().addQueryParameter(EPISODE_PARAM, index.toString()).build().toString()
     }
 
     // ------------------------------------------------------------------ catalogue
@@ -283,9 +329,64 @@ class MovieLinkProvider(
     suspend fun detail(seriesId: String): Result<MovieLinkDetail> {
         val target = MovieLinkTarget.parse(seriesId)
             ?: return Result.failure(MovieLinkException("not a $PROVIDER_ID page id: $seriesId"))
-
         val html = get("/" + target.seriesId).getOrElse { return Result.failure(it) }
         return Result.success(MovieLinkParser.detail(html, target.seriesId, target.kind))
+    }
+
+    // ------------------------------------------------------------------ fresh player token
+
+    /**
+     * The title's **current** `/p/<token>`, absolute, or `null` when the page has no player.
+     *
+     * ## Why this exists
+     * `/p/<token>` is not an id, it is a rotating token. Measured on 2026-11-26: a token captured on
+     * 2026-11-20 answers `400 bad config`, while the token on the same title page right now answers
+     * `200`. A synced row therefore carries a link that stops working, and the player used to show
+     * that HTTP 400 as its error.
+     *
+     * ## Why it is cached
+     * The title page is ~110 KB gzipped and its token is stable for minutes, so a binge of eight
+     * episodes must not cost eight page fetches. [PLAYER_TOKEN_TTL_MS] is far below the measured
+     * lifetime of a token and far above the gap between two episodes.
+     *
+     * @param seriesId `"series/<slug>"` — the same id the catalogue row stores.
+     */
+    suspend fun playerLink(seriesId: String): String? {
+        val target = MovieLinkTarget.parse(seriesId) ?: return null
+        val key = target.seriesId
+        cachedPlayerLink(key)?.let { return it }
+
+        // Two taps on the same title must not both fetch the page.
+        return playerLinkLock.withLock {
+            cachedPlayerLink(key)?.let { return@withLock it }
+
+            // Unpaced on purpose: pacing protects the 529-page crawl, and a viewer waiting on a tap
+            // is not a crawl. A failure falls back to a token we already had rather than to nothing.
+            val html = get("/" + key, paced = false).getOrElse { error ->
+                log("$key: player token refresh failed: ${error.message}")
+                return@withLock playerTokens[key]?.link
+            }
+            val path = MovieLinkParser.playerPath(html)
+            val link = absolute(path)
+            if (link.isEmpty()) {
+                log("$key: page published no player frame")
+                return@withLock playerTokens[key]?.link
+            }
+            playerTokens[key] = PlayerToken(link, System.currentTimeMillis())
+            log("$key: player token refreshed")
+            link
+        }
+    }
+
+    private fun cachedPlayerLink(key: String): String? {
+        val entry = playerTokens[key] ?: return null
+        if (System.currentTimeMillis() - entry.atMs > playerTokenTtlMs) return null
+        return entry.link
+    }
+
+    /** Drops the cached token for one title (used when the origin rejects it as stale). */
+    fun invalidatePlayerLink(seriesId: String) {
+        MovieLinkTarget.parse(seriesId)?.let { playerTokens.remove(it.seriesId) }
     }
 
     // ------------------------------------------------------------------ mapping
@@ -364,11 +465,11 @@ class MovieLinkProvider(
 
     // ------------------------------------------------------------------ transport
 
-    private suspend fun get(path: String): Result<String> {
+    private suspend fun get(path: String, paced: Boolean = true): Result<String> {
         if (base.isEmpty()) return Result.failure(MovieLinkException("index host is not configured"))
         val url = (base + path).toHttpUrlOrNull()
             ?: return Result.failure(MovieLinkException("unusable path '$path'"))
-        return fetch(url)
+        return fetch(url, paced)
     }
 
     /**
@@ -378,12 +479,12 @@ class MovieLinkProvider(
      * look like a browser", which a retry reproduces exactly. 408/425/429/5xx are retried with
      * exponential backoff plus jitter so several devices cannot synchronise their retries.
      */
-    private suspend fun fetch(url: HttpUrl): Result<String> {
+    private suspend fun fetch(url: HttpUrl, paced: Boolean = true): Result<String> {
         var attempt = 0
         var last: MovieLinkException? = null
 
         while (attempt < MAX_ATTEMPTS) {
-            pace()
+            if (paced) pace()
 
             val request = Request.Builder()
                 .url(url)
@@ -540,6 +641,18 @@ class MovieLinkProvider(
 
         /** Measured: the listing answers a browser UA politely at ~1 req/s; do not go faster. */
         const val MIN_INTERVAL_MS = 1_000L
+
+        /**
+         * Reuse window for a refreshed `/p/<token>`.
+         *
+         * The token is stable for at least tens of minutes (measured 2026-11-26: three tokens read
+         * ~20 minutes apart all still answered 200) while a token from six days earlier answers 400.
+         * Ten minutes keeps a binge on one page fetch and stays far inside the observed lifetime.
+         */
+        const val PLAYER_TOKEN_TTL_MS = 10 * 60 * 1000L
+
+        /** Query parameter the player resolver reads to pick one entry of a series shell. */
+        const val EPISODE_PARAM = "ep"
 
         const val BASE_BACKOFF_MS = 1_000L
         const val BACKOFF_JITTER_MS = 750L

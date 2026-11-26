@@ -64,6 +64,16 @@ class MovieLinkStreamRepository(
     private val resolverProvider: () -> StreamResolver,
     private val episodesOf: suspend (seriesId: String) -> List<ProviderEpisode> = { emptyList() },
     private val seriesIdOf: suspend (animeId: Int) -> String? = { null },
+    /**
+     * The title's **current** `/p/<token>` (see `MovieLinkProvider.playerLink`).
+     *
+     * A stored link is a rotating token: measured on 2026-11-26, a token six days old answers
+     * `400 bad config` while the token on the title page right now answers `200`. When the origin
+     * calls a link stale this is what re-fetches a usable one.
+     */
+    private val playerLinkOf: suspend (seriesId: String) -> String? = { null },
+    /** Writes a refreshed link back onto the episode row, so the next play needs no refresh. */
+    private val onLinkRefreshed: suspend (episodeId: Long, link: String) -> Unit = { _, _ -> },
     private val ttlMs: Long = CACHE_TTL_MS,
     private val clock: () -> Long = { System.currentTimeMillis() },
     private val log: (String) -> Unit = {},
@@ -155,7 +165,7 @@ class MovieLinkStreamRepository(
 
             read(key, link)?.let { return@withLock Result.success(it) }
 
-            attempt(link, audio)
+            attempt(animeId, episode, link, audio)
                 // The server tag is the truth the menu shows; one server exists, so it is PRIMARY.
                 .map { stream -> stream.copy(server = StreamServer.PRIMARY) }
                 .onSuccess { stream ->
@@ -220,6 +230,49 @@ class MovieLinkStreamRepository(
     }
 
     // ------------------------------------------------------------------ resolution
+
+    /**
+     * One resolve, plus the self-heal a rotating token needs.
+     *
+     * A [ResolveException.Stale] means the origin no longer decrypts this `/p/<token>` — the token is
+     * not an id and the index rotates it. The stored row keeps the dead token forever, so this is the
+     * only place that can recover: read a current token from the title page, replay once, and write
+     * the working link back onto the row so the next play is direct again.
+     *
+     * Exactly one retry: a second 400 means the page now issues tokens the shell rejects, which is a
+     * provider change and not something a loop can fix.
+     */
+    private suspend fun attempt(
+        animeId: Int,
+        episode: Episode,
+        link: String,
+        audio: AudioTrack,
+    ): Result<PlayableStream> {
+        val first = attempt(link, audio)
+        val error = first.exceptionOrNull()
+        if (error !is ResolveException.Stale) return first
+
+        val seriesId = runCatching { seriesIdOf(animeId) }.getOrNull()?.takeIf { it.isNotBlank() }
+            ?: return first
+        val refreshed = runCatching { playerLinkOf(seriesId) }.getOrNull()?.takeIf { it.isNotBlank() }
+            ?: return first
+
+        val joined = withEpisode(refreshed, episode.number.coerceAtLeast(1))
+        if (joined == link) return first
+
+        log("movielink ep${episode.id}: stale player token, refreshing")
+        return attempt(joined, audio).onSuccess {
+            runCatching { onLinkRefreshed(episode.id, joined) }
+                .onFailure { cause -> log("movielink ep${episode.id}: link backfill failed: ${cause.message}") }
+            log("movielink ep${episode.id}: player token refreshed and stored")
+        }
+    }
+
+    /** Carries the episode index onto a refreshed link; a link that already has one is left alone. */
+    private fun withEpisode(link: String, index: Int): String {
+        if (EPISODE_PARAM.containsMatchIn(link)) return link
+        return link + (if (link.contains('?')) "&" else "?") + "ep=$index"
+    }
 
     private suspend fun attempt(link: String, audio: AudioTrack): Result<PlayableStream> = try {
         // The single file is the title's own track. Asking an audio-aware resolver for a dub it does
@@ -336,6 +389,9 @@ class MovieLinkStreamRepository(
         const val HTTP_FORBIDDEN = 403
         const val HTTP_NOT_FOUND = 404
         const val HTTP_GONE = 410
+
+        /** The `?ep=` parameter the player resolver reads to pick one entry of a series shell. */
+        val EPISODE_PARAM = Regex("[?&]ep=\\d+")
 
         /** Provider messages that mean "the page no longer has the shape this parser expects". */
         val PARSE_MARKERS = listOf(
