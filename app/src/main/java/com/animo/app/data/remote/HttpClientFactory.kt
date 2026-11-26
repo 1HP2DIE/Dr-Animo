@@ -93,6 +93,9 @@ object HttpClientFactory {
             .followSslRedirects(true)
             .cookieJar(cookieJar)
             .addInterceptor(BrowserHeadersInterceptor)
+            // A network interceptor, so it runs inside the follow-up logic and can rewrite the
+            // Location *before* the redirect is followed.
+            .addNetworkInterceptor(CleartextRedirectUpgrade)
             .dispatcher(
                 Dispatcher().apply {
                     maxRequests = 4
@@ -102,6 +105,40 @@ object HttpClientFactory {
             .connectionPool(ConnectionPool(6, 5, TimeUnit.MINUTES))
             .build()
     }
+
+    /**
+     * Rewrites an `http://` redirect target to `https://` before OkHttp follows it.
+     *
+     * Measured on the second catalogue's mirror on 2026-11-26: `https://<mirror>/series/…` answers
+     * `302 Location: http://<site>/series/…`, which answers `301 https://<site>/series/…` — the very
+     * next hop is TLS again. Cleartext is off app-wide (see `network_security_config.xml`), so OkHttp
+     * refuses that hop and the whole request dies with
+     * `CLEARTEXT communication to <host> not permitted by network security policy`, even though the
+     * content is one redirect away. Upgrading is safe: an `http://` URL can never be served by this
+     * app anyway, so the only alternative outcome is the same failure.
+     *
+     * Deliberately not a scoped `cleartextTrafficPermitted` exemption: that would carry the request
+     * over the wire in the clear for a hop the origin itself immediately redirects away from.
+     */
+    internal fun upgradeRedirect(location: String): String =
+        if (location.startsWith("http://", ignoreCase = true)) {
+            "https://" + location.substring(HTTP_SCHEME_LENGTH)
+        } else {
+            location
+        }
+
+    private object CleartextRedirectUpgrade : Interceptor {
+        override fun intercept(chain: Interceptor.Chain): Response {
+            val response = chain.proceed(chain.request())
+            val location = response.header("Location") ?: return response
+            val upgraded = upgradeRedirect(location)
+            if (upgraded == location) return response
+            // Same body/headers, one header replaced: this is the response OkHttp will follow.
+            return response.newBuilder().header("Location", upgraded).build()
+        }
+    }
+
+    private const val HTTP_SCHEME_LENGTH = 7 // "http://"
 
     /**
      * One callback for the process lifetime, never unregistered: a network event between the app
