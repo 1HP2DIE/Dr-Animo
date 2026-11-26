@@ -567,10 +567,22 @@ class MovieLinkProvider(
         return (base + jitter).coerceAtMost(MAX_BACKOFF_MS)
     }
 
+    /**
+     * True only for an interstitial, never for a real page.
+     *
+     * The index started injecting Cloudflare's JS-detection bootstrap
+     * (`/cdn-cgi/challenge-platform/scripts/jsd/main.js`) into **ordinary** title pages, and that
+     * snippet contains one of [CHALLENGE_MARKERS]. Matching on the marker alone therefore declared
+     * every 200 a block and took the whole catalogue offline; measured on 2026-11-26 a real title
+     * page is ~535 KB while a Cloudflare block is a ~6 KB interstitial, so the size gate is what
+     * distinguishes them. The header is still trusted outright — it is the origin saying so.
+     */
     private fun looksChallenged(outcome: Outcome): Boolean {
         if (outcome.mitigated?.contains("challenge", ignoreCase = true) == true) return true
         if (outcome.body.isEmpty()) return false
-        return CHALLENGE_MARKERS.any { outcome.body.contains(it) }
+        // A challenge never carries a whole catalogue page.
+        if (outcome.body.length > MAX_CHALLENGE_CHARS) return false
+        return CHALLENGE_MARKERS.any { outcome.body.contains(it, ignoreCase = true) }
     }
 
     private fun bound(body: String): String =
@@ -641,6 +653,12 @@ class MovieLinkProvider(
 
         /** Measured: the listing answers a browser UA politely at ~1 req/s; do not go faster. */
         const val MIN_INTERVAL_MS = 1_000L
+
+        /**
+         * Largest body that can still be a Cloudflare interstitial. A real page is two orders of
+         * magnitude past this, and a block page is well under it.
+         */
+        const val MAX_CHALLENGE_CHARS = 64_000
 
         /**
          * Reuse window for a refreshed `/p/<token>`.
