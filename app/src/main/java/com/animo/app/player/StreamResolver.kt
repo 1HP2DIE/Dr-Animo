@@ -17,4 +17,15 @@ sealed class ResolveException(message: String) : Exception(message) {
     class Blocked(message: String = "blocked (403)") : ResolveException(message)
     class Parse(message: String) : ResolveException(message)
     class Network(cause: Throwable) : ResolveException("network: ${cause.message}")
+
+    /**
+     * The link itself is a **rotating token** that has aged out, and the origin now refuses it.
+     *
+     * Measured on movielinkbd: a `/p/<token>` captured days earlier answers `400 bad config`, while a
+     * token read from the same title page seconds ago answers `200`. That is not a network failure and
+     * not a "the episode is gone" failure — the correct response is to re-read a fresh token from the
+     * page that issues them and replay the request, which is why this is its own type instead of
+     * [Parse] or [Network].
+     */
+    class Stale(message: String = "stale link token (400)") : ResolveException(message)
 }

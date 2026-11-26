@@ -32,8 +32,10 @@ import java.io.IOException
  * not gated by Referer, and the only host that checks one (`watch.movielink.tv`) checks that it is
  * a movielinkbd domain, which [watchReferer] already is.
  *
- * Nothing is retried. A 403 here is Cloudflare rejecting the app fingerprint, not a stale token, so
- * replaying the same request only costs time; the caller's server ordering moves on instead.
+ * Nothing is retried here. A 403 is Cloudflare rejecting the app fingerprint, not a stale token, so
+ * replaying the same request only costs time; the caller's server ordering moves on instead. A 400
+ * is the opposite case — the token itself aged out — and surfaces as [ResolveException.Stale] so the
+ * caller can re-read a token from the title page and call again.
  */
 class MovieLinkStreamResolver(
     private val client: OkHttpClient,
@@ -141,6 +143,10 @@ class MovieLinkStreamResolver(
 /**
  * HTTP status -> failure, kept pure so the whole mapping is testable without a socket.
  *
+ * 400 is the origin's answer to a `/p/<token>` that no longer decrypts — a token the page rotated
+ * away from, not a broken request. It is [ResolveException.Stale] so the caller can re-read a fresh
+ * token instead of showing the viewer an HTTP code.
+ *
  * 403 is the Cloudflare answer to a non-browser fingerprint and, on `watch.movielink.tv`, to a
  * foreign Referer; 404/410 are definitive (a token that no longer exists), so the caller must not
  * re-try them against another server. Everything else is transport and surfaces as [IOException]
@@ -150,6 +156,7 @@ internal object MovieLinkErrors {
 
     fun forStatus(code: Int): Throwable? = when {
         code in 200..299 -> null
+        code == 400 -> ResolveException.Stale("embed page 400")
         code == 403 -> ResolveException.Blocked("embed page 403")
         code == 404 -> ResolveException.NotFound()
         code == 410 -> ResolveException.Dead()

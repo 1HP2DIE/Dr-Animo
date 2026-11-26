@@ -77,6 +77,13 @@ class MovieLinkStreamResolverTest {
     }
 
     @Test
+    fun `400 is a stale token, so the caller can re-read one instead of failing the play`() {
+        // The measured body for an aged-out `/p/<token>`: the origin decrypts, fails, and says so.
+        val stale = failureOf(FakeSite(400, "bad config"), "https://movielinkbd.one/p/tok400")
+        assertTrue(stale is ResolveException.Stale)
+    }
+
+    @Test
     fun `a page without the config is a parse error and a dropped socket is a network error`() {
         val parse = failureOf(FakeSite(200, "<html>no player here</html>"), "https://movielinkbd.one/p/tokNoPd2")
         assertTrue(parse is ResolveException.Parse)
