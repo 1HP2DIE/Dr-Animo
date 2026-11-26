@@ -28,7 +28,7 @@ object Changelog {
 
     val releases: List<Release> = listOf(
         Release(
-            version = "1.11.1",
+            version = "1.12.0",
             date = "26 Nov 2026",
             headline = "Films and series from the second catalogue play again when their player link has expired.",
             changes = listOf(
