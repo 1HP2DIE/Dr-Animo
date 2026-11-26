@@ -32,8 +32,9 @@ object Changelog {
             date = "26 Nov 2026",
             headline = "Films and series from the second catalogue play again when their player link has expired.",
             changes = listOf(
-                Change(ChangeKind.FIXED, "A film or episode that showed an error instead of playing now recovers on its own and starts"),
-                Change(ChangeKind.IMPROVED, "The player re-reads a fresh link each time one has aged out, so an old title keeps working without a new sync"),
+                Change(ChangeKind.FIXED, "A film or episode that showed an error instead of playing now re-reads a working link on its own and starts"),
+                Change(ChangeKind.FIXED, "Search, episode lists and the nightly sync work again on the films-and-series catalogue"),
+                Change(ChangeKind.IMPROVED, "The player keeps working on titles you added days ago, without deleting and re-adding them"),
             ),
         ),
         Release(
