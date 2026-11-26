@@ -28,6 +28,15 @@ object Changelog {
 
     val releases: List<Release> = listOf(
         Release(
+            version = "1.11.1",
+            date = "26 Nov 2026",
+            headline = "Films and series from the second catalogue play again when their player link has expired.",
+            changes = listOf(
+                Change(ChangeKind.FIXED, "A film or episode that showed an error instead of playing now recovers on its own and starts"),
+                Change(ChangeKind.IMPROVED, "The player re-reads a fresh link each time one has aged out, so an old title keeps working without a new sync"),
+            ),
+        ),
+        Release(
             version = "1.11.0",
             date = "21 Nov 2026",
             headline = "A Providers page: see what each catalogue carries, and decide which ones sync on their own.",
